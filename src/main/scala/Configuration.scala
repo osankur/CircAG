@@ -21,7 +21,7 @@ object FSM {
 }
 
 case class Configuration(
-    ltsFile: File = new File("."),
+    ltsFiles: Seq[File] = Seq[File](),
     pFile: File = new File("."),
     ltsFormat: FSM.FSMFormat = FSM.TCheckerTA,
     pFormat: FSM.FSMFormat = FSM.TCheckerTA,

@@ -15,7 +15,8 @@ import net.automatalib.util.automata.builders.AutomatonBuilders;
 import fr.irisa.circag.configuration.Configuration
 import fr.irisa.circag.configuration.FSM
 
-import scala.collection.mutable._
+import scala.collection.mutable
+import scala.collection.immutable
 import collection.JavaConverters._
 
 object Main {
@@ -28,23 +29,19 @@ object Main {
       OParser.sequence(
         programName("circAG"),
         head("circAG", "0.1"),
-        opt[File]("lts")
+        opt[Seq[File]]("lts")
           .required()
           .valueName("<lts>")
-          .action((x, c) => 
-              if (x.toString.endsWith(".ta")){
-                c.copy(ltsFile = x, ltsFormat = FSM.TCheckerTA)
-              } else {
-                throw Exception("Unknown lts format")
-              }
-            )
-          .text("lts is the labeled transition system to be verified."),
+          .action(
+            (x,c) =>
+            c.copy(ltsFiles = x)
+          ),
         opt[File]("p")
           .required()
           .valueName("<p>")
           .action((x, c) => 
               if (x.toString.endsWith(".ta")){
-                c.copy(ltsFile = x, ltsFormat = FSM.TCheckerTA)
+                c.copy(pFile = x, pFormat = FSM.TCheckerTA)
               } else {
                 throw Exception("Unknown lts format")
               }
@@ -67,18 +64,19 @@ object Main {
       case None => ()
       case Some(config) =>
         configuration.set(config)
-        if (!configuration.get().ltsFile.exists()){
-          logger.error(("%s File " + configuration.get().ltsFile.getAbsolutePath() + " does not exist%s").format(RED,RESET))
-          return
-        }
+        // for file <- configuration.get().ltsFiles do {
+        //   if (!file.exists()){
+        //     logger.error(("%s File " + file.getAbsolutePath() + " does not exist%s").format(RED,RESET))
+        //     return
+        //   }
+        // }
         if (!configuration.get().pFile.exists()){
           logger.error(("%s File " + configuration.get().pFile.getAbsolutePath() + " does not exist%s").format(RED,RESET))
           return
         }
-        logger.info("LTS File: " + configuration.get().ltsFile)
-        logger.info("P File: " + configuration.get().pFile)
-        val tmpFolder = configuration.get().tmpDirPath()
-        
+        // // logger.info("LTS File: " + configuration.get().ltsFiles)
+        // // logger.info("P File: " + configuration.get().pFile)
+        // val tmpFolder = configuration.get().tmpDirPath()
       }
   }
 }

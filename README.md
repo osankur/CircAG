@@ -1,8 +1,6 @@
-## sbt project compiled with Scala 3
+## Automatic Circular Assume Guarantee Model Checker
 
-### Usage
-
-This is a normal sbt project. You can compile code with `sbt compile`, run it with `sbt run`, and `sbt console` will start a Scala 3 REPL.
-
-For more information on the sbt-dotty plugin, see the
-[scala3-example-project](https://github.com/scala/scala3-example-project/blob/main/README.md).
+## Tasks
+- Write TChecker script to decompose a given model into components as separate files. Here processes accessing the same shared variables must be kept together. The minimal alphabet must be inferred as well for all components.
+- Write various assumption generators based on a SAT solver, passive algs from learnlib, minimal separating automata etc.
+- Connect to spot for omega-regular properties

@@ -23,7 +23,6 @@ import de.learnlib.api.query.DefaultQuery;
 import de.learnlib.api.oracle._
 import de.learnlib.api.oracle.MembershipOracle
 import de.learnlib.api.oracle.MembershipOracle.DFAMembershipOracle
-
 import net.automatalib.automata.fsa.impl.compact.CompactDFA;
 import net.automatalib.util.automata.builders.AutomatonBuilders;
 import net.automatalib.automata.fsa.DFA
@@ -149,7 +148,7 @@ class TCheckerTA(inputFile: java.io.File) {
 }
 
 
-class TCheckerAGOracles extends AGOracles[TCheckerTA, TCheckerTA]{
+class TCheckerDFAOracles extends AGOracles[TCheckerTA, TCheckerTA]{
   def checkInductivePremises(lts : TCheckerTA, assumptions : List[TCheckerTA], guarantee : TCheckerTA) : Option[CounterExample] =
     {
       None
@@ -196,7 +195,7 @@ class TCheckerMonitorMaker (
   private val acceptingLocations = {
     val accLocs = ArrayBuffer[(String,String)]()
     val regLoc = "\\s*location:(.*):(.*)\\{(.*)\\}\\s*".r
-    ta.core.split("\n").foreach( _ match
+    ta.core.split("\n").foreach( _ match {
       case regLoc(proc,loc,attr) =>
         acceptingLabel match {
           case None => accLocs.append((proc,loc))
@@ -206,6 +205,7 @@ class TCheckerMonitorMaker (
             }
         }
       case _ => ()
+    }
     )
     accLocs
   }
@@ -221,13 +221,14 @@ class TCheckerMonitorMaker (
       // The monitor shall join all syncs on letters of the alphabet
     ta.syncs.foreach { syncLine =>
       val newSyncLine =
-        syncLine.map(_._2).toSet.intersect(alphabetSet).toList match
+        syncLine.map(_._2).toSet.intersect(alphabetSet).toList match {
           case Nil          => syncLine
           case event :: Nil => (monitorProcessName, event) :: syncLine
           case _ =>
             throw BadTimedAutomaton(
               "Timed automaton must not have synchronized transitions on multiple external sync labels"
             )
+        }
       strB.append("sync:")
       strB.append(newSyncLine.map(_ + "@" + _).mkString(":"))
       strB.append("\n")
@@ -237,9 +238,10 @@ class TCheckerMonitorMaker (
     ta.syncs.foreach { syncLine =>
       val newSyncLine =
         syncLine.filter(alphabetSet.contains(_)).foreach(
-          (proc, event) => 
+          (proc, event) => {
             val currentSet = syncEventsOfProcesses.getOrElse(proc,Set[String]())
             syncEventsOfProcesses += proc -> currentSet
+          }
         )
     }
     strB.append("\n")
@@ -333,30 +335,32 @@ class TCheckerMonitorMaker (
       .getStates()
       .asScala
       .foreach(state =>
-        strStates
-          .append("location:%s:q%s{".format(monitorProcessName, state.toString))
-        val attributes = ArrayBuffer[String]()
-        if (initStates.contains(state)) then {
-          attributes.append("initial:")
-        }
-        // revert accepting and non-accepting states
-        if (!complement && hypothesis.isAccepting(state) || complement && !hypothesis.isAccepting(state)) {
-          attributes.append("labels:%s".format(monitorAcceptLabel))
-        }
-        strStates.append(attributes.mkString(":"))
-        strStates.append("}\n")
-        for (sigma <- alphabet.toList) {
-          val succs = hypothesis.getSuccessors(state, sigma);
-          if (!succs.isEmpty()) then {
-            for (succ <- succs) {
-              strTransitions.append(
-                "edge:%s:q%s:q%s:%s\n".format(
-                  monitorProcessName,
-                  state.toString,
-                  succ.toString,
-                  sigma
+        {
+          strStates
+            .append("location:%s:q%s{".format(monitorProcessName, state.toString))
+          val attributes = ArrayBuffer[String]()
+          if (initStates.contains(state)) then {
+            attributes.append("initial:")
+          }
+          // revert accepting and non-accepting states
+          if (!complement && hypothesis.isAccepting(state) || complement && !hypothesis.isAccepting(state)) {
+            attributes.append("labels:%s".format(monitorAcceptLabel))
+          }
+          strStates.append(attributes.mkString(":"))
+          strStates.append("}\n")
+          for (sigma <- alphabet.toList) {
+            val succs = hypothesis.getSuccessors(state, sigma);
+            if (!succs.isEmpty()) then {
+              for (succ <- succs) {
+                strTransitions.append(
+                  "edge:%s:q%s:q%s:%s\n".format(
+                    monitorProcessName,
+                    state.toString,
+                    succ.toString,
+                    sigma
+                  )
                 )
-              )
+              }
             }
           }
         }
