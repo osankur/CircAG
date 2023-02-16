@@ -1,4 +1,4 @@
-
+package fr.irisa.circag.tchecker
 
 import io.AnsiColor._
 import org.slf4j.Logger
@@ -27,7 +27,6 @@ import net.automatalib.automata.fsa.impl.compact.CompactDFA;
 import net.automatalib.util.automata.builders.AutomatonBuilders;
 import net.automatalib.automata.fsa.DFA
 import net.automatalib.util.automata.fsa.NFAs
-import net.automatalib.automata.fsa.NFA
 import net.automatalib.util.automata.fsa.DFAs
 import net.automatalib.words.impl.Alphabets;
 import net.automatalib.words._
@@ -37,6 +36,7 @@ import net.automatalib.automata.fsa.impl.compact.CompactNFA;
 import net.automatalib.serialization.aut.AUTSerializationProvider 
 import net.automatalib.automata.fsa.NFA
 
+import fr.irisa.circag.DLTS
 import fr.irisa.circag.configuration
 import fr.irisa.circag.statistics
 
@@ -45,45 +45,102 @@ case class FailedTAModelChecking(msg: String) extends Exception(msg)
 
 class CounterExample(trace : List[String], alphabet : Set[String])
 
-trait AGOracles[LTS, Property] {
+trait AssumeGuaranteeOracles[LTS, Property] {
   def checkInductivePremises(lts : LTS, assumptions : List[Property], guarantee : Property) : Option[CounterExample]
   def checkFinalPremise(lhs : List[Property], p : Property) : Option[CounterExample]
   def extendTrace(lts : LTS, word : List[String], extendedAlphabet : Set[String]) : Option[List[String]] 
 }
 
-/** A light parser that reads TChecker TA from given file, and stores the tuple (events,
+/** 
+ *  Light parser that reads TChecker TA from given file, and stores the tuple (events,
   * eventsOfProcesses, core, syncs) where 
   * - events is the list of all events,
   * - eventsOfProcesses maps process names to events that they include, 
-  * - core is the list of lines of the input file except for the sync instructions,
+  * - core is the list of lines of the input file except for the system name, events, and sync instructions,
   * - syncs contains lists of tuples encoding the syncs
-  * - externEvents is a subset of events and is the set of events tagged _extern_
   */
-class TCheckerTA(inputFile: java.io.File) {
-  var events: Set[String] = Set()
-  var externEvents : List[String] = List()
-  var eventsOfProcesses = HashMap[String, Set[String]]()
-  var syncs = List[List[(String, String)]]()
-  var core: String = ""
-  private val logger = LoggerFactory.getLogger(classOf[TCheckerTA])
+class TA (
+  var systemName : String = "",
+  var events: Set[String] = Set(),
+  var core: String = "",
+  var eventsOfProcesses : HashMap[String, Set[String]] = HashMap[String, Set[String]](),
+  var syncs : List[List[(String, String)]] = List[List[(String, String)]]()){
 
-  {
+  def getProcessNames() : List[String] = {
+    eventsOfProcesses.keys().toList
+  }
+
+  def alphabet() : Alphabet[String] = {
+    Alphabets.fromList(events.toList)
+  }
+  /** Given the counterexample description output by TChecker, given as a list of lines,
+   *  return the trace, that is, the sequence of events in the alphabet encoded by the said counterexample.
+   */
+  def getTraceFromCexDescription(cexDescription : List[String]) : List[String] = {
+      val word = ListBuffer[String]()
+      val regEdge = ".*->.*vedge=\"<(.*)>\".*".r
+      cexDescription.foreach({
+        case regEdge(syncList) => 
+          val singleSync = syncList.split(",").map(_.split("@")(1)).toSet.intersect(events)
+          if (singleSync.size == 1){
+            val a = singleSync.toArray
+            word.append(a(0))
+          } else if (singleSync.size > 1){
+            throw FailedTAModelChecking("The counterexample trace has a transition with syncs containing more than one letter of the alphabet:\n" + syncList)
+          } else {
+            // Ignore internal transition
+          }
+        case _ => ()
+      })
+      word.toList
+  }
+
+  override def toString(): String = {
+    val sb = StringBuilder()
+    sb.append(s"system:${systemName}\n\n")
+    for sigma <- events do {
+      sb.append(s"event:${sigma}\n")
+    }
+    sb.append("\n")
+    sb.append(core)
+    for sync <- syncs do {
+      sb.append("sync:" + sync.map(_ + "@" + _).mkString(":") + "\n")
+    }
+    sb.toString()
+  }
+
+}
+
+
+// /**
+//   * Parser for a single-process TChecker files
+//   */
+//  class SingleProcessTA
+//     (
+//     var systemName : String = "",
+//     var events: Set[String] = Set(),
+//     var core: String = "",
+//     var eventsOfProcesses : HashMap[String, Set[String]] = HashMap[String, Set[String]](),
+//     var syncs : List[List[(String, String)]] = List[List[(String, String)]](),
+//     var processName : String = ""
+//     )
+//     extends TCheckerTA(systemName, events, core, eventsOfProcesses, syncs)
+
+object TA{
+  def fromFile(inputFile: java.io.File) : TA = {
+    val ta = TA()
     val lines = Source.fromFile(inputFile).getLines().toList
     val regEvent = "\\s*event:([^ ]*).*".r
-    val regExternEvent = "\\s*event:([^ ]*).*_extern_.*".r
     val regSync = "\\s*sync:(.*)\\s*".r
     val regProcess = "\\s*process:(.*)\\s*".r
     val regEdge = "\\s*edge:[^:]*:[^:]*:[^:]*:([^{]*).*".r
+    val regSystem = "\\s*system:([^ ]*).*".r
     // System.out.println("File: " + inputFile.toString)
-    this.events = lines.flatMap({
+    ta.events = lines.flatMap({
       case regEvent(event) => Some(event.strip())
       case _               => None
     }).toSet
-    externEvents = lines.flatMap({
-      case regExternEvent(event) => Some(event.strip())
-      case _               => None
-    })
-    syncs = lines.flatMap({
+    ta.syncs = lines.flatMap({
       case regSync(syncs) =>
         Some(
           syncs
@@ -99,72 +156,165 @@ class TCheckerTA(inputFile: java.io.File) {
       case _ => None
     })
 
-    eventsOfProcesses = HashMap[String, Set[String]]()
+    ta.eventsOfProcesses = HashMap[String, Set[String]]()
     var currentProcess = ""
     lines.foreach {
       case regProcess(monitorProcessName) =>
         currentProcess = monitorProcessName
-        eventsOfProcesses += (monitorProcessName -> Set[String]())
+        ta.eventsOfProcesses += (monitorProcessName -> Set[String]())
       // System.out.println("Now reading process: " + monitorProcessName)
       case regEdge(sync) =>
-        eventsOfProcesses += (currentProcess -> (eventsOfProcesses(
+        ta.eventsOfProcesses += (currentProcess -> (ta.eventsOfProcesses(
           currentProcess
         ) + sync))
       // System.out.println("Adding sync: " + sync)
       case _ => ()
     }
-    core = lines.filter(line => !line.startsWith("sync:")).mkString("\n")
+    ta.core = lines.filter({
+      case regSystem(name) => ta.systemName = name; false
+      case regEvent(event) => false
+      case regSync(event) => false
+      case _               => true
+    }).mkString("\n")
+    return ta
   }
 
-  /** Given the counterexample description output by TChecker, given as a list of lines,
-   *  return the trace, that is, the sequence of events in the alphabet encoded by the said counterexample.
-   */
-  def getTraceFromCexDescription(cexDescription : List[String]) : List[String] = {
-      val alphabetSet = events.toSet
-      val word = ListBuffer[String]()
-      val regEdge = ".*->.*vedge=\"<(.*)>\".*".r
-      cexDescription.foreach({
-        case regEdge(syncList) => 
-          val singleSync = syncList.split(",").map(_.split("@")(1)).toSet.intersect(alphabetSet)
-          if (singleSync.size == 1){
-            val a = singleSync.toArray
-            word.append(a(0))
-          } else if (singleSync.size > 1){
-            throw FailedTAModelChecking("The counterexample trace has a transition with syncs containing more than one letter of the alphabet:\n" + syncList)
-          } else {
-            // Ignore internal transition
+  def fromDLTS(dlts : DLTS, acceptingLabelSuffix : Option[String] = None) : TA = {
+    val ta = TA(dlts.name, dlts.alphabet.toSet)
+    ta.eventsOfProcesses += (dlts.name -> ta.events )
+    val strStates = StringBuilder()  
+    val strTransitions = StringBuilder()
+    val initStates = dlts.dfa.getInitialStates().asScala
+    strStates.append("process:" + dlts.name + "\n")
+    dlts.dfa
+      .getStates()
+      .asScala
+      .foreach(state =>
+        {
+          strStates
+            .append("location:%s:q%s{".format(dlts.name, state.toString))
+          val attributes = ArrayBuffer[String]()
+          if (initStates.contains(state)) then {
+            attributes.append("initial:")
           }
-        case _ => ()
-      })
-      word.toList
+          if (dlts.dfa.isAccepting(state)) {
+            acceptingLabelSuffix match {
+              case Some(l) => attributes.append(s"labels:${dlts.name + "_" + l}")
+              case _ => ()
+            }
+          }
+          strStates.append(attributes.mkString(":"))
+          strStates.append("}\n")
+          for (sigma <- ta.events) {
+            val succs = dlts.dfa.getSuccessors(state, sigma);
+            if (!succs.isEmpty()) then {
+              for (succ <- succs) {
+                strTransitions.append(
+                  "edge:%s:q%s:q%s:%s\n".format(
+                    dlts.name,
+                    state.toString,
+                    succ.toString,
+                    sigma
+                  )
+                )
+              }
+            }
+          }
+        }
+      )
+      val taB = StringBuilder()
+      taB.append(ta.core)
+      taB.append("\n")
+      taB.append(strStates.append(strTransitions.toString).toString)
+    ta.core = taB.toString()
+    ta
   }
 
-  /** Decompose given TChecker model into several components
-   */
-  def decompose() : List[TCheckerTA] = {
-    throw Exception("Not yet implemented")
-  }
-
-}
-
-
-class TCheckerDFAOracles extends AGOracles[TCheckerTA, TCheckerTA]{
-  def checkInductivePremises(lts : TCheckerTA, assumptions : List[TCheckerTA], guarantee : TCheckerTA) : Option[CounterExample] =
-    {
-      None
+  /**
+    * @param ta timed automaton
+    * @param dlts list of DLTSs with which sync product is to be computed
+    * @param acceptingLabelSuffix if Some(suffix), then accepting states of each DLTS are labeled by name_suffix.
+    * @pre ta.systemName and dlts.name's are pairwise distinct
+    * @return
+    */
+  def synchronousProduct(ta : TA, dlts : List[DLTS], acceptingLabelSuffix : Option[String] = None) : TA = {
+    if dlts.map(_.name).distinct.size < dlts.size || dlts.map(_.name).contains(ta.systemName) then {
+      throw Exception("Synchronous product of automata of the same name")
     }
-  def checkFinalPremise(lhs : List[TCheckerTA], p : TCheckerTA) : Option[CounterExample] = {
+    val dltsTA = dlts.map({d => this.fromDLTS(d, acceptingLabelSuffix)})
+    val jointAlphabet = ta.events | dlts.foldLeft(Set[String]())( (alph, d) => alph | d.alphabet.toSet)
+    val sb = StringBuilder()
+    val systemName = s"_premise_${ta.systemName}"
+    // sb.append(s"${systemName}\n\n")
+    // sb.append(jointAlphabet.map(e => s"event:${e}").mkString("\n"))
+    // sb.append("\n")
+    sb.append(ta.core)
+    dltsTA.foreach({d => sb.append(d.core); sb.append("\n")})
+    val eventsOfProcesses = HashMap[String,Set[String]]()
+    dlts.foreach({d => eventsOfProcesses += (d.name -> d.alphabet.toSet)})
+    eventsOfProcesses += (ta.systemName -> ta.events)
+    // val sync_sb = StringBuilder()
+    val allProcesses = eventsOfProcesses.keys.toList
+    val syncs = jointAlphabet.map(
+      sigma => 
+        allProcesses.filter(eventsOfProcesses(_).contains(sigma))
+        .map({process => (process,sigma)})
+    ).toList.filter(_.size > 1)
+    TA(systemName, jointAlphabet, sb.toString(), eventsOfProcesses, syncs)
+  }
+}
+
+class TCheckerAssumeGuaranteeOracles(ltsFiles : Array[File], err : String) extends AssumeGuaranteeOracles[TA, DLTS]{
+  val alphaP = Alphabets.fromList(List[String](err))
+  val processes = ltsFiles.map(TA.fromFile(_))
+  private val errDFA : DFA[?, String] = {
+    AutomatonBuilders
+      .newDFA(alphaP)
+      .withInitial("q0")
+      .from("q0")
+      .on(err)
+      .to("q1")
+      .withAccepting("q0")
+      .create();
+  }
+  
+  /**
+    * 
+    *
+    * @param lts
+    * @param assumptions List of complete DFAs
+    * @param guarantee
+    * @pre guarantee.alphabet <= lts.alphabet
+    * @return
+    */
+  def checkInductivePremises(ta : TA, assumptions : List[DLTS], guarantee : DLTS) : Option[CounterExample] =
+    { 
+      require(guarantee.alphabet.toSet.subsetOf(ta.alphabet().toSet))
+      // Complement guarantee
+      val compG = DLTS(s"_comp_${guarantee.name}", DFAs.complement(guarantee.dfa,guarantee.alphabet), guarantee.alphabet)
+      // For each automaton A in assumptions:
+      //   Extend alphabet, and remove all transitions from non-accepting states
+      val liftedAssumptions = 
+        assumptions.map({ass => DLTS.liftAndStripNonAccepting(ass, ta.alphabet(), Some(s"lifted_${ass.name}"))})
+      val premiseProduct = TA.synchronousProduct(ta, compG::liftedAssumptions, Some("_accept_"))
+      System.out.println(premiseProduct)
+      checkReachability(premiseProduct, s"${compG.name}__accept_")
+    }
+  def checkFinalPremise(lhs : List[DLTS], p : DLTS) : Option[CounterExample] = {
     None
   }
-  def extendTrace(lts : TCheckerTA, word : List[String], extendedAlphabet : Set[String]) : Option[List[String]] ={
+  def extendTrace(lts : TA, word : List[String], extendedAlphabet : Set[String]) : Option[List[String]] ={
     None
   }
 
+  def checkReachability(ta : TA, label : String) : Option[CounterExample] = {
+    None
+  }
 }
 
 
 
-class AGVerifier[LTS, Property](ltss : List[LTS], property : Property, agOracles : AGOracles[LTS, Property]) {
+class AssumeGuaranteeVerifier[LTS, Property](ltss : List[LTS], property : Property, agOracles : AssumeGuaranteeOracles[LTS, Property]) {
   var assumptionAlphabet : List[String] = List()
   var assumptions : Array[List[Int]] = Array()
 
@@ -184,7 +334,7 @@ class AGVerifier[LTS, Property](ltss : List[LTS], property : Property, agOracles
  *  locations with the said label are accepting.
  */
 class TCheckerMonitorMaker (
-    ta: TCheckerTA,
+    ta: TA,
     alphabet: Alphabet[String],
     acceptingLabel : Option[String],
     monitorProcessName: String = "_crtmc_mon"
@@ -397,336 +547,4 @@ class TCheckerMonitorMaker (
           taB.toString
       }
     }
-
-
-  abstract class Answer
-  case object Empty extends Answer
-  case class NonEmpty(cexDescription : String) extends Answer
-
-  /** Given a string description of a product automaton, check emptiness.
-   * @param generateWitness returns the actual counterexample if set to true, and an empty string otherwise.
-   * @return Empty if the given automaton is empty, and NonEmpty with a trace otherwise.
-   */
-  def checkEmpty(monitorDescription : String, generateWitness : Boolean) : Answer = {
-    val label = if acceptingLabel == None then monitorAcceptLabel else productAcceptLabel
-    val productFile =
-      Files.createTempFile(tmpDirPath, "product", ".ta").toFile()
-    val pw = PrintWriter(productFile)
-    pw.write(monitorDescription)
-    pw.close()
-
-    // Model check product automaton
-    var certFile : java.io.File = null
-    
-    val cmd = 
-        if (generateWitness){
-          certFile = Files.createTempFile(tmpDirPath, "cert", ".ta").toFile()
-          "tck-reach -a reach %s -l %s -C %s"
-            .format(productFile.toString, label,certFile.toString)
-        } else {
-          "tck-reach -a covreach %s -l %s"
-            .format(productFile.toString, label)
-        }
-    if configuration.get().verbose_MembershipQueries then
-      System.out.println(cmd)
-    // var beginTime = System.nanoTime()
-    val output = cmd.!!
-    // this._elapsed = this._elapsed + (System.nanoTime() - beginTime)
-    // System.out.println(output)
-
-    if (!configuration.get().keepTmpFiles){
-      productFile.delete()
-    }    
-    if (output.contains("REACHABLE false")) then {
-      if (generateWitness && !configuration.get().keepTmpFiles){
-        certFile.delete()
-      }
-      Empty
-    } else if (output.contains("REACHABLE true")) then {
-      if (generateWitness){
-        // val parts = output.split("Counterexample trace:").map(_.strip()).filter(_.length>0)      
-        // val timedCex = parts(1)
-        val timedCex = Source.fromFile(certFile).getLines.mkString("\n")
-        if (!configuration.get().keepTmpFiles){
-          certFile.delete()
-        }
-        // System.out.println(timedCex)
-        NonEmpty(timedCex)
-      } else {
-        NonEmpty("")
-      }
-    } else {
-      if (generateWitness && !configuration.get().keepTmpFiles){
-        certFile.delete()
-      }      
-      throw FailedTAModelChecking(output)
-    }
   }
-
-}
-abstract class TAMembershipOracle extends DFAMembershipOracle[String]{
-  /**
-   * Query TChecker whether the given untimed word prefix.suffix is accepted by the timed automaton.
-   * @return Returns witness timed trace if the given word is in the untimed language; None otherwise.
-   */
-  def answerQuery(
-      prefix: Word[String],
-      suffix: Word[String],
-      generateWitness : Boolean
-  ): Option[String]
-
-  def systemElapsedTime : Long
-  def nbQueries : Long
-}
-
-class TCheckerMembershipOracle(
-    ta : TCheckerTA,
-    alphabet: Alphabet[String],
-    acceptingLabel : Option[String] = None
-) extends TAMembershipOracle {
-  private val logger = LoggerFactory.getLogger(classOf[TCheckerTA])
-  private val taMonitorMaker = TCheckerMonitorMaker(ta, alphabet, acceptingLabel)
-
-  private var _elapsed : Long = 0
-  private var _nbQueries : Long = 0
-  override def systemElapsedTime : Long ={
-    _elapsed
-  }
-  override def nbQueries : Long ={
-    _nbQueries
-  }
-
-  override def processQueries(
-      queries: java.util.Collection[
-        ? <: de.learnlib.api.query.Query[String, java.lang.Boolean]
-      ]
-  ): Unit = {
-    MQUtil.answerQueries(this, queries);
-  }
-
-  override def answerQuery(
-      prefix: Word[String],
-      suffix: Word[String]
-  ): java.lang.Boolean = {
-    val pr = prefix.asList.asScala
-    val su = suffix.asList.asScala
-    // System.out.println(pr.toList.mkString(" ") + " ||| " + su.mkString(" "))
-    answerQuery(prefix,suffix, false) match {
-      case None => false
-      case _ => true
-    }
-  }
-
-  /**
-   * Returns witness timed trace if the given word is in the untimed language
-   */
-  override def answerQuery(
-      prefix: Word[String],
-      suffix: Word[String],
-      generateWitness : Boolean
-  ): Option[String] = {
-    statistics.Counters.incrementCounter("taMembershipOracle")
-
-    val trace = prefix.asList().asScala ++ suffix.asList().asScala
-    this._nbQueries += 1
-    val monitorDescription = taMonitorMaker.makeWordIntersecter(trace)
-    val verdict = taMonitorMaker.checkEmpty(monitorDescription, generateWitness)
-    if configuration.get().verbose_MembershipQueries then
-      System.out.print(BLUE + "Membership query: " + trace + RESET)
-    verdict match {
-      case taMonitorMaker.Empty =>
-        if configuration.get().verbose_MembershipQueries then
-          System.out.println(RED + " (false)" + RESET)
-        statistics.negQueries = statistics.negQueries + trace.mkString(" ")
-        None
-      case taMonitorMaker.NonEmpty(cex) =>
-        statistics.posQueries = statistics.posQueries + trace.mkString(" ")
-        if configuration.get().verbose_MembershipQueries then
-          System.out.println(GREEN + " (true)" + RESET)
-        Some(cex)
-    }
-  }
-}
-
-/** Oracle to check whether the language of the TA is included in that of the hypothesis H, i.e.
- *                              T <= H ? 
- *  assuming that all locations of the TA are accepting.
- */
-class TCheckerInclusionOracle(
-    ta: TCheckerTA,
-    alphabet: Alphabet[String]
-) extends EquivalenceOracle.DFAEquivalenceOracle[String] {
-  private val logger = LoggerFactory.getLogger(classOf[TCheckerInclusionOracle])
-  private val taMonitorMaker = TCheckerMonitorMaker(ta, alphabet, None)
-  private val alphabetSet = alphabet.asScala.toSet
-
-  val tmpDirPath = FileSystems.getDefault().getPath(configuration.get().tmpDirName);
-  tmpDirPath.toFile().mkdirs()
-
-  override def findCounterExample(
-      hypothesis: DFA[_, String],
-      inputs: java.util.Collection[? <: String]
-  ): DefaultQuery[String, java.lang.Boolean] = {
-    statistics.Counters.incrementCounter("taInclusionOracle")
-    
-    val productFile =
-      Files.createTempFile(tmpDirPath, "productEq", ".ta").toFile()
-    val pw = PrintWriter(productFile)
-    pw.write(taMonitorMaker.makeDFAIntersecter(hypothesis, true))
-    pw.close()
-
-    var certFile = Files.createTempFile(tmpDirPath, "cert", ".ta").toFile()
-
-    // Model check product automaton
-    if (configuration.get().verbose)
-      System.out.println(YELLOW + "Inclusion query (|DFA| = " + hypothesis.size + ")" + RESET)
-    val cmd = "tck-reach -a reach %s -l %s -C %s" 
-      .format(productFile.toString, taMonitorMaker.monitorAcceptLabel, certFile)
-    if (configuration.get().verbose)
-      System.out.println(cmd)
-    val output = cmd.!!
-    // System.out.println(output)
-    if (!configuration.get().keepTmpFiles){
-      productFile.delete()
-    }    
-    if (output.contains("REACHABLE false")) then {
-      System.out.println(GREEN + "TA Inclusion holds: hypothesis with " + hypothesis.size + " states found" + RESET)
-      null
-    } else if (output.contains("REACHABLE true")) then {
-      // val parts = output.split("Counterexample trace:").map(_.strip()).filter(_.length>0)
-      // val cexLines = parts(1).split("\n").toList
-      val cexLines = Source.fromFile(certFile).getLines.toList
-      if (!configuration.get().keepTmpFiles){
-        certFile.delete()
-      }
-      val word = ta.getTraceFromCexDescription(cexLines).filter(alphabet.contains(_))
-      val query =  DefaultQuery[String, java.lang.Boolean](Word.fromArray[String](word.toArray,0,word.length), java.lang.Boolean.TRUE)
-      if (configuration.get().verbose){
-        System.out.println(ta.getTraceFromCexDescription(cexLines))
-        System.out.println(MAGENTA + "CEX requested alphabet: " + inputs + RESET)
-        System.out.println(RED + "Counterexample to inclusion (accepted by TA but not by hypothesis): " + query + RESET)
-      }
-      statistics.posQueries = statistics.posQueries + word.mkString(" ")
-
-      // Visualization.visualize(hypothesis, alphabet);
-      return query
-    } else {
-      throw FailedTAModelChecking(output)
-    }
-  }
-
-}
-
-/*
- * Oracle to compute interpolant automata from a given word that is not in the language.
- */
-class TCheckerInterpolationOracle(
-    ta: File,
-    alphabet: List[String]
-) {
-
-  abstract class Answer
-  case class Empty(nfa : CompactNFA[String]) extends Answer
-  case class NonEmpty(cexDescription : String) extends Answer
-
-  /**
-   * Use TChecker to check whether word is in the untimed language of the given ta.
-   * @return NonEmpty if the word is accepted (and a witness execution a string);
-   *   Empty(nfa) where nfa is an interpolant automaton otherwise.
-   */
-  def checkWord(word : List[String]) : Answer = {
-    val wordArg = "\"%s\"".format(word.mkString(" "))
-    val alphabetArg = "\"%s\"".format(alphabet.mkString(" "))
-
-    val cmd = "tck-tar %s -t %s -a %s".format(ta.toString, wordArg, alphabetArg)
-    val output = cmd.!!
-    System.out.println(cmd)
-    System.out.println(output)
-    if (output.contains("REACHABLE true")){
-      NonEmpty(output)
-    } else {
-      val parts = output.split("Interpolant Automaton:")
-      if (parts.length != 2){
-        throw Exception("Unexpected output from tck-tar:\n" + output)
-      }
-      val regNbStates = "nb_states:\\s*([0-9]*)\\s*".r
-      var nbStates = 0
-      parts(1).split("\n").foreach{
-        case regNbStates(n) => nbStates = Integer.parseInt(n)
-        case _ => ()
-      }
-      if (nbStates == 0){
-        throw Exception("Could not parse number of states in interpolant automaton:\n" + parts(1))
-      }
-      val nfa = AutomatonBuilders.newNFA(Alphabets.fromList(alphabet)).create()
-      for (i <- 1 to nbStates){
-        nfa.addState()
-      }
-      val regTrans = "\\(([0-9]*),(.*),([0-9]*)\\)".r
-      val regInit = "init:\\s*(.*)".r
-      val regAccept = "accepting: (.*)".r
-      parts(1).split("\n").foreach{
-          case regTrans(p, sigma, q) =>
-            nfa.addTransition(Integer.parseInt(p.strip()), sigma.strip(), Integer.parseInt(q.strip()))
-          case regInit(p) =>
-            nfa.setInitial(Integer.parseInt(p), true)
-          case regAccept(p) =>
-            nfa.setAccepting(Integer.parseInt(p), true)
-          case _ => ()
-      }
-      Empty(nfa)
-    }
-  }
-}
-
-
-/** Oracle to check whether the language of the hypothesis H is included in that of the TA:
- *                              H <= T ? 
- *  Here, all locations of the TA is assumed to be accepting.
- * 
- *  FIXME Checking the emptiness of H /\ complement(T)  does not imply the above inclusiom on untimed traces!
- */
-class TCheckerContainmentOracle(
-    taFile: File,
-    alphabet: Alphabet[String]
-) extends EquivalenceOracle.DFAEquivalenceOracle[String] {
-
-  private val logger = LoggerFactory.getLogger(classOf[TCheckerContainmentOracle])
-
-  private val tmpDirPath = FileSystems.getDefault().getPath(configuration.get().tmpDirName);
-  tmpDirPath.toFile().mkdirs()
-
-  /** TCheckerTA which represents the complement of the given TA,
-   *  with accepting label _complement_accept. */
-  
-  private val complementTA = {
-    val f = Files.createTempFile(tmpDirPath, "complement", ".ta").toFile()
-    val cmd = s"tck-convert -c ${taFile.toString} -o ${f.toString}"
-    System.out.println(cmd)
-    if (cmd.! != 0) then{
-      logger.error("tck-convert returned an error")
-      throw FailedTAModelChecking("Could not compute complement")
-    }
-    TCheckerTA(f)
-  }
-  val taMonitorMaker = TCheckerMonitorMaker(complementTA, alphabet, Some("_complement_accept"))
-  
-  override def findCounterExample(
-      hypothesis: DFA[_, String],
-      inputs: java.util.Collection[? <: String]
-    ): DefaultQuery[String, java.lang.Boolean] = {
-    statistics.Counters.incrementCounter("taContainmentOracle")
-
-    val productTA = taMonitorMaker.makeDFAIntersecter(hypothesis, false)
-    taMonitorMaker.checkEmpty(productTA, generateWitness=true) match {
-      case taMonitorMaker.Empty => null // Containment holds
-      case taMonitorMaker.NonEmpty(cexDescription) => // Containment fails
-      val word = complementTA.getTraceFromCexDescription(cexDescription.split("\n").toList).filter(alphabet.contains(_))
-      val query =  DefaultQuery[String, java.lang.Boolean](Word.fromArray[String](word.toArray,0,word.length), java.lang.Boolean.FALSE)
-      System.out.println(RED + "Counterexample to containment (accepted by hypothesis but not by timed automaton): " + query + RESET)
-      statistics.negQueries = statistics.negQueries + word.mkString(" ")
-      query
-    }      
-  }
-}
-

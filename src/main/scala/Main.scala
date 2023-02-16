@@ -34,19 +34,15 @@ object Main {
           .valueName("<lts>")
           .action(
             (x,c) =>
-            c.copy(ltsFiles = x)
+            c.copy(ltsFiles = x.toArray)
           ),
-        opt[File]("p")
+        opt[String]("err")
           .required()
-          .valueName("<p>")
+          .valueName("<err>")
           .action((x, c) => 
-              if (x.toString.endsWith(".ta")){
-                c.copy(pFile = x, pFormat = FSM.TCheckerTA)
-              } else {
-                throw Exception("Unknown lts format")
-              }
+              c.copy(err = x)
             )
-          .text("p is the property to be checked, given as a lts."),
+          .text("err is the label indicating an error; so that the property to be checked is 'G not err'."),
         opt[Boolean]("verbose")
           .action((_, c) => c.copy(verbose = true))
           .valueName("(true|false)"),
@@ -64,19 +60,14 @@ object Main {
       case None => ()
       case Some(config) =>
         configuration.set(config)
-        // for file <- configuration.get().ltsFiles do {
-        //   if (!file.exists()){
-        //     logger.error(("%s File " + file.getAbsolutePath() + " does not exist%s").format(RED,RESET))
-        //     return
-        //   }
-        // }
-        if (!configuration.get().pFile.exists()){
-          logger.error(("%s File " + configuration.get().pFile.getAbsolutePath() + " does not exist%s").format(RED,RESET))
-          return
+        for file <- configuration.get().ltsFiles do {
+          if (!file.exists()){
+            logger.error(("%s File " + file.getAbsolutePath() + " does not exist%s").format(RED,RESET))
+            return
+          }
         }
-        // // logger.info("LTS File: " + configuration.get().ltsFiles)
-        // // logger.info("P File: " + configuration.get().pFile)
-        // val tmpFolder = configuration.get().tmpDirPath()
+        val checker = tchecker.TCheckerAssumeGuaranteeOracles(configuration.get().ltsFiles, configuration.get().err)
+        // checker.checkInductivePremises(checker.processes(0),)
       }
   }
 }

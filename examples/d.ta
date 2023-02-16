@@ -1,0 +1,16 @@
+system:d
+
+event:b
+event:c
+event:d
+
+process:A
+location:A:q0{initial:}
+location:A:q1
+location:A:q2
+edge:A:q0:q0:d
+edge:A:q0:q1:c
+edge:A:q1:q0:b
+edge:A:q1:q1:c
+edge:A:q1:q2:d
+edge:A:q2:q2:d

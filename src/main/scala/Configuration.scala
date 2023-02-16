@@ -21,10 +21,9 @@ object FSM {
 }
 
 case class Configuration(
-    ltsFiles: Seq[File] = Seq[File](),
-    pFile: File = new File("."),
+    ltsFiles : Array[File] = Array[File](),
+    err: String = "",
     ltsFormat: FSM.FSMFormat = FSM.TCheckerTA,
-    pFormat: FSM.FSMFormat = FSM.TCheckerTA,
     keepTmpFiles: Boolean = false,
     verbose: Boolean = false,
     verbose_MembershipQueries : Boolean = false,

@@ -21,6 +21,7 @@ lazy val root = project
 		"de.learnlib" % "learnlib-api" % "0.16.0",
 		"de.learnlib" % "learnlib-parent" % "0.16.0" pomOnly(),
 		"de.learnlib.distribution" % "learnlib-distribution" % "0.16.0" pomOnly(),
+		"dk.brics" % "automaton" % "1.12-4",
 		"net.automatalib" % "automata-core" % "0.10.0",
 		"com.github.scopt" %% "scopt" % "4.1.0",
 		"org.slf4j" % "slf4j-api" % "1.7.9",
