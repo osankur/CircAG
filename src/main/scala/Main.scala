@@ -66,7 +66,7 @@ object Main {
             return
           }
         }
-        val checker = tchecker.TCheckerAssumeGuaranteeOracles(configuration.get().ltsFiles, configuration.get().err)
+        val checker = tchecker.TCheckerAssumeGuaranteeVerifier(configuration.get().ltsFiles, configuration.get().err)
         // checker.checkInductivePremises(checker.processes(0),)
       }
   }

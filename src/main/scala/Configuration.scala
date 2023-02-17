@@ -30,18 +30,18 @@ case class Configuration(
     tmpDirName: String = ".tmp/",
     visualizeDFA : Boolean = false
 ) {
-  private var tmpDirFile: Option[File] = None
-  def tmpDirPath(): File = {
-    tmpDirFile match {
+  private var tmpDirPath: Option[Path] = None
+  def getTmpDirPath(): Path = {
+    tmpDirPath match {
       case None =>
-        val tmpDirPath = FileSystems.getDefault().getPath(tmpDirName);
-        tmpDirPath.toFile().mkdirs()
-        for(file <- tmpDirPath.toFile().listFiles()){
+        val p = FileSystems.getDefault().getPath(tmpDirName);
+        p.toFile().mkdirs()
+        for(file <- p.toFile().listFiles()){
           if (!file.isDirectory()) 
             file.delete()
         }
-        tmpDirFile = Some(tmpDirPath.toFile())
-        tmpDirPath.toFile()
+        tmpDirPath = Some(p)
+        p
       case Some(f) => f
     }
   }

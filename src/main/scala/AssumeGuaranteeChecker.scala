@@ -37,18 +37,17 @@ import net.automatalib.serialization.aut.AUTSerializationProvider
 import net.automatalib.automata.fsa.NFA
 
 import fr.irisa.circag.DLTS
+import fr.irisa.circag.Trace
 import fr.irisa.circag.configuration
 import fr.irisa.circag.statistics
 
 case class BadTimedAutomaton(msg: String) extends Exception(msg)
 case class FailedTAModelChecking(msg: String) extends Exception(msg)
 
-class CounterExample(trace : List[String], alphabet : Set[String])
-
 trait AssumeGuaranteeOracles[LTS, Property] {
-  def checkInductivePremises(lts : LTS, assumptions : List[Property], guarantee : Property) : Option[CounterExample]
-  def checkFinalPremise(lhs : List[Property], p : Property) : Option[CounterExample]
-  def extendTrace(lts : LTS, word : List[String], extendedAlphabet : Set[String]) : Option[List[String]] 
+  def checkInductivePremises(lts : LTS, assumptions : List[Property], guarantee : Property) : Option[Trace]
+  def checkFinalPremise(lhs : List[Property], p : Property) : Option[Trace]
+  def extendTrace(lts : LTS, word : Trace, extendedAlphabet : Set[String]) : Trace
 }
 
 /** 
@@ -73,27 +72,6 @@ class TA (
   def alphabet() : Alphabet[String] = {
     Alphabets.fromList(events.toList)
   }
-  /** Given the counterexample description output by TChecker, given as a list of lines,
-   *  return the trace, that is, the sequence of events in the alphabet encoded by the said counterexample.
-   */
-  def getTraceFromCexDescription(cexDescription : List[String]) : List[String] = {
-      val word = ListBuffer[String]()
-      val regEdge = ".*->.*vedge=\"<(.*)>\".*".r
-      cexDescription.foreach({
-        case regEdge(syncList) => 
-          val singleSync = syncList.split(",").map(_.split("@")(1)).toSet.intersect(events)
-          if (singleSync.size == 1){
-            val a = singleSync.toArray
-            word.append(a(0))
-          } else if (singleSync.size > 1){
-            throw FailedTAModelChecking("The counterexample trace has a transition with syncs containing more than one letter of the alphabet:\n" + syncList)
-          } else {
-            // Ignore internal transition
-          }
-        case _ => ()
-      })
-      word.toList
-  }
 
   override def toString(): String = {
     val sb = StringBuilder()
@@ -110,21 +88,6 @@ class TA (
   }
 
 }
-
-
-// /**
-//   * Parser for a single-process TChecker files
-//   */
-//  class SingleProcessTA
-//     (
-//     var systemName : String = "",
-//     var events: Set[String] = Set(),
-//     var core: String = "",
-//     var eventsOfProcesses : HashMap[String, Set[String]] = HashMap[String, Set[String]](),
-//     var syncs : List[List[(String, String)]] = List[List[(String, String)]](),
-//     var processName : String = ""
-//     )
-//     extends TCheckerTA(systemName, events, core, eventsOfProcesses, syncs)
 
 object TA{
   def fromFile(inputFile: java.io.File) : TA = {
@@ -199,7 +162,7 @@ object TA{
           }
           if (dlts.dfa.isAccepting(state)) {
             acceptingLabelSuffix match {
-              case Some(l) => attributes.append(s"labels:${dlts.name + "_" + l}")
+              case Some(l) => attributes.append(s"labels:${dlts.name + l}")
               case _ => ()
             }
           }
@@ -238,22 +201,20 @@ object TA{
     * @return
     */
   def synchronousProduct(ta : TA, dlts : List[DLTS], acceptingLabelSuffix : Option[String] = None) : TA = {
-    if dlts.map(_.name).distinct.size < dlts.size || dlts.map(_.name).contains(ta.systemName) then {
-      throw Exception("Synchronous product of automata of the same name")
+    val allNames = dlts.map(_.name) ++ ta.eventsOfProcesses.keys().toList
+    if allNames.size > allNames.distinct.size then {
+      throw Exception("Attempting synchronous product of processes of the same name")
     }
+    //if dlts.map(_.name).distinct.size < dlts.size || dlts.map(_.name).contains(ta.systemName) then {
     val dltsTA = dlts.map({d => this.fromDLTS(d, acceptingLabelSuffix)})
     val jointAlphabet = ta.events | dlts.foldLeft(Set[String]())( (alph, d) => alph | d.alphabet.toSet)
     val sb = StringBuilder()
     val systemName = s"_premise_${ta.systemName}"
-    // sb.append(s"${systemName}\n\n")
-    // sb.append(jointAlphabet.map(e => s"event:${e}").mkString("\n"))
-    // sb.append("\n")
     sb.append(ta.core)
     dltsTA.foreach({d => sb.append(d.core); sb.append("\n")})
     val eventsOfProcesses = HashMap[String,Set[String]]()
     dlts.foreach({d => eventsOfProcesses += (d.name -> d.alphabet.toSet)})
-    eventsOfProcesses += (ta.systemName -> ta.events)
-    // val sync_sb = StringBuilder()
+    ta.eventsOfProcesses.foreach({(p,e) => eventsOfProcesses += (p -> e)})
     val allProcesses = eventsOfProcesses.keys.toList
     val syncs = jointAlphabet.map(
       sigma => 
@@ -261,22 +222,34 @@ object TA{
         .map({process => (process,sigma)})
     ).toList.filter(_.size > 1)
     TA(systemName, jointAlphabet, sb.toString(), eventsOfProcesses, syncs)
+
+  }
+
+  /** 
+   *  Given the counterexample description output by TChecker, given as a list of lines,
+   *  return the trace, that is, the sequence of events in the alphabet encoded by the said counterexample.
+   */
+  def getTraceFromCounterExampleOutput(cexDescription : List[String], events : Set[String]) : Trace = {
+      val word = ListBuffer[String]()
+      val regEdge = ".*->.*vedge=\"<(.*)>\".*".r
+      cexDescription.foreach({
+        case regEdge(syncList) => 
+          val singleSync = syncList.split(",").map(_.split("@")(1)).toSet.intersect(events)
+          if (singleSync.size == 1){
+            val a = singleSync.toArray
+            word.append(a(0))
+          } else if (singleSync.size > 1){
+            throw FailedTAModelChecking("The counterexample trace has a transition with syncs containing more than one letter of the alphabet:\n" + syncList)
+          } else {
+            // Ignore internal transition
+          }
+        case _ => ()
+      })
+      word.toList
   }
 }
 
-class TCheckerAssumeGuaranteeOracles(ltsFiles : Array[File], err : String) extends AssumeGuaranteeOracles[TA, DLTS]{
-  val alphaP = Alphabets.fromList(List[String](err))
-  val processes = ltsFiles.map(TA.fromFile(_))
-  private val errDFA : DFA[?, String] = {
-    AutomatonBuilders
-      .newDFA(alphaP)
-      .withInitial("q0")
-      .from("q0")
-      .on(err)
-      .to("q1")
-      .withAccepting("q0")
-      .create();
-  }
+object TCheckerAssumeGuaranteeOracles {
   
   /**
     * 
@@ -285,266 +258,137 @@ class TCheckerAssumeGuaranteeOracles(ltsFiles : Array[File], err : String) exten
     * @param assumptions List of complete DFAs
     * @param guarantee
     * @pre guarantee.alphabet <= lts.alphabet
-    * @return
+    * @return None if the premise holds; and Some(cexTrace) otherwise
     */
-  def checkInductivePremises(ta : TA, assumptions : List[DLTS], guarantee : DLTS) : Option[CounterExample] =
+  def checkInductivePremises(ta : TA, assumptions : List[DLTS], guarantee : DLTS) : Option[Trace] =
     { 
       require(guarantee.alphabet.toSet.subsetOf(ta.alphabet().toSet))
-      // Complement guarantee
       val compG = DLTS(s"_comp_${guarantee.name}", DFAs.complement(guarantee.dfa,guarantee.alphabet), guarantee.alphabet)
-      // For each automaton A in assumptions:
-      //   Extend alphabet, and remove all transitions from non-accepting states
       val liftedAssumptions = 
         assumptions.map({ass => DLTS.liftAndStripNonAccepting(ass, ta.alphabet(), Some(s"lifted_${ass.name}"))})
       val premiseProduct = TA.synchronousProduct(ta, compG::liftedAssumptions, Some("_accept_"))
-      System.out.println(premiseProduct)
-      checkReachability(premiseProduct, s"${compG.name}__accept_")
+      val trace = checkReachability(premiseProduct, s"${compG.name}_accept_")
+      trace
     }
-  def checkFinalPremise(lhs : List[DLTS], p : DLTS) : Option[CounterExample] = {
-    None
+
+  /**
+    * Check the final premise, that is, whether /\_{dtls in lhs} dtls implies property.
+    *
+    * @param lhs
+    * @param property
+    * @return None if the premise holds; and Some(cexTrace) otherwise
+    */
+  def checkFinalPremise(lhs : List[DLTS], property : DLTS) : Option[Trace] = {
+      val compG = DLTS(s"_comp_${property.name}", DFAs.complement(property.dfa,property.alphabet), property.alphabet)
+      val premiseProduct = TA.synchronousProduct(TA.fromDLTS(compG, acceptingLabelSuffix=Some("_accept_")), lhs)
+      // System.out.println(premiseProduct)
+      checkReachability(premiseProduct, s"${compG.name}_accept_")      
   }
-  def extendTrace(lts : TA, word : List[String], extendedAlphabet : Set[String]) : Option[List[String]] ={
-    None
+  /**
+    * Attempt to find a trace in ta that synchronizes with word; the returned trace has alphabet word's alphabet | ta's alphabet.
+    * 
+    * @param ta
+    * @param word
+    * @param projectionAlphabet
+    * @return
+    */
+  def extendTrace(ta : TA, word : Trace, projectionAlphabet : Option[Set[String]]) : Option[Trace] ={
+    val wordDLTS = DLTS.fromTrace(word,None)
+    val productTA = TA.synchronousProduct(ta, List(wordDLTS), acceptingLabelSuffix = Some("_accept_"))
+    checkReachability(productTA, s"${wordDLTS.name}_accept_") 
+    // match {
+    //   case None => None
+    //   case Some(exWord) => 
+    //     (projectionAlphabet match 
+    //       case None => Some(exWord)
+    //       case Some(alph) => Some(exWord.filter(alph))
+    //     )
+    // }
   }
 
-  def checkReachability(ta : TA, label : String) : Option[CounterExample] = {
-    None
+  /**
+    * Check whether ta contains an exec whose trace, projected to projectionAlphabet is word.
+    *
+    * @param ta
+    * @param word
+    * @param projectionAlphabet
+    * @return None if no such execution exists, and Some(execution) otherwise.
+    */
+  def checkTraceMembership(ta : TA, word : Trace, projectionAlphabet : Option[Set[String]]) : Option[Trace] = {  
+    val traceProcess = DLTS.fromTrace(word, projectionAlphabet)
+    val productTA = TA.synchronousProduct(ta, List(traceProcess), Some("_accept_"))
+    val label = s"${traceProcess.name}_accept_"
+    this.checkReachability(productTA, label)
+  }
+
+  def checkReachability(ta : TA, label : String) : Option[Trace] = {
+    val modelFile =
+      Files.createTempFile(configuration.get().getTmpDirPath(), "circag-query", ".ta").toFile()
+    val pw = PrintWriter(modelFile)
+    pw.write(ta.toString())
+    pw.close()
+
+    val certFile =
+      Files.createTempFile(configuration.get().getTmpDirPath(), "circag-cert", ".cert").toFile()
+    val cmd = "tck-reach -a reach %s -l %s -C %s"
+            .format(modelFile.toString, label, certFile.toString)
+
+    if configuration.globalConfiguration.verbose_MembershipQueries then
+      System.out.println(cmd)
+
+    val output = cmd.!!
+    val cex = Source.fromFile(certFile).getLines().toList
+
+    if (!configuration.globalConfiguration.keepTmpFiles){
+      modelFile.delete()
+      certFile.delete()
+    }    
+    if (output.contains("REACHABLE false")) then {
+      None
+    } else if (output.contains("REACHABLE true")) then {
+      Some(TA.getTraceFromCounterExampleOutput(cex, ta.events))
+    } else {
+      throw FailedTAModelChecking(output)
+    }
   }
 }
 
 
 
-class AssumeGuaranteeVerifier[LTS, Property](ltss : List[LTS], property : Property, agOracles : AssumeGuaranteeOracles[LTS, Property]) {
-  var assumptionAlphabet : List[String] = List()
+class AssumeGuaranteeVerifier[LTS, Property](ltss : List[LTS], property : Property) {
   var assumptions : Array[List[Int]] = Array()
 
   def simplifyAssumptions() : Unit = {
   }
-  def refineAssumptionAlphabet(trace : List[String]) : Unit = {}
-  def check() : Option[CounterExample] = {
+  def refineAssumptionAlphabet(trace : Trace) : Unit = {}
+  def check() : Option[Trace] = {
     None
   }
 }
 
+class TCheckerAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String) {
+  private var assumptionAlphabet : List[String] = List()
+  var assumptions : Buffer[DLTS] = Buffer()
 
-/** Class providing functions to generate products of the given timed automaton `ta` with traces or DFAs
- *  on the common `alphabet`. The monitors are obtained by adding a monitor process in the given TA description,
- *  and adding synchronizations on all events in the alphabet.
- *  If acceptingLabel is None, then it is assumed that all locations of the TA are accepting. Otherwise, only those
- *  locations with the said label are accepting.
- */
-class TCheckerMonitorMaker (
-    ta: TA,
-    alphabet: Alphabet[String],
-    acceptingLabel : Option[String],
-    monitorProcessName: String = "_crtmc_mon"
-)  {
-  val tmpDirPath = FileSystems.getDefault().getPath(configuration.get().tmpDirName);
-  tmpDirPath.toFile().mkdirs()
-
-  private val acceptingLocations = {
-    val accLocs = ArrayBuffer[(String,String)]()
-    val regLoc = "\\s*location:(.*):(.*)\\{(.*)\\}\\s*".r
-    ta.core.split("\n").foreach( _ match {
-      case regLoc(proc,loc,attr) =>
-        acceptingLabel match {
-          case None => accLocs.append((proc,loc))
-          case Some(lab) => 
-            if (attr.contains(s"labels:$lab")){
-              accLocs.append((proc,loc))
-            }
-        }
-      case _ => ()
-    }
-    )
-    accLocs
+  val propertyAlphabet = Alphabets.fromList(List[String](err))
+  val processes = ltsFiles.map(TA.fromFile(_))
+  private val errDFA : CompactDFA[String] = {
+    AutomatonBuilders
+      .newDFA(propertyAlphabet)
+      .withInitial("q0")
+      .from("q0")
+      .on(err)
+      .to("q1")
+      .withAccepting("q0")
+      .create();
   }
+  val propertyDLTS = DLTS("property", errDFA, propertyAlphabet)
 
-  /** Textual declaration of sync labels where the monitor process participates
-    * in all synchronized edges with a label in alphabet + 
-    * the monitor synchronizes on the letters of the alphabet with all processes
-    * which use that action without declaring any sync.
-    */
-  val productTASyncs: String = {
-    val strB = StringBuilder()
-    val alphabetSet = alphabet.asScala.toSet
-      // The monitor shall join all syncs on letters of the alphabet
-    ta.syncs.foreach { syncLine =>
-      val newSyncLine =
-        syncLine.map(_._2).toSet.intersect(alphabetSet).toList match {
-          case Nil          => syncLine
-          case event :: Nil => (monitorProcessName, event) :: syncLine
-          case _ =>
-            throw BadTimedAutomaton(
-              "Timed automaton must not have synchronized transitions on multiple external sync labels"
-            )
-        }
-      strB.append("sync:")
-      strB.append(newSyncLine.map(_ + "@" + _).mkString(":"))
-      strB.append("\n")
-    }
-    // For each process, store the set of letters that appear in a sync instruction
-    val syncEventsOfProcesses = HashMap[String, Set[String]]()
-    ta.syncs.foreach { syncLine =>
-      val newSyncLine =
-        syncLine.filter(alphabetSet.contains(_)).foreach(
-          (proc, event) => {
-            val currentSet = syncEventsOfProcesses.getOrElse(proc,Set[String]())
-            syncEventsOfProcesses += proc -> currentSet
-          }
-        )
-    }
-    strB.append("\n")
-    // The monitor shall join all previously asynchronous transitions on the letters of the alphabet
-    ta.eventsOfProcesses.foreach(
-      (proc, syncEvents) => 
-        syncEvents.intersect(alphabet.toSet).diff(syncEventsOfProcesses.getOrElse(proc, Set[String]())).foreach(
-          e => strB.append("sync:%s@%s:%s@%s\n".format(monitorProcessName,e,proc,e))
-        )
-    )
-    strB.result()
+  def simplifyAssumptions() : Unit = {
   }
-  /** Accepting label for the monitor when all states of the TA are accepting (when acceptingLabel == None)*/
-  def monitorAcceptLabel = "_crtmc_monitor_accept"
-
-  /** Accepting label for the monitor when acceptingLabel != None. The monitor still contains locations
-    labelled with monitorAcceptLabel, but the intersection is marked by productAcceptLabel. */
-  def productAcceptLabel = "_crtmc_joint_accept"
-
-  /** Returns textual description of a TA made of the product of the TA, and a
-    * monitor that reads a given word. The monitorAcceptLabel is reachable iff the
-    * intersection is non-empty.
-    * 
-    */
-  def makeWordIntersecter(word: Buffer[String]): String = {
-    // Build product automaton
-    val strB = StringBuilder()
-    strB.append(ta.core)
-    strB.append("\nprocess:%s\n".format(monitorProcessName))
-    for (i <- 0 to word.length) {
-      strB.append("location:%s:q%d".format(monitorProcessName, i))
-      val attributes = ArrayBuffer[String]()
-      if (i == 0){
-        attributes.append("initial:")
-      }
-      if (i == word.length){
-        attributes.append("labels:%s".format(monitorAcceptLabel))
-      }
-      strB.append("{%s}\n".format(attributes.mkString(":")))
-    }
-    word.zipWithIndex.foreach { (label, i) =>
-      strB.append(
-        "edge:%s:q%d:q%d:%s\n".format(monitorProcessName, i, i + 1, label)
-      )
-    }
-    strB.append("\n")
-    strB.append(productTASyncs.mkString)
-
-    acceptingLabel match {
-      case None => 
-        // All locations of the TA are accepting; so we will check for monitorAcceptLabel
-        strB.toString
-      case Some(errlabel) =>
-        // TA has designated accepting locations, we will add a new accepting location labeled productAcceptLabel
-        strB.append("\nevent:%s\n".format(productAcceptLabel))
-        // For each process with an accepting location, add a new joint accepting state
-        acceptingLocations.map(_._1).toSet.foreach{
-          proc => strB.append("location:%s:%s{labels:%s}\n".format(proc, productAcceptLabel, productAcceptLabel))
-          strB.append("sync:%s@%s:%s@%s\n".format(proc, productAcceptLabel, monitorProcessName, productAcceptLabel))
-        }
-        // Add edges from accepting locations to this new error states
-        acceptingLocations.foreach{
-          (proc,loc) =>
-            strB.append("edge:%s:%s:%s:%s\n".format(proc,loc, productAcceptLabel, productAcceptLabel))
-        }
-        strB.append("edge:%s:q%s:q%s:%s\n".format(monitorProcessName, word.length, word.length, productAcceptLabel))
-        strB.toString
-    }
+  def refineAssumptionAlphabet(trace : Trace) : Unit = {}
+  def check() : Option[Trace] = {
+    None
   }
+}
 
-  /** Returns textual description of TA made of the product of given TA, and the
-    * the given DFA. The monitorAcceptLabel is reachable if the intersection is non-empty.
-    * When complement is set to true, the returned automaton represents TA /\ comp(DFA), so the emptiness
-    * of this intersection is equivalent to inclusion of TA in DFA.
-    * 
-    * The accepting label is to be checked is monitorAcceptLabel if all locations of the TA are accepting (acceptingLabel == None),
-    * and productAcceptLabel otherwise. These cases are handled by the checkEmpty function.
-    * FIXME there should be a unique accepting label in both cases.
-    * 
-    * @param complement whether given DFA should be complemented.
-    */
-  def makeDFAIntersecter(hypothesis: DFA[_, String], complement : Boolean = false): String = {
-    val strStates = StringBuilder()
-    val strTransitions = StringBuilder()
-    // val alphabetSet = alphabet.asScala.toSet
-    val initStates = hypothesis.getInitialStates().asScala
-    strStates.append("process:" + monitorProcessName + "\n")
-    // Add a dummy accepting node in case there is no accepting state at the end (this prevents tchecker from complaining)
-    strStates.append("location:%s:dummy{labels:%s}\n".format(monitorProcessName,monitorAcceptLabel))
-    hypothesis
-      .getStates()
-      .asScala
-      .foreach(state =>
-        {
-          strStates
-            .append("location:%s:q%s{".format(monitorProcessName, state.toString))
-          val attributes = ArrayBuffer[String]()
-          if (initStates.contains(state)) then {
-            attributes.append("initial:")
-          }
-          // revert accepting and non-accepting states
-          if (!complement && hypothesis.isAccepting(state) || complement && !hypothesis.isAccepting(state)) {
-            attributes.append("labels:%s".format(monitorAcceptLabel))
-          }
-          strStates.append(attributes.mkString(":"))
-          strStates.append("}\n")
-          for (sigma <- alphabet.toList) {
-            val succs = hypothesis.getSuccessors(state, sigma);
-            if (!succs.isEmpty()) then {
-              for (succ <- succs) {
-                strTransitions.append(
-                  "edge:%s:q%s:q%s:%s\n".format(
-                    monitorProcessName,
-                    state.toString,
-                    succ.toString,
-                    sigma
-                  )
-                )
-              }
-            }
-          }
-        }
-      )
-      val taB = StringBuilder()
-      taB.append(ta.core)
-      taB.append("\n")
-      taB.append(strStates.append(strTransitions.toString).toString)
-      taB.append("\n")
-      taB.append(productTASyncs)
-      taB.append("\n")
-      acceptingLabel match {
-        case None => 
-          // All locations of the TA are accepting; so we will check for monitorAcceptLabel
-          taB.toString
-        case Some(errlabel) =>
-          // TA has designated accepting locations, we will add a new accepting location labeled productAcceptLabel
-          taB.append("\nevent:%s\n".format(productAcceptLabel))
-          // For each process with an accepting location, add a new joint accepting state
-          acceptingLocations.map(_._1).toSet.foreach{
-            proc => taB.append("location:%s:%s{labels:%s}\n".format(proc, productAcceptLabel, productAcceptLabel))
-            taB.append("sync:%s@%s:%s@%s\n".format(proc, productAcceptLabel, monitorProcessName, productAcceptLabel))
-          }
-          // Add edges from accepting locations to this new error states
-          acceptingLocations.foreach{
-            (proc,loc) =>
-              taB.append("edge:%s:%s:%s:%s\n".format(proc,loc, productAcceptLabel, productAcceptLabel))
-          }
-          hypothesis.getStates().asScala.foreach(state =>
-            if (!complement && hypothesis.isAccepting(state) || complement && !hypothesis.isAccepting(state)) {
-              taB.append("edge:%s:q%s:q%s:%s\n".format(monitorProcessName, state.toString, state.toString, productAcceptLabel))
-            }
-          )
-          taB.toString
-      }
-    }
-  }

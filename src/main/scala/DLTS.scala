@@ -24,6 +24,9 @@ import net.automatalib.words.impl.Alphabets;
   */
 case class DLTS(val name : String, val dfa: DFA[Integer, String], val alphabet: Alphabet[String])
 
+type Trace = List[String]
+
+
 object DLTS {
 
   /** Given (dfa, alphabet), compute the lifting of the dfa to extendedAlphabet
@@ -95,4 +98,29 @@ object DLTS {
     }
   }
 
+  /**
+    * Make straight-line DLTS reading a given trace, projecte to projectionAlphabet
+    *
+    * @param trace
+    * @param projectionAlphabet
+    * @return
+    */
+  def fromTrace(trace: Trace, projectionAlphabet : Option[Set[String]]) : DLTS = {
+    val alph = projectionAlphabet.getOrElse(trace.toSet)
+    val projTrace = trace.filter(alph.contains(_))
+
+    val dfa =
+      CompactDFA.Creator().createAutomaton(Alphabets.fromList(alph.toList))
+    dfa.addState()
+    for i <- 1 to projTrace.size do {
+      dfa.addState()
+    }
+    dfa.setInitialState(0)
+    projTrace.zip(0 until projTrace.size).foreach({
+      (sigma, i) =>
+        dfa.addTransition(i, sigma, i+1)
+    })
+    dfa.setAccepting(projTrace.size, true)
+    DLTS("_trace_", dfa, Alphabets.fromList(alph.toList))
+  }
 }

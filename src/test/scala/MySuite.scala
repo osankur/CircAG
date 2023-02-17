@@ -46,6 +46,9 @@ import de.learnlib.api.query.DefaultQuery;
 // For more information on writing tests, see
 // https://scalameta.org/munit/docs/getting-started.html
 
+import fr.irisa.circag.DLTS
+import fr.irisa.circag.Trace
+
 class MySuite extends munit.FunSuite {
   test("SAT Solver") {
     Global.ToggleWarningMessages(true);
@@ -85,49 +88,44 @@ class MySuite extends munit.FunSuite {
   }
 
   test("premiseChecker"){
-    val inputs1: Alphabet[String] = Alphabets.fromList(List("a","b"))
+    // {a,c,d}*
+    val inputs1: Alphabet[String] = Alphabets.fromList(List("c","d", "a"))
     val dfa1: CompactDFA[String] =
     AutomatonBuilders
       .newDFA(inputs1)
       .withInitial("q0")
       .from("q0")
-      .on("a")
+      .on("c")
       .to("q0")
       .from("q0")
-      .on("b")
-      .to("q1")
-      .from("q1")
-      .on("b")
-      .to("q1")
-      .from("q1")
+      .on("d")
+      .to("q0")
+      .from("q0")
       .on("a")
-      .to("q2")
+      .to("q0")
       .withAccepting("q0")
-      .withAccepting("q1")
       .create();
   
-    val inputs2: Alphabet[String] = Alphabets.fromList(List("b", "c", "d"))
+    // a* + a*d+
+    val inputs2: Alphabet[String] = Alphabets.fromList(List("d", "a"))
     val dfa2: CompactDFA[String] =
     AutomatonBuilders
       .newDFA(inputs2)
       .withInitial("q0")
       .from("q0")
-      .on("c")
+      .on("a")
       .to("q0")
       .from("q0")
-      .on("b")
+      .on("d")
       .to("q1")
       .from("q1")
       .on("d")
       .to("q1")
-      .from("q1")
-      .on("c")
-      .to("q2")
       .withAccepting("q0")
       .withAccepting("q1")
       .create();
-    val err = "c"
-    val errDFA : CompactDFA[String] = {
+    val err = "err"
+    val errDFA : CompactDFA[String] =
       AutomatonBuilders
         .newDFA(Alphabets.fromList(List(err)))
         .withInitial("q0")
@@ -136,67 +134,87 @@ class MySuite extends munit.FunSuite {
         .to("q1")
         .withAccepting("q0")
         .create();
-      }
-    val extendedAlph = Alphabets.fromList(List("a","b","c","d"))
-    // System.out.println(tchecker.TA.fromDLTS(DLTS("ass1", dfa1, dfa1.getInputAlphabet()), acceptingLabelSuffix = Some("_acc_")))
-    val dltss = List(DLTS("ass1", dfa1, dfa1.getInputAlphabet()), DLTS("ass2", dfa2, dfa2.getInputAlphabet()))
-    // Visualization.visualize(dltss.head.dfa, Alphabets.fromList(List("a","b")))
-    // Visualization.visualize(DLTSs.lift(dltss.head, extendedAlph).dfa, extendedAlph)
-    // System.out.println(dltss.map(tchecker.TA.fromDLTS(_)))
-    val checker = tchecker.TCheckerAssumeGuaranteeOracles(Array(File("examples/b.ta")), err)
-    checker.checkInductivePremises(checker.processes(0), dltss, DLTS("guarantee", errDFA, errDFA.getInputAlphabet()))
-    // System.out.println("Printing core: " + checker.processes(0).core)
-    // Then, display a DOT representation of this automaton
-    // Visualization.visualize(ba, true);
+
+    val dltss = List(DLTS("ass1p", dfa1, dfa1.getInputAlphabet()), DLTS("ass2", dfa2, dfa2.getInputAlphabet()))
+    val agv = tchecker.TCheckerAssumeGuaranteeVerifier(Array(File("examples/lts1.ta")), err)
+    val checker = tchecker.TCheckerAssumeGuaranteeOracles.checkInductivePremises(agv.processes(0), dltss, agv.propertyDLTS)
+    assert(checker != None)
+    //System.out.println(checker)
+
+    val dfa1_p: CompactDFA[String] =
+    AutomatonBuilders
+      .newDFA(Alphabets.fromList(List("c","d")))
+      .withInitial("q0")
+      .from("q0")
+      .on("d")
+      .to("q1")
+      .from("q1")
+      .on("c")
+      .to("q1")
+      .from("q1")
+      .on("d")
+      .to("q1")
+      .withAccepting("q0")
+      .withAccepting("q1")
+      .create();
+    
+    val dltss_p = List(DLTS("ass1p", dfa1_p, dfa1_p.getInputAlphabet()), DLTS("ass2", dfa2, dfa2.getInputAlphabet()))
+    val checker_p = tchecker.TCheckerAssumeGuaranteeOracles.checkInductivePremises(agv.processes(0), dltss_p, agv.propertyDLTS)
+    assertEquals(checker_p, None)
+
+ 
+ 
+    val dfa3: CompactDFA[String] =
+    AutomatonBuilders
+      .newDFA(Alphabets.fromList(List("c","a","b", "err")))
+      .withInitial("q0")
+      .from("q0")
+      .on("a")
+      .to("q0")
+      .from("q0")
+      .on("b")
+      .to("q0")      
+      .from("q0")
+      .on("c")
+      .to("q1")
+      .from("q1")
+      .on("b")
+      .to("q1")
+      .from("q1")
+      .on("c")
+      .to("q1")
+      .from("q1")
+      .on("a")
+      .to("q2")
+      .from("q2")
+      .on("a")
+      .to("q2")
+      .from("q2")
+      .on("b")
+      .to("q2")
+      .from("q2")
+      .on("c")
+      .to("q2")
+      .from("q2")
+      .on("err")
+      .to("q3")
+      .withAccepting("q0")
+      .withAccepting("q1")
+      .withAccepting("q2")
+      .withAccepting("q3")
+      .create();
+ 
+    val cex3 = tchecker.TCheckerAssumeGuaranteeOracles.checkFinalPremise(DLTS("ass3", dfa3, dfa3.getInputAlphabet())::dltss_p, agv.propertyDLTS)
+    assertEquals(cex3, None)
+
+    assert(None == tchecker.TCheckerAssumeGuaranteeOracles.checkTraceMembership(agv.processes(0), List[String]("c", "c", "err", "err"), Some(Set[String]("c", "err"))))
+    assert(None != tchecker.TCheckerAssumeGuaranteeOracles.checkTraceMembership(agv.processes(0), List[String]("c", "c", "err"), Some(Set[String]("c", "err"))))
+    assert(None != tchecker.TCheckerAssumeGuaranteeOracles.checkTraceMembership(agv.processes(0), List[String]("c", "b", "err"), Some(Set[String]("c", "err"))))
+    // (checker_p.processes(0), dltss_p, DLTS("guarantee", errDFA, errDFA.getInputAlphabet()))
+    assert(tchecker.TCheckerAssumeGuaranteeOracles.extendTrace(agv.processes(0), List[String]("c", "c", "err"), None)
+      == Some(List("c","c","a","err")))
   }
-//   test("learning"){
-//     val inputs: Alphabet[Character] = Alphabets.characters('a', 'b')
-//     val mqOracle: MembershipOracle[Character, java.lang.Boolean] =
-//       SampleMembershipOracle()
-//     val lstar = ClassicLStarDFABuilder[Character]()
-//       .withAlphabet(inputs)
-//       .withOracle(mqOracle)
-//       .create()
-//     val wMethod = SampleEquivalenceOracle()
-//     val experiment: DFAExperiment[Character] =
-//       DFAExperiment(lstar, wMethod, inputs);
-
-//     // turn on time profiling
-//     experiment.setProfile(true);
-
-//     // enable logging of models
-//     experiment.setLogModels(true);
-
-//     // run experiment
-//     experiment.run();
-
-//     // get learned model
-//     val result = experiment.getFinalHypothesis();
-
-//     // report results
-//     System.out.println(
-//       "-------------------------------------------------------"
-//     );
-
-//     // profiling
-//     System.out.println(SimpleProfiler.getResults());
-
-//     // learning statistics
-//     System.out.println(experiment.getRounds().getSummary());
-
-//     // model statistics
-//     System.out.println("States: " + result.size());
-//     System.out.println("Sigma: " + inputs.size());
-
-//     // show model
-//     // Visualization.visualize(result, inputs);
-//     val f = new java.util.function.Function[Character, String] {
-//       override def apply(input: Character): String = input + ""
-//     }
-//     // System.out.println(AUTWriter.writeAutomaton(result, inputs, f, System.out))
-
-//     System.out.println(
-//       "-------------------------------------------------------"
-//     );
-//   }
+  test("fromTrace"){
+    val _ = DLTS.fromTrace(List("a","b","c","a"),Some(Set("a", "b")))
+  }
 }
