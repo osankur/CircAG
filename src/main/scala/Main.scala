@@ -14,6 +14,7 @@ import net.automatalib.util.automata.builders.AutomatonBuilders;
 
 import fr.irisa.circag.configuration.Configuration
 import fr.irisa.circag.configuration.FSM
+import fr.irisa.circag.tchecker.TA
 
 import scala.collection.mutable
 import scala.collection.immutable
@@ -37,7 +38,6 @@ object Main {
             c.copy(ltsFiles = x.toArray)
           ),
         opt[String]("err")
-          .required()
           .valueName("<err>")
           .action((x, c) => 
               c.copy(err = x)
@@ -52,22 +52,40 @@ object Main {
         opt[Boolean]("visualizeDFA")
           .action((_, c) => c.copy(visualizeDFA = true))
           .valueName("(true|false)")
-          .text("Visualize the DFA that was learned")
+          .text("Visualize the DFA that was learned"),
+        cmd("product")
+          .action((_, c) => c.copy(cmd = "product")),
+        cmd("ag")
+          .action((_, c) => c.copy(cmd = "ag")),
+        cmd("aag")
+          .action((_, c) => c.copy(cmd = "aag"))
       )
     }
-
-    OParser.parse(parser1, args, Configuration()) match {
-      case None => ()
-      case Some(config) =>
-        configuration.set(config)
-        for file <- configuration.get().ltsFiles do {
-          if (!file.exists()){
-            logger.error(("%s File " + file.getAbsolutePath() + " does not exist%s").format(RED,RESET))
-            return
+    try {
+      OParser.parse(parser1, args, Configuration()) match {
+        case None => ()
+        case Some(config) =>
+          configuration.set(config)
+          for file <- configuration.get().ltsFiles do {
+            if (!file.exists()){
+              throw Exception(("%sFile " + file.getAbsolutePath() + " does not exist%s").format(RED,RESET))
+            }
           }
+          config.cmd match {
+            case "product" =>
+              val tas = configuration.get().ltsFiles.map(TA.fromFile(_))
+              val product = tchecker.TA.synchronousProduct(tas.toList)
+              System.out.println(product.toString())
+            case "ag" =>
+              val checker = tchecker.TCheckerAssumeGuaranteeVerifier(configuration.get().ltsFiles, configuration.get().err)
+          }
+          // checker.checkInductivePremises(checker.processes(0),)
         }
-        val checker = tchecker.TCheckerAssumeGuaranteeVerifier(configuration.get().ltsFiles, configuration.get().err)
-        // checker.checkInductivePremises(checker.processes(0),)
-      }
+    } catch {
+      case e => 
+        e.printStackTrace()
+        logger.error(e.getMessage())
+    }
+
   }
 }

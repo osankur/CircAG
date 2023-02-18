@@ -9,7 +9,7 @@ import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable.ListBuffer
 import scala.collection.mutable.Buffer
 import scala.sys.process._
-import scala.io.Source
+import scala.io
 import scala.collection.mutable.StringBuilder
 import scala.collection.mutable.HashMap
 import de.learnlib.util.MQUtil;
@@ -90,7 +90,7 @@ class TA (
 object TA{
   def fromFile(inputFile: java.io.File) : TA = {
     val ta = TA()
-    val lines = Source.fromFile(inputFile).getLines().toList
+    val lines = scala.io.Source.fromFile(inputFile).getLines().toList
     val regEvent = "\\s*event:([^ ]*).*".r
     val regSync = "\\s*sync:(.*)\\s*".r
     val regProcess = "\\s*process:(.*)\\s*".r
@@ -125,9 +125,8 @@ object TA{
         ta.eventsOfProcesses += (monitorProcessName -> Set[String]())
       // System.out.println("Now reading process: " + monitorProcessName)
       case regEdge(sync) =>
-        ta.eventsOfProcesses += (currentProcess -> (ta.eventsOfProcesses(
-          currentProcess
-        ) + sync))
+        ta.eventsOfProcesses.put(currentProcess,
+          (ta.eventsOfProcesses(currentProcess) + sync))
       // System.out.println("Adding sync: " + sync)
       case _ => ()
     }
@@ -222,6 +221,29 @@ object TA{
     TA(systemName, jointAlphabet, sb.toString(), eventsOfProcesses, syncs)
 
   }
+
+  def synchronousProduct(tas : List[TA]) : TA = {
+    require(tas.size > 0)
+    val allProcesses = (tas.map(_.eventsOfProcesses.keys().toSet)).foldLeft(Set[String]())({(a,b) => a | b}).toList
+    val processCount = (tas.map(_.eventsOfProcesses.keys().size)).sum
+    if allProcesses.size < processCount then {
+      throw Exception("Attempting synchronous product of processes of the same name")
+    }
+    //if dlts.map(_.name).distinct.size < dlts.size || dlts.map(_.name).contains(ta.systemName) then {
+    val jointAlphabet = tas.foldLeft(Set[String]())((alph,ta) => alph | ta.alphabet)
+    val sb = StringBuilder()
+    val systemName = s"_product_"
+    tas.foreach({d => sb.append(d.core); sb.append("\n")})
+    val eventsOfProcesses = HashMap[String,Set[String]]()
+    tas.foreach({_.eventsOfProcesses.foreach({(p,e) => eventsOfProcesses.put(p, e)})})
+    val syncs = jointAlphabet.map(
+      sigma => 
+        allProcesses.filter(eventsOfProcesses(_).contains(sigma))
+        .map({process => (process,sigma)})
+    ).toList.filter(_.size > 1)
+    TA(systemName, jointAlphabet, sb.toString(), eventsOfProcesses, syncs)
+  }
+
 
   /** 
    *  Given the counterexample description output by TChecker, given as a list of lines,
@@ -347,7 +369,7 @@ object TCheckerAssumeGuaranteeOracles {
       System.out.println(cmd)
 
     val output = cmd.!!
-    val cex = Source.fromFile(certFile).getLines().toList
+    val cex = scala.io.Source.fromFile(certFile).getLines().toList
 
     if (!configuration.globalConfiguration.keepTmpFiles){
       modelFile.delete()
@@ -419,14 +441,13 @@ class ConstraintManager(ctx : z3.Context, nbProcesses : Int){
   }
 
 }
+abstract class AGIntermediateResult extends Exception
+class AGSuccess extends AGIntermediateResult
+case class AGContinue(constraint : z3.BoolExpr) extends AGIntermediateResult
+case class AGFalse(cex : Trace) extends AGIntermediateResult
 
 class TCheckerAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useAlphabetRefinement : Boolean = false) {
   
-  abstract class AGIntermediateResult extends Exception
-  class AGSuccess extends AGIntermediateResult
-  case class AGContinue(constraint : z3.BoolExpr) extends AGIntermediateResult
-  case class AGFalse(cex : Trace) extends AGIntermediateResult
-
   val z3ctx = {
     val cfg = HashMap[String, String]()
     cfg.put("model", "true");
@@ -506,16 +527,20 @@ class TCheckerAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useA
   def applyAG() : AGIntermediateResult = {
     try{
       for (ta,i) <- processes.zipWithIndex do {
-        TCheckerAssumeGuaranteeOracles.checkInductivePremises(ta, processDependencies(i).map(assumptions(_)).toList, propertyDLTS)
+        // TCheckerAssumeGuaranteeOracles.checkInductivePremises(ta, processDependencies(i).map(assumptions(_)).toList, propertyDLTS)
+        TCheckerAssumeGuaranteeOracles.checkInductivePremises(ta, processDependencies(i).map(assumptions(_)).toList, assumptions(i))
         match {
           case None => ()
-          case Some(cexTrace) => throw AGContinue(updateConstraints(cexTrace))
+          case Some(cexTrace) => 
+            System.out.println(s"Premise ${i} failed with cex: ${cexTrace}")
+            throw AGContinue(updateConstraints(cexTrace))
         }
       }
       TCheckerAssumeGuaranteeOracles.checkFinalPremise(propertyDependencies.map(assumptions(_)).toList, propertyDLTS)
       match {
         case None => AGSuccess()
         case Some(cexTrace) =>
+          System.out.println(s"Final premise failed with cex: ${cexTrace}")
           throw AGContinue(z3ctx.mkTrue())
       }
     } catch {

@@ -48,6 +48,10 @@ import de.learnlib.api.query.DefaultQuery;
 
 import fr.irisa.circag.DLTS
 import fr.irisa.circag.Trace
+import fr.irisa.circag.tchecker.TCheckerAssumeGuaranteeOracles
+import fr.irisa.circag.tchecker.TCheckerAssumeGuaranteeVerifier
+import fr.irisa.circag.tchecker.AGContinue
+import fr.irisa.circag.tchecker.AGSuccess
 
 class MySuite extends munit.FunSuite {
   test("SAT Solver") {
@@ -148,7 +152,7 @@ class MySuite extends munit.FunSuite {
         .withAccepting("q0")
         .create();
 
-    val dltss = List(DLTS("ass1p", dfa1, dfa1.getInputAlphabet()), DLTS("ass2", dfa2, dfa2.getInputAlphabet()))
+    val dltss = List(DLTS("ass1p", dfa1, dfa1.getInputAlphabet().toSet), DLTS("ass2", dfa2, dfa2.getInputAlphabet().toSet))
     val agv = tchecker.TCheckerAssumeGuaranteeVerifier(Array(File("examples/lts1.ta")), err)
     val checker = tchecker.TCheckerAssumeGuaranteeOracles.checkInductivePremises(agv.processes(0), dltss, agv.propertyDLTS)
     assert(checker != None)
@@ -171,7 +175,7 @@ class MySuite extends munit.FunSuite {
       .withAccepting("q1")
       .create();
     
-    val dltss_p = List(DLTS("ass1p", dfa1_p, dfa1_p.getInputAlphabet()), DLTS("ass2", dfa2, dfa2.getInputAlphabet()))
+    val dltss_p = List(DLTS("ass1p", dfa1_p, dfa1_p.getInputAlphabet().toSet), DLTS("ass2", dfa2, dfa2.getInputAlphabet().toSet))
     val checker_p = tchecker.TCheckerAssumeGuaranteeOracles.checkInductivePremises(agv.processes(0), dltss_p, agv.propertyDLTS)
     assertEquals(checker_p, None)
 
@@ -217,7 +221,7 @@ class MySuite extends munit.FunSuite {
       .withAccepting("q3")
       .create();
  
-    val cex3 = tchecker.TCheckerAssumeGuaranteeOracles.checkFinalPremise(DLTS("ass3", dfa3, dfa3.getInputAlphabet())::dltss_p, agv.propertyDLTS)
+    val cex3 = tchecker.TCheckerAssumeGuaranteeOracles.checkFinalPremise(DLTS("ass3", dfa3, dfa3.getInputAlphabet().toSet)::dltss_p, agv.propertyDLTS)
     assertEquals(cex3, None)
 
     assert(None == tchecker.TCheckerAssumeGuaranteeOracles.checkTraceMembership(agv.processes(0), List[String]("c", "c", "err", "err"), Some(Set[String]("c", "err"))))
@@ -235,6 +239,82 @@ class MySuite extends munit.FunSuite {
         .withInitial("q0")
         .withAccepting("q0")
         .create()
-}
+  }
+  test("mus"){
+    // {a,c,d}*
+    val inputs1: Alphabet[String] = Alphabets.fromList(List("req1","req2", "rel1", "rel2"))
+    val gUser: CompactDFA[String] =
+    AutomatonBuilders
+      .newDFA(inputs1)
+      .withInitial("q0")
+      .from("q0")
+      .on("req1")
+      .to("q1")
+      .from("q1")
+      .on("rel1")
+      .to("q0")
+      .from("q0")
+      .on("req2")
+      .to("q2")
+      .from("q2")
+      .on("rel2")
+      .to("q0")
+      .withAccepting("q0")
+      .withAccepting("q1")
+      .withAccepting("q2")
+      .create();
+  
+    // a* + a*d+
+    val inputs2: Alphabet[String] = Alphabets.fromList(List("start1", "start2", "end1", "end2"))
+    val gSched: CompactDFA[String] =
+    AutomatonBuilders
+      .newDFA(inputs2)
+      .withInitial("q0")
+      .from("q0")
+      .on("start1")
+      .to("q1")
+      .from("q1")
+      .on("end1")
+      .to("q0")
+      .from("q0")
+      .on("start2")
+      .to("q2")
+      .from("q2")
+      .on("end2")
+      .to("q0")
+      .withAccepting("q0")
+      .withAccepting("q1")
+      .withAccepting("q2")
+      .create();
+
+    val err = "err"
+    val gMachine : CompactDFA[String] =
+      AutomatonBuilders
+        .newDFA(Alphabets.fromList(List(err)))
+        .withInitial("q0")
+        .withAccepting("q0")
+        .create();
+
+    val errDFA : CompactDFA[String] =
+      AutomatonBuilders
+        .newDFA(Alphabets.fromList(List(err)))
+        .withInitial("q0")
+        .from("q0")
+        .on(err)
+        .to("q1")
+        .withAccepting("q0")
+        .create();
+
+    val ver = tchecker.TCheckerAssumeGuaranteeVerifier(Array(File("examples/ums/user.ta"), File("examples/ums/scheduler.ta"), File("examples/ums/machine.ta")), "err")
+    ver.assumptions(0) = DLTS("user", gUser, gUser.getInputAlphabet().toSet)
+    ver.assumptions(1) = DLTS("sched", gSched, gSched.getInputAlphabet().toSet)
+    ver.assumptions(2) = DLTS("machine", gMachine, gMachine.getInputAlphabet().toSet)
+    System.out.println(TCheckerAssumeGuaranteeOracles.checkFinalPremise(ver.assumptions.toList, DLTS("prop", errDFA, errDFA.getInputAlphabet().toSet)))
+    ver.applyAG() match {
+      case e : tchecker.AGSuccess => ()
+      case _ => throw Exception("AG Verification failed")
+    }
+  
+  }
 
 }
