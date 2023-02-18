@@ -41,6 +41,8 @@ import fr.irisa.circag.Trace
 import fr.irisa.circag.configuration
 import fr.irisa.circag.statistics
 
+import com.microsoft.z3
+
 case class BadTimedAutomaton(msg: String) extends Exception(msg)
 case class FailedTAModelChecking(msg: String) extends Exception(msg)
 
@@ -60,7 +62,7 @@ trait AssumeGuaranteeOracles[LTS, Property] {
   */
 class TA (
   var systemName : String = "",
-  var events: Set[String] = Set(),
+  var alphabet: Set[String] = Set(),
   var core: String = "",
   var eventsOfProcesses : HashMap[String, Set[String]] = HashMap[String, Set[String]](),
   var syncs : List[List[(String, String)]] = List[List[(String, String)]]()){
@@ -69,14 +71,10 @@ class TA (
     eventsOfProcesses.keys().toList
   }
 
-  def alphabet() : Alphabet[String] = {
-    Alphabets.fromList(events.toList)
-  }
-
   override def toString(): String = {
     val sb = StringBuilder()
     sb.append(s"system:${systemName}\n\n")
-    for sigma <- events do {
+    for sigma <- alphabet do {
       sb.append(s"event:${sigma}\n")
     }
     sb.append("\n")
@@ -99,7 +97,7 @@ object TA{
     val regEdge = "\\s*edge:[^:]*:[^:]*:[^:]*:([^{]*).*".r
     val regSystem = "\\s*system:([^ ]*).*".r
     // System.out.println("File: " + inputFile.toString)
-    ta.events = lines.flatMap({
+    ta.alphabet = lines.flatMap({
       case regEvent(event) => Some(event.strip())
       case _               => None
     }).toSet
@@ -144,7 +142,7 @@ object TA{
 
   def fromDLTS(dlts : DLTS, acceptingLabelSuffix : Option[String] = None) : TA = {
     val ta = TA(dlts.name, dlts.alphabet.toSet)
-    ta.eventsOfProcesses += (dlts.name -> ta.events )
+    ta.eventsOfProcesses += (dlts.name -> ta.alphabet )
     val strStates = StringBuilder()  
     val strTransitions = StringBuilder()
     val initStates = dlts.dfa.getInitialStates().asScala
@@ -168,7 +166,7 @@ object TA{
           }
           strStates.append(attributes.mkString(":"))
           strStates.append("}\n")
-          for (sigma <- ta.events) {
+          for (sigma <- ta.alphabet) {
             val succs = dlts.dfa.getSuccessors(state, sigma);
             if (!succs.isEmpty()) then {
               for (succ <- succs) {
@@ -207,7 +205,7 @@ object TA{
     }
     //if dlts.map(_.name).distinct.size < dlts.size || dlts.map(_.name).contains(ta.systemName) then {
     val dltsTA = dlts.map({d => this.fromDLTS(d, acceptingLabelSuffix)})
-    val jointAlphabet = ta.events | dlts.foldLeft(Set[String]())( (alph, d) => alph | d.alphabet.toSet)
+    val jointAlphabet = ta.alphabet | dlts.foldLeft(Set[String]())( (alph, d) => alph | d.alphabet.toSet)
     val sb = StringBuilder()
     val systemName = s"_premise_${ta.systemName}"
     sb.append(ta.core)
@@ -262,10 +260,10 @@ object TCheckerAssumeGuaranteeOracles {
     */
   def checkInductivePremises(ta : TA, assumptions : List[DLTS], guarantee : DLTS) : Option[Trace] =
     { 
-      require(guarantee.alphabet.toSet.subsetOf(ta.alphabet().toSet))
-      val compG = DLTS(s"_comp_${guarantee.name}", DFAs.complement(guarantee.dfa,guarantee.alphabet), guarantee.alphabet)
+      require(guarantee.alphabet.toSet.subsetOf(ta.alphabet))
+      val compG = DLTS(s"_comp_${guarantee.name}", DFAs.complement(guarantee.dfa, Alphabets.fromList(guarantee.alphabet.toList)), guarantee.alphabet)
       val liftedAssumptions = 
-        assumptions.map({ass => DLTS.liftAndStripNonAccepting(ass, ta.alphabet(), Some(s"lifted_${ass.name}"))})
+        assumptions.map({ass => DLTS.liftAndStripNonAccepting(ass, ta.alphabet, Some(s"lifted_${ass.name}"))})
       val premiseProduct = TA.synchronousProduct(ta, compG::liftedAssumptions, Some("_accept_"))
       val trace = checkReachability(premiseProduct, s"${compG.name}_accept_")
       trace
@@ -279,7 +277,7 @@ object TCheckerAssumeGuaranteeOracles {
     * @return None if the premise holds; and Some(cexTrace) otherwise
     */
   def checkFinalPremise(lhs : List[DLTS], property : DLTS) : Option[Trace] = {
-      val compG = DLTS(s"_comp_${property.name}", DFAs.complement(property.dfa,property.alphabet), property.alphabet)
+      val compG = DLTS(s"_comp_${property.name}", DFAs.complement(property.dfa, Alphabets.fromList(property.alphabet.toList)), property.alphabet)
       val premiseProduct = TA.synchronousProduct(TA.fromDLTS(compG, acceptingLabelSuffix=Some("_accept_")), lhs)
       // System.out.println(premiseProduct)
       checkReachability(premiseProduct, s"${compG.name}_accept_")      
@@ -296,14 +294,26 @@ object TCheckerAssumeGuaranteeOracles {
     val wordDLTS = DLTS.fromTrace(word,None)
     val productTA = TA.synchronousProduct(ta, List(wordDLTS), acceptingLabelSuffix = Some("_accept_"))
     checkReachability(productTA, s"${wordDLTS.name}_accept_") 
-    // match {
-    //   case None => None
-    //   case Some(exWord) => 
-    //     (projectionAlphabet match 
-    //       case None => Some(exWord)
-    //       case Some(alph) => Some(exWord.filter(alph))
-    //     )
-    // }
+  }
+
+  /**
+    * 
+    * @param ta
+    * @param word
+    * @param projectionAlphabet
+    * @return
+    */
+  def attemptToExtendTraceToAllProcesses(tas : Array[TA], word : Trace, projectionAlphabet : Option[Set[String]]) : Trace = {
+    var currentTrace = word
+    for ta <- tas do {
+      val wordDLTS = DLTS.fromTrace(currentTrace,None)
+      val productTA = TA.synchronousProduct(ta, List(wordDLTS), acceptingLabelSuffix = Some("_accept_"))
+      checkReachability(productTA, s"${wordDLTS.name}_accept_") match {
+        case None => ()
+        case Some(newTrace) => currentTrace = newTrace
+      }
+    }
+    currentTrace
   }
 
   /**
@@ -346,7 +356,7 @@ object TCheckerAssumeGuaranteeOracles {
     if (output.contains("REACHABLE false")) then {
       None
     } else if (output.contains("REACHABLE true")) then {
-      Some(TA.getTraceFromCounterExampleOutput(cex, ta.events))
+      Some(TA.getTraceFromCounterExampleOutput(cex, ta.alphabet))
     } else {
       throw FailedTAModelChecking(output)
     }
@@ -366,27 +376,168 @@ class AssumeGuaranteeVerifier[LTS, Property](ltss : List[LTS], property : Proper
   }
 }
 
-class TCheckerAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String) {
-  private var assumptionAlphabet : List[String] = List()
-  var assumptions : Buffer[DLTS] = Buffer()
+class ConstraintManager(ctx : z3.Context, nbProcesses : Int){
+  val samples = new Array[(Buffer[(Trace,z3.BoolExpr)])](nbProcesses)
+  val toVars = HashMap[(Int,Trace), z3.BoolExpr]()
+  val toIndexedTraces = HashMap[z3.BoolExpr, (Int,Trace)]()
 
-  val propertyAlphabet = Alphabets.fromList(List[String](err))
+  def varOfIndexedTrace(process : Int, trace : Trace) : z3.BoolExpr = {
+    if (toVars.contains((process, trace))) then {
+      toVars((process, trace))
+    } else {
+      val v = ctx.mkBoolConst(ctx.mkSymbol(s"${(process,trace)}"))
+      samples(process).append((trace,v))
+      toVars.put((process,trace), v)
+      toIndexedTraces.put(v, (process, trace))
+      v
+    }
+  }
+
+  /**
+    * Return boolean expression with the following property:
+      For each pair of traces w, w', if proj(w, alphabet) is a prefix of proj(w', alphabet),
+    * then var(w') -> var(w)
+    *
+    * @param process
+    * @param alphabet
+    * @return
+    */
+  def generateTheoryConstraint(process : Int, alphabet : Set[String]) : z3.BoolExpr = {
+    val projTraces = samples(process).map({ (trace,v) => (trace.filter(alphabet.contains(_)), v)})
+    var constraint = ctx.mkTrue()
+    for i <- 0 until projTraces.size do {
+      for j <- i+1 until projTraces.size do {
+        if projTraces(i)._1.startsWith(projTraces(j)._1) then{
+          constraint = ctx.mkAnd(constraint, ctx.mkImplies(projTraces(i)._2, projTraces(j)._2))
+        }
+        if projTraces(j)._1.startsWith(projTraces(i)._1) then{
+          constraint = ctx.mkAnd(constraint, ctx.mkImplies(projTraces(j)._2, projTraces(i)._2))
+        }
+      }
+    }
+    constraint
+  }
+
+}
+
+class TCheckerAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useAlphabetRefinement : Boolean = false) {
+  
+  abstract class AGIntermediateResult extends Exception
+  class AGSuccess extends AGIntermediateResult
+  case class AGContinue(constraint : z3.BoolExpr) extends AGIntermediateResult
+  case class AGFalse(cex : Trace) extends AGIntermediateResult
+
+  val z3ctx = {
+    val cfg = HashMap[String, String]()
+    cfg.put("model", "true");
+    z3.Context(cfg);
+  }
+
+  val propertyAlphabet = Set[String](err)
   val processes = ltsFiles.map(TA.fromFile(_))
-  private val errDFA : CompactDFA[String] = {
-    AutomatonBuilders
-      .newDFA(propertyAlphabet)
-      .withInitial("q0")
-      .from("q0")
-      .on(err)
-      .to("q1")
-      .withAccepting("q0")
-      .create();
+  val wholeAlphabet = processes.foldLeft(propertyAlphabet)({(alph, pr) => alph | pr.alphabet})
+  val propertyDLTS = {
+    val errDFA : CompactDFA[String] = {
+      AutomatonBuilders
+        .newDFA(Alphabets.fromList(propertyAlphabet.toList))
+        .withInitial("q0")
+        .from("q0")
+        .on(err)
+        .to("q1")
+        .withAccepting("q0")
+        .create();
+    }
+    DLTS("property", errDFA, propertyAlphabet)
   }
-  val propertyDLTS = DLTS("property", errDFA, propertyAlphabet)
 
-  def simplifyAssumptions() : Unit = {
+  /**
+    * Current alphabet for assumptions g_i.
+    * The assumption of each alphabet is ta.alphabet & assumptionAlphabet.
+    */
+  private var assumptionAlphabet = 
+    if useAlphabetRefinement then {
+      propertyAlphabet
+    } else {
+      wholeAlphabet
+    }
+
+  /**
+    * The assumption DLTS g_i for each process i.
+    */
+  var assumptions : Buffer[DLTS] = {
+    (0 until ltsFiles.size)
+    .map(
+      { i =>
+        val alph = propertyAlphabet.intersect(processes(i).alphabet)
+        val dfa : CompactDFA[String] = {
+          AutomatonBuilders
+          .newDFA(Alphabets.fromList(alph.toList))
+          .withInitial("q0")
+          .withAccepting("q0")
+          .create()
+        }
+        for sigma <- alph do {
+          dfa.addTransition(0, sigma, 0)
+        }
+        DLTS(s"g_${i}", dfa, alph)
+      }).toBuffer
   }
-  def refineAssumptionAlphabet(trace : Trace) : Unit = {}
+
+  /**
+    * G_i: the set of process indices on which the proof of process(i) depends.
+    * Initially all processes depend on all (including themselves)
+    */
+  private var processDependencies : Buffer[Set[Int]] = 
+    (0 until ltsFiles.size)
+    .map({_ =>(0 until ltsFiles.size).toSet})
+    .toBuffer
+
+  private var propertyDependencies : Set[Int] = 
+    (0 until ltsFiles.size)
+    .toSet
+
+  def generateAssumptions() : Unit = {
+  }
+
+  def updateConstraints(cexTrace : Trace) : z3.BoolExpr = {
+    z3ctx.mkTrue()
+  }
+
+  def applyAG() : AGIntermediateResult = {
+    try{
+      for (ta,i) <- processes.zipWithIndex do {
+        TCheckerAssumeGuaranteeOracles.checkInductivePremises(ta, processDependencies(i).map(assumptions(_)).toList, propertyDLTS)
+        match {
+          case None => ()
+          case Some(cexTrace) => throw AGContinue(updateConstraints(cexTrace))
+        }
+      }
+      TCheckerAssumeGuaranteeOracles.checkFinalPremise(propertyDependencies.map(assumptions(_)).toList, propertyDLTS)
+      match {
+        case None => AGSuccess()
+        case Some(cexTrace) =>
+          throw AGContinue(z3ctx.mkTrue())
+      }
+    } catch {
+      case ex : AGContinue => ex
+      case ex : AGFalse => ex
+    }
+  }
+  def alphabetRefine(cexTrace : Trace) : AGIntermediateResult = {
+    val completeAlphabets = processes.map({ pr => wholeAlphabet.intersect(pr.alphabet)}).toBuffer
+    val currentAlphabets = assumptions.map(_.alphabet)
+    if ( completeAlphabets == currentAlphabets ) then {
+      AGFalse(cexTrace)
+    } else {
+      AGContinue(z3ctx.mkTrue())
+      // TODO Add the step MATCH(sigma1, sigma2, ... sigman)
+    }
+  }
+
+  /**
+    * Simplify propertyDependencies and processDependencies 
+    */
+  def simplifyDependencies() : Unit = {}
   def check() : Option[Trace] = {
     None
   }

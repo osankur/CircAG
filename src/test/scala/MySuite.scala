@@ -66,23 +66,36 @@ class MySuite extends munit.FunSuite {
     val ctx = Context(cfg);      
     /* do something with the context */
 
-    val opt = ctx.mkOptimize()
+    val x = ctx.mkSymbol("x")
+    val y = ctx.mkSymbol("y")
+    val varx = ctx.mkBoolConst(x)
+    val vary = ctx.mkBoolConst(y)
+    val e = ctx.mkEq(varx, ctx.mkNot(vary))
+    val solver = ctx.mkSolver()
+    solver.add(e)
+    System.out.println(e)
+    System.out.println(solver.check())
+    val m = solver.getModel()
+    System.out.println(m)
+    System.out.println("x:" + m.evaluate(varx, false))
+    System.out.println("y:" + m.evaluate(vary, false))
+    // val opt = ctx.mkOptimize()
 
-    // Set constraints.
-    val xExp : IntExpr = ctx.mkIntConst("x")
-    val yExp : IntExpr = ctx.mkIntConst("y")
+    // // Set constraints.
+    // val xExp : IntExpr = ctx.mkIntConst("x")
+    // val yExp : IntExpr = ctx.mkIntConst("y")
 
-    opt.Add(ctx.mkEq(ctx.mkAdd(xExp, yExp), ctx.mkInt(10)),
-            ctx.mkGe(xExp, ctx.mkInt(0)),
-            ctx.mkGe(yExp, ctx.mkInt(0)))
+    // opt.Add(ctx.mkEq(ctx.mkAdd(xExp, yExp), ctx.mkInt(10)),
+    //         ctx.mkGe(xExp, ctx.mkInt(0)),
+    //         ctx.mkGe(yExp, ctx.mkInt(0)))
 
-    // Set objectives.
-    val mx : Optimize.Handle[IntSort] = opt.MkMaximize(xExp)
-    val my : Optimize.Handle[IntSort] = opt.MkMaximize(yExp)
+    // // Set objectives.
+    // val mx : Optimize.Handle[IntSort] = opt.MkMaximize(xExp)
+    // val my : Optimize.Handle[IntSort] = opt.MkMaximize(yExp)
 
-    System.out.println(opt.Check())
-    System.out.println(mx)
-    System.out.println(my)
+    // System.out.println(opt.Check())
+    // System.out.println(mx)
+    // System.out.println(my)
     /* be kind to dispose manually and not wait for the GC. */
     ctx.close();      
   }
@@ -216,5 +229,12 @@ class MySuite extends munit.FunSuite {
   }
   test("fromTrace"){
     val _ = DLTS.fromTrace(List("a","b","c","a"),Some(Set("a", "b")))
-  }
+    val dfa3: CompactDFA[String] =
+      AutomatonBuilders
+        .newDFA(Alphabets.fromList(List("a")))
+        .withInitial("q0")
+        .withAccepting("q0")
+        .create()
+}
+
 }

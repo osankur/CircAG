@@ -22,10 +22,9 @@ import net.automatalib.words.impl.Alphabets;
   * @param dfa
   * @param alphabet
   */
-case class DLTS(val name : String, val dfa: DFA[Integer, String], val alphabet: Alphabet[String])
+case class DLTS(val name : String, val dfa: DFA[Integer, String], val alphabet: Set[String])
 
 type Trace = List[String]
-
 
 object DLTS {
 
@@ -38,16 +37,16 @@ object DLTS {
     * @param extendedAlphabet
     * @return
     */
-  def lift(dlts: DLTS, extendedAlphabet: Alphabet[String], name : Option[String] = None): DLTS = {
+  def lift(dlts: DLTS, extendedAlphabet: Set[String], name : Option[String] = None): DLTS = {
     val alphabet = dlts.alphabet
     val dfa = dlts.dfa
 
     val newAlphabet =
-      Alphabets.fromList((alphabet.toSet | extendedAlphabet.toSet).toBuffer)
+      (alphabet | extendedAlphabet)
     val newSymbols =
-      Alphabets.fromList(extendedAlphabet.toSet.diff(alphabet.toSet).toBuffer)
+      extendedAlphabet.diff(alphabet)
     val liftedDFA =
-      CompactDFA.Creator().createAutomaton(newAlphabet)
+      CompactDFA.Creator().createAutomaton(Alphabets.fromList(newAlphabet.toList))
     for i <- 1 to dfa.size() do {
       liftedDFA.addState()
     }
@@ -79,7 +78,7 @@ object DLTS {
     */
   def liftAndStripNonAccepting(
       dlts: DLTS,
-      extendedAlphabet: Alphabet[String],
+      extendedAlphabet: Set[String],
       name : Option[String] = None
   ): DLTS = {
     val liftedDLTS = lift(dlts, extendedAlphabet, name)
@@ -121,6 +120,6 @@ object DLTS {
         dfa.addTransition(i, sigma, i+1)
     })
     dfa.setAccepting(projTrace.size, true)
-    DLTS("_trace_", dfa, Alphabets.fromList(alph.toList))
+    DLTS("_trace_", dfa, alph)
   }
 }
