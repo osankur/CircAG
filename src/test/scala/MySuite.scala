@@ -4,12 +4,14 @@ import java.util.HashMap
 import java.io.File
 import collection.JavaConverters._
 import collection.convert.ImplicitConversions._
+import collection.mutable.Buffer
 import com.microsoft.z3._
 
 
 import dk.brics.automaton.Automaton
 import dk.brics.automaton.RegExp
 
+import de.learnlib.algorithms.rpni.BlueFringeRPNIDFA
 import de.learnlib.api.oracle._
 import de.learnlib.api.oracle.MembershipOracle
 import net.automatalib.words._
@@ -52,6 +54,7 @@ import fr.irisa.circag.tchecker.TCheckerAssumeGuaranteeOracles
 import fr.irisa.circag.tchecker.TCheckerAssumeGuaranteeVerifier
 import fr.irisa.circag.tchecker.AGContinue
 import fr.irisa.circag.tchecker.AGSuccess
+import com.microsoft.z3.enumerations.Z3_lbool
 
 class MySuite extends munit.FunSuite {
   test("SAT Solver") {
@@ -81,8 +84,10 @@ class MySuite extends munit.FunSuite {
     System.out.println(solver.check())
     val m = solver.getModel()
     System.out.println(m)
-    System.out.println("x:" + m.evaluate(varx, false))
-    System.out.println("y:" + m.evaluate(vary, false))
+    System.out.println("x:" + (m.evaluate(varx, false).getBoolValue() == Z3_lbool.Z3_L_TRUE))
+    System.out.println("y:" + (m.evaluate(vary, false).getBoolValue() == Z3_lbool.Z3_L_TRUE))
+    val a = m.evaluate(varx, false)
+    System.out.println(a.getBoolValue().toInt())
     // val opt = ctx.mkOptimize()
 
     // // Set constraints.
@@ -315,6 +320,14 @@ class MySuite extends munit.FunSuite {
       case _ => throw Exception("AG Verification failed")
     }
   
+  }
+  test("rpni"){
+    val alph = Alphabets.fromList(List("c","a","b", "err"))
+    val learner = BlueFringeRPNIDFA(alph)
+    learner.addPositiveSamples(Buffer(List("a","b","c"), List("a","a","c")).map(Word.fromList(_)))
+    learner.addNegativeSamples(Buffer(List("a","b","err"), List("a","a","b")).map(Word.fromList(_)))     
+    val dfa = learner.computeModel()
+    Visualization.visualize(dfa, alph)
   }
 
 }

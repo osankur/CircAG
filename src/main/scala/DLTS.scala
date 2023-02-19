@@ -8,6 +8,7 @@ import scala.collection.immutable.Set
 import collection.convert.ImplicitConversions._
 
 import net.automatalib.automata.fsa.DFA;
+import net.automatalib.automata.fsa.impl.compact.CompactDFA;
 import net.automatalib.util.automata.fsa.DFAs
 import net.automatalib.automata.fsa.impl.compact.CompactDFA;
 import net.automatalib.util.automata.builders.AutomatonBuilders;
@@ -121,5 +122,36 @@ object DLTS {
     })
     dfa.setAccepting(projTrace.size, true)
     DLTS("_trace_", dfa, alph)
+  }
+
+  def makePrefixClosed(dfa : DFA[?, String], alphabet : Set[String]) : CompactDFA[String] = {
+    if(!DFAs.isPrefixClosed(dfa,Alphabets.fromList(alphabet.toList))) then {
+      throw Exception("Not prefix-closed")
+      // TODO make it prefix-closed
+    }
+    val statesMap  = HashMap((dfa.getInitialState(),0))
+    var index = 0
+    val newDFA = CompactDFA.Creator().createAutomaton(Alphabets.fromList(alphabet.toList))
+    dfa.getStates().foreach({
+      state => 
+        statesMap.put(state, index)
+        index = index + 1
+        newDFA.addState(dfa.isAccepting(state))
+    })
+    newDFA.setInitial(statesMap(dfa.getInitialState()), true)
+    dfa.getStates().foreach(
+      {s =>
+        for a <- alphabet do {
+          dfa.getSuccessors(s,a).foreach(
+            {snext =>
+              if (newDFA.isAccepting(statesMap(s)) && newDFA.isAccepting(statesMap(snext))) then {
+                newDFA.addTransition(statesMap(s), a, statesMap(snext))
+              }
+            }
+          )        
+        }
+      }
+    )
+    newDFA
   }
 }

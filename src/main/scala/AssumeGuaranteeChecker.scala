@@ -40,7 +40,7 @@ import fr.irisa.circag.DLTS
 import fr.irisa.circag.Trace
 import fr.irisa.circag.configuration
 import fr.irisa.circag.statistics
-
+import fr.irisa.circag.ConstraintManager
 import com.microsoft.z3
 
 case class BadTimedAutomaton(msg: String) extends Exception(msg)
@@ -398,62 +398,17 @@ class AssumeGuaranteeVerifier[LTS, Property](ltss : List[LTS], property : Proper
   }
 }
 
-class ConstraintManager(ctx : z3.Context, nbProcesses : Int){
-  val samples = new Array[(Buffer[(Trace,z3.BoolExpr)])](nbProcesses)
-  val toVars = HashMap[(Int,Trace), z3.BoolExpr]()
-  val toIndexedTraces = HashMap[z3.BoolExpr, (Int,Trace)]()
 
-  def varOfIndexedTrace(process : Int, trace : Trace) : z3.BoolExpr = {
-    if (toVars.contains((process, trace))) then {
-      toVars((process, trace))
-    } else {
-      val v = ctx.mkBoolConst(ctx.mkSymbol(s"${(process,trace)}"))
-      samples(process).append((trace,v))
-      toVars.put((process,trace), v)
-      toIndexedTraces.put(v, (process, trace))
-      v
-    }
-  }
 
-  /**
-    * Return boolean expression with the following property:
-      For each pair of traces w, w', if proj(w, alphabet) is a prefix of proj(w', alphabet),
-    * then var(w') -> var(w)
-    *
-    * @param process
-    * @param alphabet
-    * @return
-    */
-  def generateTheoryConstraint(process : Int, alphabet : Set[String]) : z3.BoolExpr = {
-    val projTraces = samples(process).map({ (trace,v) => (trace.filter(alphabet.contains(_)), v)})
-    var constraint = ctx.mkTrue()
-    for i <- 0 until projTraces.size do {
-      for j <- i+1 until projTraces.size do {
-        if projTraces(i)._1.startsWith(projTraces(j)._1) then{
-          constraint = ctx.mkAnd(constraint, ctx.mkImplies(projTraces(i)._2, projTraces(j)._2))
-        }
-        if projTraces(j)._1.startsWith(projTraces(i)._1) then{
-          constraint = ctx.mkAnd(constraint, ctx.mkImplies(projTraces(j)._2, projTraces(i)._2))
-        }
-      }
-    }
-    constraint
-  }
-
-}
 abstract class AGIntermediateResult extends Exception
 class AGSuccess extends AGIntermediateResult
-case class AGContinue(constraint : z3.BoolExpr) extends AGIntermediateResult
+class AGContinue extends AGIntermediateResult
 case class AGFalse(cex : Trace) extends AGIntermediateResult
 
 class TCheckerAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useAlphabetRefinement : Boolean = false) {
   
-  val z3ctx = {
-    val cfg = HashMap[String, String]()
-    cfg.put("model", "true");
-    z3.Context(cfg);
-  }
 
+  val nbProcesses = ltsFiles.size
   val propertyAlphabet = Set[String](err)
   val processes = ltsFiles.map(TA.fromFile(_))
   val wholeAlphabet = processes.foldLeft(propertyAlphabet)({(alph, pr) => alph | pr.alphabet})
@@ -517,11 +472,12 @@ class TCheckerAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useA
     (0 until ltsFiles.size)
     .toSet
 
+  val constraintManager = ConstraintManager(processDependencies, propertyDependencies, assumptions.map(_.alphabet))
   def generateAssumptions() : Unit = {
   }
 
-  def updateConstraints(cexTrace : Trace) : z3.BoolExpr = {
-    z3ctx.mkTrue()
+  def updateConstraints(process : Int, cexTrace : Trace) : Unit = {
+    constraintManager.addConstraint(process, cexTrace, 34)
   }
 
   def applyAG() : AGIntermediateResult = {
@@ -533,7 +489,8 @@ class TCheckerAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useA
           case None => ()
           case Some(cexTrace) => 
             System.out.println(s"Premise ${i} failed with cex: ${cexTrace}")
-            throw AGContinue(updateConstraints(cexTrace))
+            updateConstraints(i, cexTrace)
+            throw AGContinue()
         }
       }
       TCheckerAssumeGuaranteeOracles.checkFinalPremise(propertyDependencies.map(assumptions(_)).toList, propertyDLTS)
@@ -541,7 +498,19 @@ class TCheckerAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useA
         case None => AGSuccess()
         case Some(cexTrace) =>
           System.out.println(s"Final premise failed with cex: ${cexTrace}")
-          throw AGContinue(z3ctx.mkTrue())
+          // If all processes contain proj(cexTrace), then return false, otherwise continue
+          for (ta,i) <- processes.zipWithIndex do {
+            TCheckerAssumeGuaranteeOracles.checkTraceMembership(ta, cexTrace, Some(assumptions(i).alphabet))
+            match {
+              case None => 
+                System.out.println(s"\tCex does not apply to process ${i}. Continuing...")
+                constraintManager.addFinalPremiseConstraint(cexTrace)
+                throw AGContinue()
+              case _ => ()
+            }
+          }
+          System.out.println(s"\tConfirming cex: ${cexTrace}")
+          throw AGFalse(cexTrace)
       }
     } catch {
       case ex : AGContinue => ex
@@ -554,7 +523,7 @@ class TCheckerAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useA
     if ( completeAlphabets == currentAlphabets ) then {
       AGFalse(cexTrace)
     } else {
-      AGContinue(z3ctx.mkTrue())
+      AGContinue()
       // TODO Add the step MATCH(sigma1, sigma2, ... sigman)
     }
   }
@@ -564,7 +533,24 @@ class TCheckerAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useA
     */
   def simplifyDependencies() : Unit = {}
   def check() : Option[Trace] = {
-    None
+    try{
+      while(true) {
+        this.assumptions = constraintManager.generateAssumptions(this.assumptions)
+        this.applyAG() match {
+          case AGFalse(cex) =>
+            alphabetRefine(cex) match {
+              case AGFalse(cex) => throw AGFalse(cex)
+              case _ => ()
+            }
+        }
+      }
+      None
+    } catch {
+      case AGFalse(cex) => 
+        Some(cex)
+      case e: AGSuccess =>
+        None
+    }
   }
 }
 

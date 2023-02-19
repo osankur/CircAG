@@ -25,7 +25,7 @@ case class Configuration(
     ltsFiles : Array[File] = Array[File](),
     err: String = "",
     ltsFormat: FSM.FSMFormat = FSM.TCheckerTA,
-    keepTmpFiles: Boolean = true,
+    keepTmpFiles: Boolean = false,
     verbose: Boolean = false,
     verbose_MembershipQueries : Boolean = false,
     tmpDirName: String = ".tmp/",

@@ -78,6 +78,9 @@ object Main {
               System.out.println(product.toString())
             case "ag" =>
               val checker = tchecker.TCheckerAssumeGuaranteeVerifier(configuration.get().ltsFiles, configuration.get().err)
+              System.out.println(checker.check())
+            case _ => 
+              logger.error("Unknown command")
           }
           // checker.checkInductivePremises(checker.processes(0),)
         }
