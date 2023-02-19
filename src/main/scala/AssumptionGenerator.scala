@@ -2,9 +2,11 @@ package fr.irisa.circag
 
 import java.util.HashMap
 import scala.collection.mutable.Buffer
+import scala.collection.mutable
 import collection.JavaConverters._
 import collection.convert.ImplicitConversions._
 
+import io.AnsiColor._
 
 import de.learnlib.api.oracle.EquivalenceOracle
 import de.learnlib.api.query.DefaultQuery;
@@ -65,8 +67,11 @@ class ConstraintManager(private var processDependencies : Buffer[Set[Int]],
   private var solver = z3ctx.mkSolver()
   private var previousValuation = HashMap[z3.BoolExpr,Boolean]()
 
-  private var positiveSamples = Buffer.tabulate(nbProcesses)({_ => Set[Trace]()})
-  private var negativeSamples = Buffer.tabulate(nbProcesses)({_ => Set[Trace]()})
+  private var positiveSamples = Buffer.tabulate(nbProcesses)({_ => Buffer[Trace]()})
+  private var negativeSamples = Buffer.tabulate(nbProcesses)({_ => Buffer[Trace]()})
+
+  // the empty word must be accepted by all
+  constraint = z3ctx.mkAnd((0 until nbProcesses).map({i => varOfIndexedTrace(i, List[String]())}) : _*)
 
   private def varOfIndexedTrace(process : Int, trace : Trace) : z3.BoolExpr = {
     if (toVars.contains((process, trace))) then {
@@ -115,46 +120,75 @@ class ConstraintManager(private var processDependencies : Buffer[Set[Int]],
     (0 until nbProcesses).foreach({i => updateTheoryConstraints(i)})
   }
 
+  def checkPrefixIndependance(pos : Buffer[Trace], neg : Buffer[Trace]) : Unit =  {
+    for p <- pos do {
+      for n <- neg do {
+        if (p.startsWith(neg)) then {
+          throw Exception(s"pos: ${p}, neg: ${n}")
+        }
+      }
+    }
+  }
   def generateAssumptions(oldAssumptions : Buffer[DLTS]) : Buffer[DLTS] = {
-    var positiveSamples = Buffer.tabulate(nbProcesses)({_ => Set[Trace]()})
-    var negativeSamples = Buffer.tabulate(nbProcesses)({_ => Set[Trace]()})
+    var positiveSamples = Buffer.tabulate(nbProcesses)({_ => Buffer[Trace]()})
+    var negativeSamples = Buffer.tabulate(nbProcesses)({_ => Buffer[Trace]()})
+    // System.out.println(s"Old positive samples: ${this.positiveSamples}")
+    // System.out.println(s"Old negative samples: ${this.negativeSamples}")
+
     solver.add(constraint)
     solver.add(theoryConstraints)
     if(solver.check() != z3.Status.SATISFIABLE){
       throw Exception("Constraints are unsatisfiable")
     }
+    // System.out.println(constraint)
+    // System.out.println(theoryConstraints)
     val m = solver.getModel()
-    System.out.println(m)
+    // System.out.println(m)
     samples.zipWithIndex.foreach({
       (isamples, i) => 
         isamples.foreach({
           (trace, v) =>
             m.evaluate(v, false).getBoolValue() match {
-              case z3.enumerations.Z3_lbool.Z3_L_TRUE => 
-                positiveSamples(i).add(trace)
+              case z3.enumerations.Z3_lbool.Z3_L_TRUE =>
+                // System.out.println(s"Valuation(${i}):POS: ${trace} --> ${trace.filter(assumptionAlphabets(i))}")
+                positiveSamples(i).add(trace.filter(assumptionAlphabets(i)))
               case z3.enumerations.Z3_lbool.Z3_L_FALSE => 
-                negativeSamples(i).add(trace)
+                // System.out.println(s"Valuation(${i}):NEG: ${trace} --> ${trace.filter(assumptionAlphabets(i))}")
+                negativeSamples(i).add(trace.filter(assumptionAlphabets(i)))
               case _ =>
-                throw Exception("Unknown value for variable " + v)
+                ()
             }
         })
     })
-    System.out.println(s"New positive samples: ${positiveSamples}")
-    System.out.println(s"New negative samples: ${negativeSamples}")
     val newAssumptions = Buffer[DLTS]()
     for i <- 0 until nbProcesses do {
-      if( positiveSamples(i) == this.positiveSamples(i)
-      && negativeSamples(i) == this.negativeSamples(i)){
+      // System.out.println(s"Old positive samples for ${i}: ${this.positiveSamples(i)}")
+      // System.out.println(s"Old negative samples for ${i}: ${this.negativeSamples(i)}")
+      System.out.println(s"#POS(${i}) = ${positiveSamples(i).size}:\n")
+      for w <- positiveSamples(i) do {
+        System.out.println(s"\t${w}")
+      }
+      System.out.println(s"#NEG(${i}) = ${negativeSamples(i).size}:\n")
+      for w <- negativeSamples(i) do {
+        System.out.println(s"\t${w}")
+      }
+      checkPrefixIndependance(positiveSamples(i), negativeSamples(i))
+      if( positiveSamples(i).toSet == this.positiveSamples(i).toSet
+      && negativeSamples(i).toSet == this.negativeSamples(i).toSet){
         newAssumptions.append(oldAssumptions(i))
+        // System.out.println(s"Keeping assumption ${i}...")
       } else {
-        System.out.println(s"updating assumption ${i}...")
+        System.out.println(s"${BLUE}Updating assumption ${i}...${RESET}")
         val learner = BlueFringeRPNIDFA(Alphabets.fromList(assumptionAlphabets(i).toList))
         learner.addPositiveSamples(positiveSamples(i).map(Word.fromList(_)))
         learner.addNegativeSamples(negativeSamples(i).map(Word.fromList(_)))
-        newAssumptions.append(DLTS(oldAssumptions(i).name, DLTS.makePrefixClosed(learner.computeModel(), assumptionAlphabets(i)), assumptionAlphabets(i)))
-        Visualization.visualize(newAssumptions(i).dfa, Alphabets.fromList(assumptionAlphabets(i).toList))
-        this.positiveSamples = positiveSamples
-        this.negativeSamples = negativeSamples
+        newAssumptions.append(
+          DLTS(oldAssumptions(i).name, 
+              DFAs.complete(DLTS.makePrefixClosed(learner.computeModel(), assumptionAlphabets(i)), Alphabets.fromList(assumptionAlphabets(i).toList)),
+              assumptionAlphabets(i)))
+        // Visualization.visualize(newAssumptions(i).dfa, Alphabets.fromList(assumptionAlphabets(i).toList))
+        this.positiveSamples(i) = positiveSamples(i)
+        this.negativeSamples(i) = negativeSamples(i)
       }
     }
     newAssumptions
@@ -170,14 +204,23 @@ class ConstraintManager(private var processDependencies : Buffer[Set[Int]],
     * @return
     */
   private def updateTheoryConstraints(process : Int, sampleIndex : Int = 0) : Unit = {
-    val projTraces = samples(process).map({ (trace,v) => (trace.filter(this.assumptionAlphabets(process).contains(_)), v)})
-    for i <- sampleIndex until projTraces.size do {
+    // val projTraces = samples(process).map({ (trace,v) => (trace.filter(this.assumptionAlphabets(process).contains(_)), v)})
+    for i <- sampleIndex until samples(process).size do {
+      val projTrace_i = this.samples(process)(i)._1.filter(this.assumptionAlphabets(process).contains(_))
+      val vi = this.samples(process)(i)._2
       for j <- 0 until i do {
-        if projTraces(i)._1.startsWith(projTraces(j)._1) then{
-          theoryConstraints = z3ctx.mkAnd(constraint, z3ctx.mkImplies(projTraces(i)._2, projTraces(j)._2))
+        val projTrace_j = this.samples(process)(j)._1.filter(this.assumptionAlphabets(process).contains(_))
+        val vj = this.samples(process)(j)._2
+        // System.out.println(s"VERSUS ${samples(process)(i)._1} - ${samples(process)(j)._1}")
+        // System.out.println(s"PROJ VERSUS ${projTrace_i} - ${projTrace_j}")
+
+        if projTrace_i.startsWith(projTrace_j) then{
+          theoryConstraints = z3ctx.mkAnd(theoryConstraints, z3ctx.mkImplies(vi, vj))
+          // System.out.println("\t  -> ")
         }
-        if projTraces(j)._1.startsWith(projTraces(i)._1) then{
-          theoryConstraints = z3ctx.mkAnd(constraint, z3ctx.mkImplies(projTraces(j)._2, projTraces(i)._2))
+        if projTrace_j.startsWith(projTrace_i) then{
+          theoryConstraints = z3ctx.mkAnd(theoryConstraints, z3ctx.mkImplies(vj, vi))
+          // System.out.println("\t  <- ")
         }
       }
     }

@@ -24,9 +24,15 @@ lazy val root = project
 		"dk.brics" % "automaton" % "1.12-4",
 		"net.automatalib" % "automata-core" % "0.10.0",
 		"com.github.scopt" %% "scopt" % "4.1.0",
-		"org.slf4j" % "slf4j-api" % "1.7.9",
-        "org.slf4j" % "slf4j-simple" % "1.7.9",
+		// "org.slf4j" % "slf4j-api" % "1.7.9",
+        // "org.slf4j" % "slf4j-simple" % "1.7.9",
 		"tools.aqua" % "z3-turnkey" % "4.11.2",
   		)
   	)
 cancelable in Global := true
+
+ThisBuild / assemblyMergeStrategy := {
+  case PathList("META-INF", x, xs @ _*) if x.toLowerCase == "services" => MergeStrategy.filterDistinctLines
+  case PathList("META-INF", xs @ _*) => MergeStrategy.discard
+  case x => MergeStrategy.first
+}as

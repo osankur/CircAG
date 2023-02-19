@@ -46,6 +46,7 @@ object DLTS {
       (alphabet | extendedAlphabet)
     val newSymbols =
       extendedAlphabet.diff(alphabet)
+    System.out.println(s"DLTS.alphabet: ${dlts.alphabet}, extendedAlphabet: ${extendedAlphabet}, newAlphabet: ${newAlphabet}")
     val liftedDFA =
       CompactDFA.Creator().createAutomaton(Alphabets.fromList(newAlphabet.toList))
     for i <- 1 to dfa.size() do {
@@ -67,6 +68,8 @@ object DLTS {
         }
       }
     }
+    // System.out.println(s"Showing lifting to ${newAlphabet}")
+    // Visualization.visualize(liftedDFA, Alphabets.fromList(newAlphabet.toList))
     return DLTS(name.getOrElse(dlts.name), liftedDFA, newAlphabet)
   }
 
@@ -93,6 +96,10 @@ object DLTS {
             }
           )
           // System.out.println(cdfa.getInputAlphabet())
+        // System.out.println(s"${dlts.name} before lift-stripping for alphabet ${extendedAlphabet}")
+        // Visualization.visualize(dlts.dfa, Alphabets.fromList(dlts.alphabet.toList))
+        // System.out.println(s"${dlts.name} after lift-stripping")
+        // Visualization.visualize(liftedDLTS.dfa, Alphabets.fromList(liftedDLTS.alphabet.toList))
         liftedDLTS
       case _ => throw Exception("Can only strip CompactDFA")
     }
@@ -125,10 +132,6 @@ object DLTS {
   }
 
   def makePrefixClosed(dfa : DFA[?, String], alphabet : Set[String]) : CompactDFA[String] = {
-    if(!DFAs.isPrefixClosed(dfa,Alphabets.fromList(alphabet.toList))) then {
-      throw Exception("Not prefix-closed")
-      // TODO make it prefix-closed
-    }
     val statesMap  = HashMap((dfa.getInitialState(),0))
     var index = 0
     val newDFA = CompactDFA.Creator().createAutomaton(Alphabets.fromList(alphabet.toList))
@@ -144,14 +147,41 @@ object DLTS {
         for a <- alphabet do {
           dfa.getSuccessors(s,a).foreach(
             {snext =>
-              if (newDFA.isAccepting(statesMap(s)) && newDFA.isAccepting(statesMap(snext))) then {
-                newDFA.addTransition(statesMap(s), a, statesMap(snext))
-              }
+              //if (newDFA.isAccepting(statesMap(s)) && newDFA.isAccepting(statesMap(snext))) then {
+              newDFA.addTransition(statesMap(s), a, statesMap(snext))
+              //}
             }
           )        
         }
       }
     )
+    def isAcceptingReachable(s: Int) : Boolean =
+      { 
+        val visited = Array.fill(newDFA.size)(false)
+        def dfs(s : Int) : Boolean = {
+          System.out.println(s"DFS: ${s}")
+          if newDFA.isAccepting(s) then {
+            true
+          } else if !visited(s) then {
+            visited(s) = true
+            // System.out.println(alphabet.toSeq.map(newDFA.getSuccessors(s, _)))
+            alphabet.toSeq.map(newDFA.getSuccessors(s, _).exists({dfs(_)})).exists({x=>x})
+          } else {
+            false
+          }
+        }
+        dfs(s)
+      }
+    // Make it prefix-closed
+    if(!DFAs.isPrefixClosed(dfa,Alphabets.fromList(alphabet.toList))) then {
+      newDFA.getStates().filter(!newDFA.isAccepting(_)).foreach({
+        s => newDFA.setAccepting(s, isAcceptingReachable(s))
+      })
+      // System.out.println("Showing non-prefix-closed automaton")
+      // Visualization.visualize(dfa, Alphabets.fromList(alphabet.toList))
+      // System.out.println("Prefix closure:")
+      // Visualization.visualize(newDFA, Alphabets.fromList(alphabet.toList))
+    }
     newDFA
   }
 }

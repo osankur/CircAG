@@ -1,8 +1,8 @@
 package fr.irisa.circag
 
 import scala.sys.process._
-import org.slf4j.Logger
-import org.slf4j.LoggerFactory
+// import org.slf4j.Logger
+// import org.slf4j.LoggerFactory
 import io.AnsiColor._
 import scopt.OParser
 import java.io._
@@ -21,7 +21,6 @@ import scala.collection.immutable
 import collection.JavaConverters._
 
 object Main {
-  val logger = LoggerFactory.getLogger("CircAG")
 
   def main(args: Array[String]): Unit = {
     val builder = OParser.builder[Configuration]
@@ -80,14 +79,14 @@ object Main {
               val checker = tchecker.TCheckerAssumeGuaranteeVerifier(configuration.get().ltsFiles, configuration.get().err)
               System.out.println(checker.check())
             case _ => 
-              logger.error("Unknown command")
+              System.err.println("Unknown command")
           }
           // checker.checkInductivePremises(checker.processes(0),)
         }
     } catch {
       case e => 
         e.printStackTrace()
-        logger.error(e.getMessage())
+        System.err.println(e.getMessage())
     }
 
   }
