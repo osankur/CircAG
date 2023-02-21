@@ -8,6 +8,10 @@ import collection.convert.ImplicitConversions._
 
 import io.AnsiColor._
 
+
+import net.automatalib.serialization.dot.GraphDOT
+
+
 import de.learnlib.api.oracle.EquivalenceOracle
 import de.learnlib.api.query.DefaultQuery;
 import de.learnlib.api.oracle._
@@ -67,8 +71,8 @@ class ConstraintManager(private var processDependencies : Buffer[Set[Int]],
   private var solver = z3ctx.mkSolver()
   private var previousValuation = HashMap[z3.BoolExpr,Boolean]()
 
-  private var positiveSamples = Buffer.tabulate(nbProcesses)({_ => Buffer[Trace]()})
-  private var negativeSamples = Buffer.tabulate(nbProcesses)({_ => Buffer[Trace]()})
+  private var positiveSamples = Buffer.tabulate(nbProcesses)({_ => mutable.Set[Trace]()})
+  private var negativeSamples = Buffer.tabulate(nbProcesses)({_ => mutable.Set[Trace]()})
 
   // the empty word must be accepted by all
   constraint = z3ctx.mkAnd((0 until nbProcesses).map({i => varOfIndexedTrace(i, List[String]())}) : _*)
@@ -91,12 +95,11 @@ class ConstraintManager(private var processDependencies : Buffer[Set[Int]],
       case 34 =>
         assert(trace.size > 0)
         val prefix = trace.dropRight(1)
-        constraint = z3ctx.mkAnd(constraint, 
-          z3ctx.mkOr(
+        val newConstr =           z3ctx.mkOr(
             z3ctx.mkOr(processDependencies(process).map({j => z3ctx.mkNot(varOfIndexedTrace(j, prefix))}).toSeq : _*),
-            varOfIndexedTrace(process, trace)
-          )
-        )
+            varOfIndexedTrace(process, trace))
+        System.out.println(s"Adding constraint ${newConstr}")
+        constraint = z3ctx.mkAnd(constraint, newConstr)
         incrementalTraces.append((process, trace, constraintType))
     }
   }
@@ -120,7 +123,7 @@ class ConstraintManager(private var processDependencies : Buffer[Set[Int]],
     (0 until nbProcesses).foreach({i => updateTheoryConstraints(i)})
   }
 
-  def checkPrefixIndependance(pos : Buffer[Trace], neg : Buffer[Trace]) : Unit =  {
+  def checkPrefixIndependance(pos : mutable.Set[Trace], neg : mutable.Set[Trace]) : Unit =  {
     for p <- pos do {
       for n <- neg do {
         if (p.startsWith(neg)) then {
@@ -130,8 +133,8 @@ class ConstraintManager(private var processDependencies : Buffer[Set[Int]],
     }
   }
   def generateAssumptions(oldAssumptions : Buffer[DLTS]) : Buffer[DLTS] = {
-    var positiveSamples = Buffer.tabulate(nbProcesses)({_ => Buffer[Trace]()})
-    var negativeSamples = Buffer.tabulate(nbProcesses)({_ => Buffer[Trace]()})
+    var positiveSamples = Buffer.tabulate(nbProcesses)({_ => mutable.Set[Trace]()})
+    var negativeSamples = Buffer.tabulate(nbProcesses)({_ => mutable.Set[Trace]()})
     // System.out.println(s"Old positive samples: ${this.positiveSamples}")
     // System.out.println(s"Old negative samples: ${this.negativeSamples}")
 
@@ -151,7 +154,11 @@ class ConstraintManager(private var processDependencies : Buffer[Set[Int]],
             m.evaluate(v, false).getBoolValue() match {
               case z3.enumerations.Z3_lbool.Z3_L_TRUE =>
                 // System.out.println(s"Valuation(${i}):POS: ${trace} --> ${trace.filter(assumptionAlphabets(i))}")
-                positiveSamples(i).add(trace.filter(assumptionAlphabets(i)))
+                val sample = trace.filter(assumptionAlphabets(i))
+                for k <- 0 to sample.size do {
+                  positiveSamples(i).add(sample.dropRight(k))
+                  // System.out.println("Adding " + sample.dropRight(k))
+                }
               case z3.enumerations.Z3_lbool.Z3_L_FALSE => 
                 // System.out.println(s"Valuation(${i}):NEG: ${trace} --> ${trace.filter(assumptionAlphabets(i))}")
                 negativeSamples(i).add(trace.filter(assumptionAlphabets(i)))
@@ -176,16 +183,24 @@ class ConstraintManager(private var processDependencies : Buffer[Set[Int]],
       if( positiveSamples(i).toSet == this.positiveSamples(i).toSet
       && negativeSamples(i).toSet == this.negativeSamples(i).toSet){
         newAssumptions.append(oldAssumptions(i))
-        // System.out.println(s"Keeping assumption ${i}...")
+        System.out.println(s"Keeping assumption ${i}...")
       } else {
         System.out.println(s"${BLUE}Updating assumption ${i}...${RESET}")
+        statistics.Counters.incrementCounter("RPNI")
         val learner = BlueFringeRPNIDFA(Alphabets.fromList(assumptionAlphabets(i).toList))
         learner.addPositiveSamples(positiveSamples(i).map(Word.fromList(_)))
         learner.addNegativeSamples(negativeSamples(i).map(Word.fromList(_)))
+        val initialModel = learner.computeModel()
         newAssumptions.append(
-          DLTS(oldAssumptions(i).name, 
-              DFAs.complete(DLTS.makePrefixClosed(learner.computeModel(), assumptionAlphabets(i)), Alphabets.fromList(assumptionAlphabets(i).toList)),
-              assumptionAlphabets(i)))
+          oldAssumptions(i).copy(
+            dfa = DLTS.makePrefixClosed(initialModel, assumptionAlphabets(i), removeNonAcceptingStates = true)
+          )
+        )
+
+        // newAssumptions.append(
+        //   DLTS(oldAssumptions(i).name, 
+        //       DFAs.complete(DLTS.makePrefixClosed(initialModel, assumptionAlphabets(i)), Alphabets.fromList(assumptionAlphabets(i).toList)),
+        //       assumptionAlphabets(i)))
         // Visualization.visualize(newAssumptions(i).dfa, Alphabets.fromList(assumptionAlphabets(i).toList))
         this.positiveSamples(i) = positiveSamples(i)
         this.negativeSamples(i) = negativeSamples(i)

@@ -35,4 +35,4 @@ ThisBuild / assemblyMergeStrategy := {
   case PathList("META-INF", x, xs @ _*) if x.toLowerCase == "services" => MergeStrategy.filterDistinctLines
   case PathList("META-INF", xs @ _*) => MergeStrategy.discard
   case x => MergeStrategy.first
-}as
+}

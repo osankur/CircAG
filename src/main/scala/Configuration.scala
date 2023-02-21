@@ -3,8 +3,12 @@ package fr.irisa.circag.configuration
 
 import java.io.File
 import java.nio.file._
-
+import collection.mutable.Buffer
+import fr.irisa.circag.Trace
 case class ParseError(msg: String) extends Exception(msg)
+
+var g1 = false
+val cex = Buffer.tabulate(4)({_ => Set[Trace]()})
 
 object FSM {
   sealed trait FSMFormat

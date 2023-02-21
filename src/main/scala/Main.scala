@@ -76,8 +76,12 @@ object Main {
               val product = tchecker.TA.synchronousProduct(tas.toList)
               System.out.println(product.toString())
             case "ag" =>
-              val checker = tchecker.TCheckerAssumeGuaranteeVerifier(configuration.get().ltsFiles, configuration.get().err)
-              System.out.println(checker.check())
+              tchecker.TCheckerAssumeGuaranteeVerifier(configuration.get().ltsFiles, configuration.get().err).check()
+              match {
+                case None => System.out.println(s"${GREEN}${BOLD}Success${RESET}")
+                case Some(cex) => System.out.println(s"${RED}${BOLD}Counterexample${RESET} ${cex}")
+              }
+              System.out.println(statistics.Counters.toString)
             case _ => 
               System.err.println("Unknown command")
           }

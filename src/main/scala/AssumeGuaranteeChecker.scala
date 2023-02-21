@@ -286,15 +286,18 @@ object TCheckerAssumeGuaranteeOracles {
     * @param assumptions List of complete DFAs
     * @param guarantee
     * @pre guarantee.alphabet <= lts.alphabet
-    * @pre assumptions are complete prefix-closed DFAs
+    * @pre All states of the automata in lhs are accepting
     * @return None if the premise holds; and Some(cexTrace) otherwise
     */
   def checkInductivePremises(ta : TA, assumptions : List[DLTS], guarantee : DLTS) : Option[Trace] =
     { 
+      statistics.Counters.incrementCounter("inductive-premise")
+
       require(guarantee.alphabet.toSet.subsetOf(ta.alphabet))
       require(assumptions.forall({dlts => 
         DFAs.isPrefixClosed(dlts.dfa, Alphabets.fromList(dlts.alphabet.toList))
       }))
+      System.out.println(s"Checking inductive premise for ${ta.systemName}")
       val guaranteeAlphabet = Alphabets.fromList(guarantee.alphabet.toList)
       val compG = DLTS(
         s"_comp_${guarantee.name}", 
@@ -305,6 +308,15 @@ object TCheckerAssumeGuaranteeOracles {
         assumptions.map({ass => DLTS.liftAndStripNonAccepting(ass, ta.alphabet, Some(s"lifted_${ass.name}"))})
       val premiseProduct = TA.synchronousProduct(ta, compG::liftedAssumptions, Some("_accept_"))
       val trace = checkReachability(premiseProduct, s"${compG.name}_accept_")
+      // System.out.println(premiseProduct.toString())
+      // if (configuration.cex(0).contains(trace)) then {
+      //   val i = 0
+      //   System.out.println(s"While checking ${ta.systemName}, here is ${assumptions(i).name}")
+      //   Visualization.visualize(assumptions(i).dfa,  Alphabets.fromList(assumptions(i).alphabet.toList))
+
+      //   System.out.println("lifted g1")
+      //   Visualization.visualize(liftedAssumptions(i).dfa, Alphabets.fromList(liftedAssumptions(i).alphabet.toList))
+      // }
       trace
     }
 
@@ -313,13 +325,29 @@ object TCheckerAssumeGuaranteeOracles {
     *
     * @param lhs
     * @param property
+    * @pre All states of the automata in lhs are accepting
     * @return None if the premise holds; and Some(cexTrace) otherwise
     */
   def checkFinalPremise(lhs : List[DLTS], property : DLTS) : Option[Trace] = {
+      statistics.Counters.incrementCounter("final-premise")
+
+      // Check precondition
+      for dlts <- lhs do {
+        val dfa = dlts.dfa
+        dfa.getStates().foreach({s =>
+          for a <- dlts.alphabet do {
+            dfa.getSuccessors(s,a).foreach({
+              sn =>
+                assert(dfa.isAccepting(sn))
+              })
+          }
+        })
+      }
+
       val compG = DLTS(s"_comp_${property.name}", DFAs.complement(property.dfa, Alphabets.fromList(property.alphabet.toList)), property.alphabet)
       val premiseProduct = TA.synchronousProduct(TA.fromDLTS(compG, acceptingLabelSuffix=Some("_accept_")), lhs)
       // System.out.println(premiseProduct)
-      checkReachability(premiseProduct, s"${compG.name}_accept_")      
+      checkReachability(premiseProduct, s"${compG.name}_accept_")
   }
   /**
     * Attempt to find a trace in ta that synchronizes with word; the returned trace has alphabet word's alphabet | ta's alphabet.
@@ -364,6 +392,8 @@ object TCheckerAssumeGuaranteeOracles {
     * @return None if no such execution exists, and Some(execution) otherwise.
     */
   def checkTraceMembership(ta : TA, word : Trace, projectionAlphabet : Option[Set[String]]) : Option[Trace] = {  
+    statistics.Counters.incrementCounter("trace-membership")
+
     val traceProcess = DLTS.fromTrace(word, projectionAlphabet)
     val productTA = TA.synchronousProduct(ta, List(traceProcess), Some("_accept_"))
     val label = s"${traceProcess.name}_accept_"
@@ -371,6 +401,7 @@ object TCheckerAssumeGuaranteeOracles {
   }
 
   def checkReachability(ta : TA, label : String) : Option[Trace] = {
+    statistics.Counters.incrementCounter("model-checking")
     val modelFile =
       Files.createTempFile(configuration.get().getTmpDirPath(), "circag-query", ".ta").toFile()
     val pw = PrintWriter(modelFile)
@@ -423,7 +454,7 @@ class AGContinue extends AGIntermediateResult
 case class AGFalse(cex : Trace) extends AGIntermediateResult
 
 class TCheckerAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useAlphabetRefinement : Boolean = false) {
-  
+
 
   val nbProcesses = ltsFiles.size
   val propertyAlphabet = Set[String](err)
@@ -442,6 +473,7 @@ class TCheckerAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useA
     }
     DLTS("property", errDFA, propertyAlphabet)
   }
+
 
   /**
     * Current alphabet for assumptions g_i.
@@ -480,11 +512,11 @@ class TCheckerAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useA
 
   /**
     * G_i: the set of process indices on which the proof of process(i) depends.
-    * Initially all processes depend on all (including themselves)
+    * Initially all processes depend on all (except for themselves)
     */
   private var processDependencies : Buffer[Set[Int]] = 
     (0 until ltsFiles.size)
-    .map({_ =>(0 until ltsFiles.size).toSet})
+    .map({i =>(0 until ltsFiles.size).toSet - i})
     .toBuffer
 
   private var propertyDependencies : Set[Int] = 
@@ -502,13 +534,21 @@ class TCheckerAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useA
   def applyAG() : AGIntermediateResult = {
     try{
       for (ta,i) <- processes.zipWithIndex do {
-        // TCheckerAssumeGuaranteeOracles.checkInductivePremises(ta, processDependencies(i).map(assumptions(_)).toList, propertyDLTS)
         TCheckerAssumeGuaranteeOracles.checkInductivePremises(ta, processDependencies(i).map(assumptions(_)).toList, assumptions(i))
         match {
           case None =>
             System.out.println(s"${GREEN}Premise ${i} passed${RESET}")
           case Some(cexTrace) => 
             System.out.println(s"${RED}Premise ${i} failed with cex: ${cexTrace}${RESET}")
+            if (configuration.cex(i).contains(cexTrace)) then {
+              for j <- processDependencies(i) do {
+                System.out.println(s"Dependency ${assumptions(j).name}")
+                Visualization.visualize(assumptions(j).dfa, Alphabets.fromList(assumptions(j).alphabet.toList))
+              }
+              throw Exception("Repeated CEX")
+            } else {
+              configuration.cex(i) = configuration.cex(i) + cexTrace
+            }
             updateConstraints(i, cexTrace)
             throw AGContinue()
         }
@@ -526,6 +566,10 @@ class TCheckerAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useA
             match {
               case None => 
                 System.out.println(s"\tCex does not apply to process ${i}. Continuing...")
+                // for ass <- assumptions do {
+                //   System.out.println(ass.name)
+                //   Visualization.visualize(ass.dfa, Alphabets.fromList(ass.alphabet.toList))
+                // }
                 constraintManager.addFinalPremiseConstraint(cexTrace)
                 throw AGContinue()
               case _ => ()
@@ -558,10 +602,11 @@ class TCheckerAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useA
     try{
       while(true) {
         this.assumptions = constraintManager.generateAssumptions(this.assumptions)
-        for (ass,i) <- assumptions.zipWithIndex do {
-          // System.out.println(s"${ass.name} for process ${processes(i).systemName} alphabet: ${ass.alphabet}")
-          // Visualization.visualize(ass.dfa, Alphabets.fromList(ass.alphabet.toList))
-        }
+
+        // for (ass,i) <- assumptions.zipWithIndex do {
+        //   System.out.println(s"${ass.name} for process ${processes(i).systemName} alphabet: ${ass.alphabet}")
+        //   Visualization.visualize(ass.dfa, Alphabets.fromList(ass.alphabet.toList))
+        // }
         this.applyAG() match {
           case AGFalse(cex) =>
             alphabetRefine(cex) match {

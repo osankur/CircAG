@@ -16,14 +16,17 @@ import net.automatalib.visualization.Visualization;
 import net.automatalib.words.Alphabet;
 import net.automatalib.words.impl.Alphabets;
 
-/**
-  * Deterministic LTS used as hypotheses and properties.
+/** Deterministic LTS used as hypotheses and properties.
   *
   * @param name
   * @param dfa
   * @param alphabet
   */
-case class DLTS(val name : String, val dfa: DFA[Integer, String], val alphabet: Set[String])
+case class DLTS(
+    val name: String,
+    val dfa: DFA[Integer, String],
+    val alphabet: Set[String]
+)
 
 type Trace = List[String]
 
@@ -38,7 +41,11 @@ object DLTS {
     * @param extendedAlphabet
     * @return
     */
-  def lift(dlts: DLTS, extendedAlphabet: Set[String], name : Option[String] = None): DLTS = {
+  def lift(
+      dlts: DLTS,
+      extendedAlphabet: Set[String],
+      name: Option[String] = None
+  ): DLTS = {
     val alphabet = dlts.alphabet
     val dfa = dlts.dfa
 
@@ -46,9 +53,11 @@ object DLTS {
       (alphabet | extendedAlphabet)
     val newSymbols =
       extendedAlphabet.diff(alphabet)
-    System.out.println(s"DLTS.alphabet: ${dlts.alphabet}, extendedAlphabet: ${extendedAlphabet}, newAlphabet: ${newAlphabet}")
+    // System.out.println(s"DLTS.alphabet: ${dlts.alphabet}, extendedAlphabet: ${extendedAlphabet}, newAlphabet: ${newAlphabet}")
     val liftedDFA =
-      CompactDFA.Creator().createAutomaton(Alphabets.fromList(newAlphabet.toList))
+      CompactDFA
+        .Creator()
+        .createAutomaton(Alphabets.fromList(newAlphabet.toList))
     for i <- 1 to dfa.size() do {
       liftedDFA.addState()
     }
@@ -73,8 +82,8 @@ object DLTS {
     return DLTS(name.getOrElse(dlts.name), liftedDFA, newAlphabet)
   }
 
-  /** Lift to extendedAlphabet as the method lift, and remove all transitions
-    * from non-accepting states
+  /** Complete, lift to extendedAlphabet, and remove all transitions from
+    * non-accepting states
     *
     * @param dlts
     * @param extendedAlphabet
@@ -83,9 +92,15 @@ object DLTS {
   def liftAndStripNonAccepting(
       dlts: DLTS,
       extendedAlphabet: Set[String],
-      name : Option[String] = None
+      name: Option[String] = None
   ): DLTS = {
-    val liftedDLTS = lift(dlts, extendedAlphabet, name)
+    val liftedDLTS = lift(
+      dlts.copy(dfa =
+        DFAs.complete(dlts.dfa, Alphabets.fromList(dlts.alphabet.toList))
+      ),
+      extendedAlphabet,
+      name
+    )
     liftedDLTS.dfa match {
       case cdfa: CompactDFA[?] =>
         cdfa
@@ -95,7 +110,7 @@ object DLTS {
               cdfa.removeAllTransitions(s)
             }
           )
-          // System.out.println(cdfa.getInputAlphabet())
+        // System.out.println(cdfa.getInputAlphabet())
         // System.out.println(s"${dlts.name} before lift-stripping for alphabet ${extendedAlphabet}")
         // Visualization.visualize(dlts.dfa, Alphabets.fromList(dlts.alphabet.toList))
         // System.out.println(s"${dlts.name} after lift-stripping")
@@ -105,14 +120,14 @@ object DLTS {
     }
   }
 
-  /**
-    * Make straight-line DLTS reading a given trace, projecte to projectionAlphabet
+  /** Make straight-line DLTS reading a given trace, projecte to
+    * projectionAlphabet
     *
     * @param trace
     * @param projectionAlphabet
     * @return
     */
-  def fromTrace(trace: Trace, projectionAlphabet : Option[Set[String]]) : DLTS = {
+  def fromTrace(trace: Trace, projectionAlphabet: Option[Set[String]]): DLTS = {
     val alph = projectionAlphabet.getOrElse(trace.toSet)
     val projTrace = trace.filter(alph.contains(_))
 
@@ -123,64 +138,102 @@ object DLTS {
       dfa.addState()
     }
     dfa.setInitialState(0)
-    projTrace.zip(0 until projTrace.size).foreach({
-      (sigma, i) =>
-        dfa.addTransition(i, sigma, i+1)
-    })
+    projTrace
+      .zip(0 until projTrace.size)
+      .foreach({ (sigma, i) =>
+        dfa.addTransition(i, sigma, i + 1)
+      })
     dfa.setAccepting(projTrace.size, true)
     DLTS("_trace_", dfa, alph)
   }
 
-  def makePrefixClosed(dfa : DFA[?, String], alphabet : Set[String]) : CompactDFA[String] = {
-    val statesMap  = HashMap((dfa.getInitialState(),0))
+  def makePrefixClosed(
+      dfa: DFA[?, String],
+      alphabet: Set[String],
+      removeNonAcceptingStates: Boolean = false
+  ): CompactDFA[String] = {
+    val statesMap = HashMap((dfa.getInitialState(), 0))
     var index = 0
-    val newDFA = CompactDFA.Creator().createAutomaton(Alphabets.fromList(alphabet.toList))
-    dfa.getStates().foreach({
-      state => 
+    val newDFA =
+      CompactDFA.Creator().createAutomaton(Alphabets.fromList(alphabet.toList))
+    dfa
+      .getStates()
+      .foreach({ state =>
         statesMap.put(state, index)
         index = index + 1
         newDFA.addState(dfa.isAccepting(state))
-    })
+      })
     newDFA.setInitial(statesMap(dfa.getInitialState()), true)
-    dfa.getStates().foreach(
-      {s =>
-        for a <- alphabet do {
-          dfa.getSuccessors(s,a).foreach(
-            {snext =>
-              //if (newDFA.isAccepting(statesMap(s)) && newDFA.isAccepting(statesMap(snext))) then {
-              newDFA.addTransition(statesMap(s), a, statesMap(snext))
-              //}
-            }
-          )        
-        }
-      }
-    )
-    def isAcceptingReachable(s: Int) : Boolean =
-      { 
-        val visited = Array.fill(newDFA.size)(false)
-        def dfs(s : Int) : Boolean = {
-          System.out.println(s"DFS: ${s}")
-          if newDFA.isAccepting(s) then {
-            true
-          } else if !visited(s) then {
-            visited(s) = true
-            // System.out.println(alphabet.toSeq.map(newDFA.getSuccessors(s, _)))
-            alphabet.toSeq.map(newDFA.getSuccessors(s, _).exists({dfs(_)})).exists({x=>x})
-          } else {
-            false
+    dfa
+      .getStates()
+      .foreach(
+        { s =>
+          for a <- alphabet do {
+            dfa
+              .getSuccessors(s, a)
+              .foreach(
+                { snext =>
+                  // if (newDFA.isAccepting(statesMap(s)) && newDFA.isAccepting(statesMap(snext))) then {
+                  newDFA.addTransition(statesMap(s), a, statesMap(snext))
+                  // }
+                }
+              )
           }
         }
-        dfs(s)
+      )
+    def isAcceptingReachable(s: Int): Boolean = {
+      val visited = Array.fill(newDFA.size)(false)
+      def dfs(s: Int): Boolean = {
+        if newDFA.isAccepting(s) then {
+          true
+        } else if !visited(s) then {
+          visited(s) = true
+          // System.out.println(alphabet.toSeq.map(newDFA.getSuccessors(s, _)))
+          alphabet.toSeq
+            .map(newDFA.getSuccessors(s, _).exists({ dfs(_) }))
+            .exists({ x => x })
+        } else {
+          false
+        }
       }
+      dfs(s)
+    }
     // Make it prefix-closed
-    if(!DFAs.isPrefixClosed(dfa,Alphabets.fromList(alphabet.toList))) then {
-      newDFA.getStates().filter(!newDFA.isAccepting(_)).foreach({
-        s => newDFA.setAccepting(s, isAcceptingReachable(s))
-      })
-      // System.out.println("Showing non-prefix-closed automaton")
-      // Visualization.visualize(dfa, Alphabets.fromList(alphabet.toList))
-      // System.out.println("Prefix closure:")
-      // Visualization.visualize(newDFA, Alphabets.fromList(alphabet.toList))
+    if (!DFAs.isPrefixClosed(dfa, Alphabets.fromList(alphabet.toList))) then {
+      newDFA
+        .getStates()
+        .filter(!newDFA.isAccepting(_))
+        .foreach({ s =>
+          newDFA.removeAllTransitions(s)
+        // if (!newDFA.isAccepting(s) && isAcceptingReachable(s)) then {
+        //   newDFA.setAccepting(s, true)
+        //   System.out.println(s"Setting state ${s} accepting")
+        // }
+        // newDFA.setAccepting(s, isAcceptingReachable(s))
+        })
+    }
+    // System.out.println("Showing non-prefix-closed automaton")
+    // Visualization.visualize(dfa, Alphabets.fromList(alphabet.toList))
+    // System.out.println("Prefix closure:")
+    // Visualization.visualize(newDFA, Alphabets.fromList(alphabet.toList))
+    if (removeNonAcceptingStates) then {
+      var rm = false
+      for sigma <- newDFA.getInputAlphabet() do {
+        newDFA
+          .getStates()
+          .foreach(
+            { s =>
+              newDFA
+                .getSuccessors(s, sigma)
+                .foreach({ sn =>
+                  if !newDFA.isAccepting(sn) then {
+                    newDFA.removeAllTransitions(s, sigma)
+                    rm = true
+                  }
+                })
+            }
+          )
+      }
     }
     newDFA
   }
