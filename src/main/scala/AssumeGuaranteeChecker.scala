@@ -11,12 +11,14 @@ import scala.sys.process._
 import scala.io
 import scala.collection.mutable.StringBuilder
 import scala.collection.mutable.HashMap
-import de.learnlib.util.MQUtil;
+
 import java.io.File
 import java.io.InputStream
 import java.nio.file._
 import java.io.PrintWriter
 import java.io.ByteArrayInputStream
+
+import de.learnlib.util.MQUtil;
 import de.learnlib.api.oracle.EquivalenceOracle
 import de.learnlib.api.query.DefaultQuery;
 import de.learnlib.api.oracle._
@@ -62,6 +64,7 @@ trait AssumeGuaranteeOracles[LTS, Property] {
 class TA (
   var systemName : String = "",
   var alphabet: Set[String] = Set(),
+  var internalAlphabet: Set[String] = Set(),
   var core: String = "",
   var eventsOfProcesses : HashMap[String, Set[String]] = HashMap[String, Set[String]](),
   var syncs : List[List[(String, String)]] = List[List[(String, String)]]()){
@@ -97,7 +100,11 @@ object TA{
     val regSystem = "\\s*system:([^ ]*).*".r
     // System.out.println("File: " + inputFile.toString)
     ta.alphabet = lines.flatMap({
-      case regEvent(event) => Some(event.strip())
+      case regEvent(event) if !event.startsWith("_") => Some(event.strip())
+      case _               => None
+    }).toSet
+    ta.internalAlphabet = lines.flatMap({
+      case regEvent(event) if event.startsWith("_") => Some(event.strip())
       case _               => None
     }).toSet
     ta.syncs = lines.flatMap({
@@ -212,7 +219,7 @@ object TA{
     }
     //if dlts.map(_.name).distinct.size < dlts.size || dlts.map(_.name).contains(ta.systemName) then {
     val dltsTA = dlts.map({d => this.fromDLTS(d, acceptingLabelSuffix)})
-    val jointAlphabet = ta.alphabet | dlts.foldLeft(Set[String]())( (alph, d) => alph | d.alphabet.toSet)
+    val jointAlphabet = ta.alphabet | dlts.foldLeft(Set[String]())( (alph, d) => alph | d.alphabet)
     val sb = StringBuilder()
     val systemName = s"_premise_${ta.systemName}"
     sb.append(ta.core)
@@ -226,7 +233,7 @@ object TA{
         allProcesses.filter(eventsOfProcesses(_).contains(sigma))
         .map({process => (process,sigma)})
     ).toList.filter(_.size > 1)
-    TA(systemName, jointAlphabet, sb.toString(), eventsOfProcesses, syncs)
+    TA(systemName, jointAlphabet, ta.internalAlphabet, sb.toString(), eventsOfProcesses, syncs)
 
   }
 
@@ -239,6 +246,7 @@ object TA{
     }
     //if dlts.map(_.name).distinct.size < dlts.size || dlts.map(_.name).contains(ta.systemName) then {
     val jointAlphabet = tas.foldLeft(Set[String]())((alph,ta) => alph | ta.alphabet)
+    val jointInternalAlphabet = tas.foldLeft(Set[String]())((alph,ta) => alph | ta.internalAlphabet)
     val sb = StringBuilder()
     val systemName = s"_product_"
     tas.foreach({d => sb.append(d.core); sb.append("\n")})
@@ -249,7 +257,7 @@ object TA{
         allProcesses.filter(eventsOfProcesses(_).contains(sigma))
         .map({process => (process,sigma)})
     ).toList.filter(_.size > 1)
-    TA(systemName, jointAlphabet, sb.toString(), eventsOfProcesses, syncs)
+    TA(systemName, jointAlphabet, jointInternalAlphabet, sb.toString(), eventsOfProcesses, syncs)
   }
 
 
@@ -280,7 +288,7 @@ object TA{
 object TCheckerAssumeGuaranteeOracles {
   
   /**
-    * 
+    * ta |= lhs |> guarantee
     *
     * @param lts
     * @param assumptions List of complete DFAs
@@ -308,15 +316,6 @@ object TCheckerAssumeGuaranteeOracles {
         assumptions.map({ass => DLTS.liftAndStripNonAccepting(ass, ta.alphabet, Some(s"lifted_${ass.name}"))})
       val premiseProduct = TA.synchronousProduct(ta, compG::liftedAssumptions, Some("_accept_"))
       val trace = checkReachability(premiseProduct, s"${compG.name}_accept_")
-      // System.out.println(premiseProduct.toString())
-      // if (configuration.cex(0).contains(trace)) then {
-      //   val i = 0
-      //   System.out.println(s"While checking ${ta.systemName}, here is ${assumptions(i).name}")
-      //   Visualization.visualize(assumptions(i).dfa,  Alphabets.fromList(assumptions(i).alphabet.toList))
-
-      //   System.out.println("lifted g1")
-      //   Visualization.visualize(liftedAssumptions(i).dfa, Alphabets.fromList(liftedAssumptions(i).alphabet.toList))
-      // }
       trace
     }
 

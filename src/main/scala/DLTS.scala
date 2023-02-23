@@ -4,12 +4,14 @@ import scala.collection.mutable.Buffer
 import scala.collection.mutable.HashMap
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.immutable.Set
-
+import dk.brics.automaton
+import net.automatalib.brics.BricsNFA
 import collection.convert.ImplicitConversions._
 
 import net.automatalib.automata.fsa.DFA;
 import net.automatalib.automata.fsa.impl.compact.CompactDFA;
 import net.automatalib.util.automata.fsa.DFAs
+import net.automatalib.util.automata.fsa.NFAs
 import net.automatalib.automata.fsa.impl.compact.CompactDFA;
 import net.automatalib.util.automata.builders.AutomatonBuilders;
 import net.automatalib.visualization.Visualization;
@@ -145,6 +147,60 @@ object DLTS {
       })
     dfa.setAccepting(projTrace.size, true)
     DLTS("_trace_", dfa, alph)
+  }
+
+  def fromRegExp(name : String, regexp : String ) : DLTS = {
+    var currentChar = 'a'
+    val names = HashMap[Character, String]()
+    val identifierReg = ".*?@([a-zA-Z0-9]+).*".r
+
+    var modifiedRegexp = regexp
+    def addIdentifier() : Boolean = {
+      modifiedRegexp match {
+        case identifierReg(name) => 
+          // System.out.println(s"${name} -> ${currentChar}")
+          names.put(currentChar, name)
+          modifiedRegexp = modifiedRegexp.replaceAllLiterally(s"@${name}", s"${currentChar}")
+          currentChar = (Char.char2int(currentChar) + 1).toChar
+          true
+        case _ => 
+          false
+      }
+    }
+    // System.out.println(s"Initial regex: ${modifiedRegexp}")
+    while(addIdentifier()){}
+    // System.out.println(s"Modified regex: ${modifiedRegexp}")
+    val aut = BricsNFA(dk.brics.automaton.RegExp(modifiedRegexp).toAutomaton())
+    val dfa = NFAs.determinize(aut, Alphabets.characters('A', 'z'))
+
+    val alph = Alphabets.fromList(names.values.toList)
+    val newDFA =
+      CompactDFA.Creator().createAutomaton(alph)
+    dfa
+      .getStates()
+      .foreach({ state =>
+        newDFA.addState(dfa.isAccepting(state))
+      })
+    newDFA.setInitial(dfa.getInitialState(), true)
+    // System.out.println(names.keys)
+    dfa
+      .getStates()
+      .foreach(
+        { s =>
+          for a <- names.keys do {
+            dfa
+              .getSuccessors(s, a)
+              .foreach(
+                { snext =>
+                  newDFA.addTransition(s, names(a), snext)
+                }
+              )
+          }
+        }
+      )
+    // Visualization.visualize(newDFA, alph)
+
+    DLTS(name, newDFA, alph.toSet)
   }
 
   def makePrefixClosed(

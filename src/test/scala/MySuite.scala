@@ -28,6 +28,7 @@ import de.learnlib.util.Experiment.DFAExperiment;
 import de.learnlib.util.statistics.SimpleProfiler;
 import net.automatalib.automata.fsa.DFA;
 import net.automatalib.util.automata.fsa.DFAs 
+import net.automatalib.util.automata.fsa.NFAs 
 import net.automatalib.automata.fsa.impl.compact.CompactDFA;
 import net.automatalib.util.automata.builders.AutomatonBuilders;
 import net.automatalib.visualization.Visualization;
@@ -327,7 +328,23 @@ class MySuite extends munit.FunSuite {
     learner.addPositiveSamples(Buffer(List("a","b","c"), List("a","a","c")).map(Word.fromList(_)))
     learner.addNegativeSamples(Buffer(List("a","b","err"), List("a","a","b")).map(Word.fromList(_)))     
     val dfa = learner.computeModel()
-    Visualization.visualize(dfa, alph)
+    // Visualization.visualize(dfa, alph)
+  }
+
+  test("regexp"){
+    // DLTS.fromRegExp("ocan", "@a@b+(@c|@d)*@e?")
+    // DLTS.fromRegExp("ocan", "(~(.*@start1[^@end1]*@start1.*)) & (~(.*@start2[^@end2]*@start2.*))")
+    // val r = new RegExp("ab+(c|d)*e?");
+    // val r = new RegExp("(~(.*a[^b]*a.*)) ")
+    // val a = r.toAutomaton();
+    // val ba = new BricsNFA(a);
+
+    // // Then, display a DOT representation of this automaton
+    // Visualization.visualize(ba, true);
+    // val r = dk.brics.automaton.RegExp("~(ab)")
+    // val aut = r.toAutomaton()
+    // val baut : AbstractBricsAutomaton = BricsNFA(aut)
+    // Visualization.visualize(baut, true)
   }
 
 }
