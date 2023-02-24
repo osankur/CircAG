@@ -27,6 +27,8 @@ import de.learnlib.oracle.membership.SimulatorOracle.DFASimulatorOracle;
 import de.learnlib.util.Experiment.DFAExperiment;
 import de.learnlib.util.statistics.SimpleProfiler;
 import net.automatalib.automata.fsa.DFA;
+import net.automatalib.automata.fsa.impl.FastDFA
+import net.automatalib.automata.fsa.impl.FastDFAState
 import net.automatalib.util.automata.fsa.DFAs 
 import net.automatalib.util.automata.fsa.NFAs 
 import net.automatalib.automata.fsa.impl.compact.CompactDFA;
@@ -116,9 +118,9 @@ class MySuite extends munit.FunSuite {
   test("premiseChecker"){
     // {a,c,d}*
     val inputs1: Alphabet[String] = Alphabets.fromList(List("c","d", "a"))
-    val dfa1: CompactDFA[String] =
+    val dfa1 =
     AutomatonBuilders
-      .newDFA(inputs1)
+      .forDFA(FastDFA(inputs1))
       .withInitial("q0")
       .from("q0")
       .on("c")
@@ -134,9 +136,9 @@ class MySuite extends munit.FunSuite {
   
     // a* + a*d+
     val inputs2: Alphabet[String] = Alphabets.fromList(List("d", "a"))
-    val dfa2: CompactDFA[String] =
+    val dfa2 =
     AutomatonBuilders
-      .newDFA(inputs2)
+      .forDFA(FastDFA(inputs2))
       .withInitial("q0")
       .from("q0")
       .on("a")
@@ -151,9 +153,9 @@ class MySuite extends munit.FunSuite {
       .withAccepting("q1")
       .create();
     val err = "err"
-    val errDFA : CompactDFA[String] =
+    val errDFA : FastDFA[String] =
       AutomatonBuilders
-        .newDFA(Alphabets.fromList(List(err)))
+        .forDFA(FastDFA(Alphabets.fromList(List(err))))
         .withInitial("q0")
         .from("q0")
         .on(err)
@@ -167,9 +169,9 @@ class MySuite extends munit.FunSuite {
     assert(checker != None)
     //System.out.println(checker)
 
-    val dfa1_p: CompactDFA[String] =
+    val dfa1_p: FastDFA[String] =
     AutomatonBuilders
-      .newDFA(Alphabets.fromList(List("c","d")))
+      .forDFA(FastDFA(Alphabets.fromList(List("c","d"))))
       .withInitial("q0")
       .from("q0")
       .on("d")
@@ -190,9 +192,9 @@ class MySuite extends munit.FunSuite {
 
  
  
-    val dfa3: CompactDFA[String] =
+    val dfa3 =
     AutomatonBuilders
-      .newDFA(Alphabets.fromList(List("c","a","b", "err")))
+      .forDFA(FastDFA(Alphabets.fromList(List("c","a","b", "err"))))
       .withInitial("q0")
       .from("q0")
       .on("a")
@@ -252,9 +254,9 @@ class MySuite extends munit.FunSuite {
   test("mus"){
     // {a,c,d}*
     val inputs1: Alphabet[String] = Alphabets.fromList(List("req1","req2", "rel1", "rel2"))
-    val gUser: CompactDFA[String] =
+    val gUser =
     AutomatonBuilders
-      .newDFA(inputs1)
+      .forDFA(FastDFA(inputs1))
       .withInitial("q0")
       .from("q0")
       .on("req1")
@@ -275,9 +277,9 @@ class MySuite extends munit.FunSuite {
   
     // a* + a*d+
     val inputs2: Alphabet[String] = Alphabets.fromList(List("start1", "start2", "end1", "end2"))
-    val gSched: CompactDFA[String] =
+    val gSched =
     AutomatonBuilders
-      .newDFA(inputs2)
+      .forDFA(FastDFA(inputs2))
       .withInitial("q0")
       .from("q0")
       .on("start1")
@@ -297,16 +299,16 @@ class MySuite extends munit.FunSuite {
       .create();
 
     val err = "err"
-    val gMachine : CompactDFA[String] =
+    val gMachine : FastDFA[String] =
       AutomatonBuilders
-        .newDFA(Alphabets.fromList(List(err)))
+        .forDFA(FastDFA(Alphabets.fromList(List(err))))
         .withInitial("q0")
         .withAccepting("q0")
         .create();
 
-    val errDFA : CompactDFA[String] =
+    val errDFA : FastDFA[String] =
       AutomatonBuilders
-        .newDFA(Alphabets.fromList(List(err)))
+        .forDFA(FastDFA(Alphabets.fromList(List(err))))
         .withInitial("q0")
         .from("q0")
         .on(err)

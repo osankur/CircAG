@@ -27,6 +27,8 @@ import de.learnlib.api.oracle.MembershipOracle.DFAMembershipOracle
 import net.automatalib.automata.fsa.impl.compact.CompactDFA;
 import net.automatalib.util.automata.builders.AutomatonBuilders;
 import net.automatalib.automata.fsa.DFA
+import net.automatalib.automata.fsa.impl.FastDFA
+import net.automatalib.automata.fsa.impl.FastDFAState
 import net.automatalib.util.automata.fsa.NFAs
 import net.automatalib.util.automata.fsa.DFAs
 import net.automatalib.words.impl.Alphabets;
@@ -310,7 +312,7 @@ object TCheckerAssumeGuaranteeOracles {
       val guaranteeAlphabet = Alphabets.fromList(guarantee.alphabet.toList)
       val compG = DLTS(
         s"_comp_${guarantee.name}", 
-        DFAs.complement(guarantee.dfa, guaranteeAlphabet),
+        DFAs.complement(guarantee.dfa, guaranteeAlphabet, FastDFA(guaranteeAlphabet)),
         guarantee.alphabet)
       // Visualization.visualize(compG.dfa, Alphabets.fromList(guarantee.alphabet.toList))
       val liftedAssumptions = 
@@ -343,8 +345,8 @@ object TCheckerAssumeGuaranteeOracles {
           }
         })
       }
-
-      val compG = DLTS(s"_comp_${property.name}", DFAs.complement(property.dfa, Alphabets.fromList(property.alphabet.toList)), property.alphabet)
+      val alph = Alphabets.fromList(property.alphabet.toList)
+      val compG = DLTS(s"_comp_${property.name}", DFAs.complement(property.dfa, alph, FastDFA(alph)), property.alphabet)
       val premiseProduct = TA.synchronousProduct(TA.fromDLTS(compG, acceptingLabelSuffix=Some("_accept_")), lhs)
       // System.out.println(premiseProduct)
       checkReachability(premiseProduct, s"${compG.name}_accept_")
@@ -461,9 +463,10 @@ class TCheckerAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useA
   val processes = ltsFiles.map(TA.fromFile(_))
   val wholeAlphabet = processes.foldLeft(propertyAlphabet)({(alph, pr) => alph | pr.alphabet})
   val propertyDLTS = {
-    val errDFA : CompactDFA[String] = {
+    val errDFA = {
+      val alph= Alphabets.fromList(propertyAlphabet.toList)
       AutomatonBuilders
-        .newDFA(Alphabets.fromList(propertyAlphabet.toList))
+        .forDFA(FastDFA(alph))
         .withInitial("q0")
         .from("q0")
         .on(err)
@@ -494,15 +497,10 @@ class TCheckerAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useA
     .map(
       { i =>
         val alph = assumptionAlphabet.intersect(processes(i).alphabet)
-        val dfa : CompactDFA[String] = {
-          AutomatonBuilders
-          .newDFA(Alphabets.fromList(alph.toList))
-          .withInitial("q0")
-          .withAccepting("q0")
-          .create()
-        }
+        val dfa = FastDFA(Alphabets.fromList(alph.toList))
+        val state = dfa.addState(true)
         for sigma <- alph do {
-          dfa.addTransition(0, sigma, 0)
+          dfa.addTransition(state, sigma, state)
         }
         // Visualization.visualize(dfa, Alphabets.fromList(processes(i).alphabet.toList))
 
