@@ -33,6 +33,9 @@ import net.automatalib.automata.fsa.impl.compact.CompactDFA;
 import net.automatalib.util.automata.builders.AutomatonBuilders;
 import net.automatalib.visualization.Visualization;
 import net.automatalib.words.Alphabet;
+import net.automatalib.commons.util.nid.MutableNumericID;
+import net.automatalib.words.impl.FastAlphabet;
+
 import net.automatalib.words.impl.Alphabets;
 import net.automatalib.brics.AbstractBricsAutomaton
 import net.automatalib.brics.BricsNFA
@@ -160,7 +163,7 @@ class MySuite extends munit.FunSuite {
 
     val dltss = List(DLTS("ass1p", dfa1, dfa1.getInputAlphabet().toSet), DLTS("ass2", dfa2, dfa2.getInputAlphabet().toSet))
     val agv = tchecker.TCheckerAssumeGuaranteeVerifier(Array(File("examples/lts1.ta")), err)
-    val checker = tchecker.TCheckerAssumeGuaranteeOracles.checkInductivePremises(agv.processes(0), dltss, agv.propertyDLTS)
+    val checker = tchecker.TCheckerAssumeGuaranteeOracles.checkInductivePremise(agv.processes(0), dltss, agv.propertyDLTS)
     assert(checker != None)
     //System.out.println(checker)
 
@@ -182,7 +185,7 @@ class MySuite extends munit.FunSuite {
       .create();
     
     val dltss_p = List(DLTS("ass1p", dfa1_p, dfa1_p.getInputAlphabet().toSet), DLTS("ass2", dfa2, dfa2.getInputAlphabet().toSet))
-    val checker_p = tchecker.TCheckerAssumeGuaranteeOracles.checkInductivePremises(agv.processes(0), dltss_p, agv.propertyDLTS)
+    val checker_p = tchecker.TCheckerAssumeGuaranteeOracles.checkInductivePremise(agv.processes(0), dltss_p, agv.propertyDLTS)
     assertEquals(checker_p, None)
 
  
@@ -323,6 +326,15 @@ class MySuite extends munit.FunSuite {
   
   }
   test("rpni"){
+    class Event(label : String, var id : Int) extends MutableNumericID{
+      def getId() : Int = {
+        id
+      }
+      def setId(id : Int) : Unit = {
+        this.id = id
+      }
+    }
+    // val alph = List("c","a","b", "err").zipWithIndex.map(Event(_ : _*))
     val alph = Alphabets.fromList(List("c","a","b", "err"))
     val learner = BlueFringeRPNIDFA(alph)
     learner.addPositiveSamples(Buffer(List("a","b","c"), List("a","a","c")).map(Word.fromList(_)))

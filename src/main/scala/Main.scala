@@ -51,7 +51,7 @@ object Main {
         opt[Boolean]("visualizeDFA")
           .action((_, c) => c.copy(visualizeDFA = true))
           .valueName("(true|false)")
-          .text("Visualize the DFA that was learned"),
+          .text("Visualize the DFAs that were learned"),
         cmd("product")
           .action((_, c) => c.copy(cmd = "product")),
         cmd("ag")
@@ -92,6 +92,7 @@ object Main {
         e.printStackTrace()
         System.err.println(e.getMessage())
     }
-
+    System.out.println(s"RPNI time: ${statistics.rpniTime.toFloat/1e9d}s")
+    System.out.println(s"Z3 time: ${statistics.z3Time.toFloat/1e9d}s")
   }
 }

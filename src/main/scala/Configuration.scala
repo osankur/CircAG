@@ -31,7 +31,7 @@ case class Configuration(
     ltsFormat: FSM.FSMFormat = FSM.TCheckerTA,
     keepTmpFiles: Boolean = true,
     verbose: Boolean = false,
-    verbose_MembershipQueries : Boolean = true,
+    verbose_MembershipQueries : Boolean = false,
     tmpDirName: String = ".tmp/",
     visualizeDFA : Boolean = false
 ) {

@@ -3,6 +3,8 @@ package fr.irisa.circag.statistics
 var posQueries = Set[String]()
 var negQueries = Set[String]()
 var lastTrace : List[String] = null
+var rpniTime : Long = 0
+var z3Time : Long = 0
 
 object Counters {
     var counter = Map[String,Int]().withDefaultValue(0)

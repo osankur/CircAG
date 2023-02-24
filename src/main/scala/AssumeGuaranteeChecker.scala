@@ -48,7 +48,7 @@ case class BadTimedAutomaton(msg: String) extends Exception(msg)
 case class FailedTAModelChecking(msg: String) extends Exception(msg)
 
 trait AssumeGuaranteeOracles[LTS, Property] {
-  def checkInductivePremises(lts : LTS, assumptions : List[Property], guarantee : Property) : Option[Trace]
+  def checkInductivePremise(lts : LTS, assumptions : List[Property], guarantee : Property) : Option[Trace]
   def checkFinalPremise(lhs : List[Property], p : Property) : Option[Trace]
   def extendTrace(lts : LTS, word : Trace, extendedAlphabet : Set[String]) : Trace
 }
@@ -244,7 +244,6 @@ object TA{
     if allProcesses.size < processCount then {
       throw Exception("Attempting synchronous product of processes of the same name")
     }
-    //if dlts.map(_.name).distinct.size < dlts.size || dlts.map(_.name).contains(ta.systemName) then {
     val jointAlphabet = tas.foldLeft(Set[String]())((alph,ta) => alph | ta.alphabet)
     val jointInternalAlphabet = tas.foldLeft(Set[String]())((alph,ta) => alph | ta.internalAlphabet)
     val sb = StringBuilder()
@@ -297,7 +296,7 @@ object TCheckerAssumeGuaranteeOracles {
     * @pre All states of the automata in lhs are accepting
     * @return None if the premise holds; and Some(cexTrace) otherwise
     */
-  def checkInductivePremises(ta : TA, assumptions : List[DLTS], guarantee : DLTS) : Option[Trace] =
+  def checkInductivePremise(ta : TA, assumptions : List[DLTS], guarantee : DLTS) : Option[Trace] =
     { 
       statistics.Counters.incrementCounter("inductive-premise")
 
@@ -305,7 +304,9 @@ object TCheckerAssumeGuaranteeOracles {
       require(assumptions.forall({dlts => 
         DFAs.isPrefixClosed(dlts.dfa, Alphabets.fromList(dlts.alphabet.toList))
       }))
-      System.out.println(s"Checking inductive premise for ${ta.systemName}")
+      if configuration.get().verbose then {
+        System.out.println(s"Checking inductive premise for ${ta.systemName}")
+      }
       val guaranteeAlphabet = Alphabets.fromList(guarantee.alphabet.toList)
       val compG = DLTS(
         s"_comp_${guarantee.name}", 
@@ -412,7 +413,7 @@ object TCheckerAssumeGuaranteeOracles {
     val cmd = "tck-reach -a reach %s -l %s -C %s"
             .format(modelFile.toString, label, certFile.toString)
 
-    if configuration.globalConfiguration.verbose_MembershipQueries then
+    if configuration.get().verbose then
       System.out.println(cmd)
 
     val output = cmd.!!
@@ -533,7 +534,7 @@ class TCheckerAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useA
   def applyAG() : AGIntermediateResult = {
     try{
       for (ta,i) <- processes.zipWithIndex do {
-        TCheckerAssumeGuaranteeOracles.checkInductivePremises(ta, processDependencies(i).map(assumptions(_)).toList, assumptions(i))
+        TCheckerAssumeGuaranteeOracles.checkInductivePremise(ta, processDependencies(i).map(assumptions(_)).toList, assumptions(i))
         match {
           case None =>
             System.out.println(s"${GREEN}Premise ${i} passed${RESET}")

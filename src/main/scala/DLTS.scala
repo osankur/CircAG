@@ -10,6 +10,8 @@ import collection.convert.ImplicitConversions._
 
 import net.automatalib.automata.fsa.DFA;
 import net.automatalib.automata.fsa.impl.compact.CompactDFA;
+import net.automatalib.automata.fsa.impl.FastDFA
+import net.automatalib.automata.fsa.impl.FastDFAState
 import net.automatalib.util.automata.fsa.DFAs
 import net.automatalib.util.automata.fsa.NFAs
 import net.automatalib.automata.fsa.impl.compact.CompactDFA;
@@ -79,6 +81,7 @@ object DLTS {
         }
       }
     }
+    
     // System.out.println(s"Showing lifting to ${newAlphabet}")
     // Visualization.visualize(liftedDFA, Alphabets.fromList(newAlphabet.toList))
     return DLTS(name.getOrElse(dlts.name), liftedDFA, newAlphabet)
@@ -207,9 +210,11 @@ object DLTS {
       dfa: DFA[?, String],
       alphabet: Set[String],
       removeNonAcceptingStates: Boolean = false
-  ): CompactDFA[String] = {
+  ): DFA[Integer, String] = {
     val statesMap = HashMap((dfa.getInitialState(), 0))
     var index = 0
+    //val newDFA =
+    //  new FastDFA(Alphabets.fromList(alphabet.toList))
     val newDFA =
       CompactDFA.Creator().createAutomaton(Alphabets.fromList(alphabet.toList))
     dfa
@@ -255,19 +260,19 @@ object DLTS {
       dfs(s)
     }
     // Make it prefix-closed
-    if (!DFAs.isPrefixClosed(dfa, Alphabets.fromList(alphabet.toList))) then {
-      newDFA
-        .getStates()
-        .filter(!newDFA.isAccepting(_))
-        .foreach({ s =>
-          newDFA.removeAllTransitions(s)
-        // if (!newDFA.isAccepting(s) && isAcceptingReachable(s)) then {
-        //   newDFA.setAccepting(s, true)
-        //   System.out.println(s"Setting state ${s} accepting")
-        // }
-        // newDFA.setAccepting(s, isAcceptingReachable(s))
-        })
-    }
+    //if (!DFAs.isPrefixClosed(dfa, Alphabets.fromList(alphabet.toList))) then {
+    newDFA
+      .getStates()
+      .filter(!newDFA.isAccepting(_))
+      .foreach({ s =>
+        newDFA.removeAllTransitions(s)
+      // if (!newDFA.isAccepting(s) && isAcceptingReachable(s)) then {
+      //   newDFA.setAccepting(s, true)
+      //   System.out.println(s"Setting state ${s} accepting")
+      // }
+      // newDFA.setAccepting(s, isAcceptingReachable(s))
+      })
+    // }
     // System.out.println("Showing non-prefix-closed automaton")
     // Visualization.visualize(dfa, Alphabets.fromList(alphabet.toList))
     // System.out.println("Prefix closure:")
