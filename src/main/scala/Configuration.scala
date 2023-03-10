@@ -29,11 +29,13 @@ case class Configuration(
     ltsFiles : Array[File] = Array[File](),
     err: String = "",
     ltsFormat: FSM.FSMFormat = FSM.TCheckerTA,
-    keepTmpFiles: Boolean = true,
+    keepTmpFiles: Boolean = false,
     verbose: Boolean = false,
     verbose_MembershipQueries : Boolean = false,
     tmpDirName: String = ".tmp/",
-    visualizeDFA : Boolean = false
+    visualizeDFA : Boolean = false,
+    alphabetRefinement : Boolean = true,
+    randomSeed : Int = 0
 ) {
   private var tmpDirPath: Option[Path] = None
   def getTmpDirPath(): Path = {

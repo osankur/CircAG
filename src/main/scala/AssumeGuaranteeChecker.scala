@@ -236,7 +236,6 @@ object TA{
         .map({process => (process,sigma)})
     ).toList.filter(_.size > 1)
     TA(systemName, jointAlphabet, ta.internalAlphabet, sb.toString(), eventsOfProcesses, syncs)
-
   }
 
   def synchronousProduct(tas : List[TA]) : TA = {
@@ -294,18 +293,16 @@ object TCheckerAssumeGuaranteeOracles {
     * @param lts
     * @param assumptions List of complete DFAs
     * @param guarantee
-    * @pre guarantee.alphabet <= lts.alphabet
-    * @pre All states of the automata in lhs are accepting
+    * @pre guarantee.alphabet <= lts.alphabet (checked by assertion)
+    * @pre All reachable states of the assumptions and ta are accepting (not checked by assertion)
     * @return None if the premise holds; and Some(cexTrace) otherwise
     */
   def checkInductivePremise(ta : TA, assumptions : List[DLTS], guarantee : DLTS) : Option[Trace] =
     { 
       statistics.Counters.incrementCounter("inductive-premise")
-
+      var beginTime = System.nanoTime()
       require(guarantee.alphabet.toSet.subsetOf(ta.alphabet))
-      require(assumptions.forall({dlts => 
-        DFAs.isPrefixClosed(dlts.dfa, Alphabets.fromList(dlts.alphabet.toList))
-      }))
+      // require(assumptions.forall({dlts => !dlts.dfa.getStates().forall(_.isAccepting())}))
       if configuration.get().verbose then {
         System.out.println(s"Checking inductive premise for ${ta.systemName}")
       }
@@ -318,8 +315,8 @@ object TCheckerAssumeGuaranteeOracles {
       val liftedAssumptions = 
         assumptions.map({ass => DLTS.liftAndStripNonAccepting(ass, ta.alphabet, Some(s"lifted_${ass.name}"))})
       val premiseProduct = TA.synchronousProduct(ta, compG::liftedAssumptions, Some("_accept_"))
-      val trace = checkReachability(premiseProduct, s"${compG.name}_accept_")
-      trace
+      statistics.Timers.incrementTimer("inductive-premise", System.nanoTime() - beginTime)
+      checkReachability(premiseProduct, s"${compG.name}_accept_")
     }
 
   /**
@@ -393,7 +390,7 @@ object TCheckerAssumeGuaranteeOracles {
     * @param projectionAlphabet
     * @return None if no such execution exists, and Some(execution) otherwise.
     */
-  def checkTraceMembership(ta : TA, word : Trace, projectionAlphabet : Option[Set[String]]) : Option[Trace] = {  
+  def checkTraceMembership(ta : TA, word : Trace, projectionAlphabet : Option[Set[String]] = None) : Option[Trace] = {  
     statistics.Counters.incrementCounter("trace-membership")
 
     val traceProcess = DLTS.fromTrace(word, projectionAlphabet)
@@ -402,7 +399,14 @@ object TCheckerAssumeGuaranteeOracles {
     this.checkReachability(productTA, label)
   }
 
+  /**
+   * Check the reachability of a state labeled by label. Return such a trace if any.
+   * 
+   * @param ta
+   * @param label
+   */
   def checkReachability(ta : TA, label : String) : Option[Trace] = {
+    val beginTime = System.nanoTime()    
     statistics.Counters.incrementCounter("model-checking")
     val modelFile =
       Files.createTempFile(configuration.get().getTmpDirPath(), "circag-query", ".ta").toFile()
@@ -412,7 +416,7 @@ object TCheckerAssumeGuaranteeOracles {
 
     val certFile =
       Files.createTempFile(configuration.get().getTmpDirPath(), "circag-cert", ".cert").toFile()
-    val cmd = "tck-reach -a reach %s -l %s -C %s"
+    val cmd = "tck-reach -a reach %s -l %s -c %s"
             .format(modelFile.toString, label, certFile.toString)
 
     if configuration.get().verbose then
@@ -425,6 +429,7 @@ object TCheckerAssumeGuaranteeOracles {
       modelFile.delete()
       certFile.delete()
     }    
+    statistics.Timers.incrementTimer("tchecker", System.nanoTime() - beginTime)
     if (output.contains("REACHABLE false")) then {
       None
     } else if (output.contains("REACHABLE true")) then {
@@ -455,12 +460,59 @@ class AGSuccess extends AGIntermediateResult
 class AGContinue extends AGIntermediateResult
 case class AGFalse(cex : Trace) extends AGIntermediateResult
 
+/**
+  * AG Proof skeleton that specifies which the dependencies for each premise of the N-way AG rule,
+  * and the alphabets to be used for the assumption DFA of each TA.
+  * 
+  * @param processDependencies the set of process indices on which the proof of process(i) must depend.
+  * @param propertyDependencies
+  * @param assumptionAlphabets
+  */
+class AGProofSkeleton(var processDependencies : Buffer[Set[Int]],
+                      var propertyDependencies : Set[Int],
+                      var assumptionAlphabets : Buffer[Set[String]]) {
+  require(processDependencies.size > 0)
+  require(processDependencies.size == assumptionAlphabets.size)
+  def update(processAlphabets : Buffer[Set[String]], propertyAlphabet : Set[String], newAssumptionAlphabet : Set[String]) : Unit = {
+    require(processDependencies.size == processAlphabets.size)
+    val nbProcesses = processDependencies.size
+    // Compute simplified sets of assumptions for the new alphabet
+    // adj(i)(j) iff (i = j) or (i and j have a common symbol) or (i has a common symbol with k such that adj(k)(j))
+    // Index nbProcesses represents the property.
+    var adj = Buffer.tabulate(nbProcesses+1)({_ => Buffer.fill(nbProcesses+1)(false)})
+    for i <- 0 until nbProcesses do {
+      adj(i)(i) = true
+      for j <- 0 until i do {
+        adj(i)(j) = !processAlphabets(i).intersect(processAlphabets(j)).isEmpty
+        adj(j)(i) = adj(i)(j)
+      }
+    }
+    adj(nbProcesses)(nbProcesses) = true
+    for j <- 0 until nbProcesses do {
+        adj(nbProcesses)(j) = !propertyAlphabet.intersect(processAlphabets(j)).isEmpty
+        adj(j)(nbProcesses) = adj(nbProcesses)(j)
+    }
+    for k <- 0 until nbProcesses+1 do {
+      for i <- 0 until nbProcesses+1 do {
+        for j <- 0 until nbProcesses+1 do {
+          if(adj(i)(k) && adj(k)(j)) then {
+            adj(i)(j) = true
+          }
+        }
+      }
+    }
+    for i <- 0 until nbProcesses do {
+      processDependencies(i) = adj(i).zipWithIndex.filter({(b,i) => b}).map(_._2).toSet
+    }
+    propertyDependencies = adj(nbProcesses).zipWithIndex.filter({(b,i) => b}).map(_._2).toSet
+  }
+}
+
 class TCheckerAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useAlphabetRefinement : Boolean = false) {
-
-
   val nbProcesses = ltsFiles.size
   val propertyAlphabet = Set[String](err)
-  val processes = ltsFiles.map(TA.fromFile(_))
+  val processes = ltsFiles.map(TA.fromFile(_)).toBuffer
+
   val wholeAlphabet = processes.foldLeft(propertyAlphabet)({(alph, pr) => alph | pr.alphabet})
   val propertyDLTS = {
     val errDFA = {
@@ -477,16 +529,31 @@ class TCheckerAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useA
     DLTS("property", errDFA, propertyAlphabet)
   }
 
+  // Set of symbols that appear in the property alphabet, or in at least two processes
+  val interfaceAlphabet =
+    // Consider only symbols that appear at least in two processes (union of J_i's in CAV16)
+    val symbolCount = HashMap[String, Int]()
+    processes.foreach{p => p.alphabet.foreach{
+      sigma => symbolCount.put(sigma,symbolCount.getOrElse(sigma,0)+1)
+    }}
+    symbolCount.filterInPlace((sigma,count) => count >= 2)
+    propertyAlphabet | symbolCount.map({(sigma,_) => sigma}).toSet
+
+  // Intersection of local alphabets with the interface alphabet: when all 
+  // assumptions use these alphabets, the AG procedure is complete.
+  // i.e. alpha_F = alphaM_i /\ alphaP cup J_i
+  val completeAlphabets = processes.map({ 
+    pr => interfaceAlphabet.intersect(pr.alphabet)
+  }).toBuffer
 
   /**
-    * Current alphabet for assumptions g_i.
-    * The assumption of each alphabet is ta.alphabet & assumptionAlphabet.
+    * Current alphabet for assumptions: the alphabet of each assumption for ta is ta.alphabet & assumptionAlphabet.
     */
   private var assumptionAlphabet = 
     if useAlphabetRefinement then {
       propertyAlphabet
     } else {
-      wholeAlphabet
+      interfaceAlphabet
     }
 
   /**
@@ -508,20 +575,29 @@ class TCheckerAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useA
       }).toBuffer
   }
 
+
+  val proofSkeleton = 
+    val processDependencies : Buffer[Set[Int]] = 
+      (0 until ltsFiles.size)
+      .map({i =>(0 until ltsFiles.size).toSet - i})
+      .toBuffer
+    val propertyDependencies : Set[Int] = 
+      (0 until ltsFiles.size)
+      .toSet
+    AGProofSkeleton(processDependencies, propertyDependencies, assumptions.map(_.alphabet))
+  val constraintManager = ConstraintManager(proofSkeleton)
+
   /**
-    * G_i: the set of process indices on which the proof of process(i) depends.
-    * Initially all processes depend on all (except for themselves)
+    * Updates assumptionAlphabet, and consequently processDependencies, propertyDependencies, and resets constraint manager.
+    *
+    * @param newAlphabet
     */
-  private var processDependencies : Buffer[Set[Int]] = 
-    (0 until ltsFiles.size)
-    .map({i =>(0 until ltsFiles.size).toSet - i})
-    .toBuffer
+  private def updateAssumptionAlphabet(newAssumptionAlphabet : Set[String]) : Unit = {
+    require(assumptionAlphabet.subsetOf(newAssumptionAlphabet))
+    proofSkeleton.update(processes.map(_.alphabet), propertyAlphabet, newAssumptionAlphabet)
+    constraintManager.reset()
+  }
 
-  private var propertyDependencies : Set[Int] = 
-    (0 until ltsFiles.size)
-    .toSet
-
-  val constraintManager = ConstraintManager(processDependencies, propertyDependencies, assumptions.map(_.alphabet))
   def generateAssumptions() : Unit = {
   }
 
@@ -532,14 +608,14 @@ class TCheckerAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useA
   def applyAG() : AGIntermediateResult = {
     try{
       for (ta,i) <- processes.zipWithIndex do {
-        TCheckerAssumeGuaranteeOracles.checkInductivePremise(ta, processDependencies(i).map(assumptions(_)).toList, assumptions(i))
+        TCheckerAssumeGuaranteeOracles.checkInductivePremise(ta, proofSkeleton.processDependencies(i).map(assumptions(_)).toList, assumptions(i))
         match {
           case None =>
             System.out.println(s"${GREEN}Premise ${i} passed${RESET}")
           case Some(cexTrace) => 
             System.out.println(s"${RED}Premise ${i} failed with cex: ${cexTrace}${RESET}")
             if (configuration.cex(i).contains(cexTrace)) then {
-              for j <- processDependencies(i) do {
+              for j <- proofSkeleton.processDependencies(i) do {
                 System.out.println(s"Dependency ${assumptions(j).name}")
                 Visualization.visualize(assumptions(j).dfa, Alphabets.fromList(assumptions(j).alphabet.toList))
               }
@@ -551,7 +627,7 @@ class TCheckerAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useA
             throw AGContinue()
         }
       }
-      TCheckerAssumeGuaranteeOracles.checkFinalPremise(propertyDependencies.map(assumptions(_)).toList, propertyDLTS)
+      TCheckerAssumeGuaranteeOracles.checkFinalPremise(proofSkeleton.propertyDependencies.map(assumptions(_)).toList, propertyDLTS)
       match {
         case None => 
           System.out.println(s"${GREEN}Final premise succeeded${RESET}")
@@ -582,13 +658,39 @@ class TCheckerAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useA
     }
   }
   def alphabetRefine(cexTrace : Trace) : AGIntermediateResult = {
-    val completeAlphabets = processes.map({ pr => wholeAlphabet.intersect(pr.alphabet)}).toBuffer
     val currentAlphabets = assumptions.map(_.alphabet)
-    if ( completeAlphabets == currentAlphabets ) then {
+    if ( this.completeAlphabets == currentAlphabets ) then {
+      // All alphabets are complete; we can conclude
       AGFalse(cexTrace)
     } else {
-      AGContinue()
-      // TODO Add the step MATCH(sigma1, sigma2, ... sigman)
+      // Extend the trace to the alphabet of each TA separately (projected to the TA's external alphabet)
+      val processTraces = processes.map{
+        p => TCheckerAssumeGuaranteeOracles.checkTraceMembership(p, cexTrace) match {
+          case Some(processTrace) => processTrace.filter(p.alphabet)
+          case None => throw Exception(s"Trace $cexTrace fails the final premise but cannot be reproduced here")
+        }
+      }
+      System.out.println(processTraces)
+      // MATCH: Check if each pair of traces match when projected to common alphabet
+      var tracesMatch = true
+      for i <- 0 until this.processes.size do {
+        for j <- 0 until i do {
+          val commonAlphabet = processes(i).alphabet.intersect(processes(j).alphabet)
+          if (processTraces(i).filter(commonAlphabet) != processTraces(j).filter(commonAlphabet)) then {
+            tracesMatch = false
+          }
+        }
+      }
+      if (tracesMatch) then{
+        AGFalse(cexTrace)
+      } else {
+        // Choose a symbol that appears in a process trace but not in the current alphabet
+        val traceSymbols = processTraces.map(_.toSet).fold(Set[String]())({(a,b) => a | b})
+        val newSymbols = traceSymbols.diff(this.assumptionAlphabet)
+        assert(!newSymbols.isEmpty)
+        throw Exception("inconc")
+        AGContinue()
+      }
     }
   }
 
@@ -601,10 +703,6 @@ class TCheckerAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useA
       while(true) {
         this.assumptions = constraintManager.generateAssumptions(this.assumptions)
 
-        // for (ass,i) <- assumptions.zipWithIndex do {
-        //   System.out.println(s"${ass.name} for process ${processes(i).systemName} alphabet: ${ass.alphabet}")
-        //   Visualization.visualize(ass.dfa, Alphabets.fromList(ass.alphabet.toList))
-        // }
         this.applyAG() match {
           case AGFalse(cex) =>
             alphabetRefine(cex) match {
@@ -620,9 +718,14 @@ class TCheckerAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useA
       }
       None
     } catch {
-      case AGFalse(cex) => 
-        Some(cex)
+      case AGFalse(cex) => Some(cex)
       case e: AGSuccess =>
+        if configuration.get().visualizeDFA then {
+          for (ass,i) <- assumptions.zipWithIndex do {
+            System.out.println(s"${ass.name} for process ${processes(i).systemName} alphabet: ${ass.alphabet}")
+            ass.visualize()
+          }
+        }
         None
     }
   }

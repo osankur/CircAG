@@ -30,7 +30,11 @@ case class DLTS(
     val name: String,
     val dfa: FastDFA[String],
     val alphabet: Set[String]
-)
+) {
+  def visualize() : Unit = {
+    Visualization.visualize(dfa, Alphabets.fromList(alphabet.toList))
+  }
+}
 
 type Trace = List[String]
 
@@ -95,6 +99,9 @@ object DLTS {
       extendedAlphabet: Set[String],
       name: Option[String] = None
   ): DLTS = {
+
+    var beginTime = System.nanoTime()
+
     val alph = Alphabets.fromList(dlts.alphabet.toList)
     val tmpFastDFA = FastDFA(alph)
     val liftedDLTS = lift(
@@ -118,8 +125,9 @@ object DLTS {
         // Visualization.visualize(dlts.dfa, Alphabets.fromList(dlts.alphabet.toList))
         // System.out.println(s"${dlts.name} after lift-stripping")
         // Visualization.visualize(liftedDLTS.dfa, Alphabets.fromList(liftedDLTS.alphabet.toList))
+        statistics.liftingTime = statistics.liftingTime + (System.nanoTime() - beginTime)
         liftedDLTS
-      case _ => throw Exception("Can only strip CompactDFA")
+      // case _ => throw Exception("Can only strip CompactDFA")
     }
   }
 
@@ -139,6 +147,9 @@ object DLTS {
     newStates.append(dfa.addState())
     for i <- 1 to projTrace.size do {
       newStates.append(dfa.addState(i == projTrace.size))
+    }
+    if(projTrace.size == 0) then{
+      newStates(0).setAccepting(true)
     }
     dfa.setInitialState(newStates(0))
     projTrace
@@ -184,7 +195,6 @@ object DLTS {
         newStates.append(newDFA.addState(dfa.isAccepting(state)))
       })
     newDFA.setInitial(newStates(dfa.getInitialState()), true)
-    // System.out.println(names.keys)
     dfa
       .getStates()
       .foreach(
@@ -201,7 +211,6 @@ object DLTS {
         }
       )
     // Visualization.visualize(newDFA, alph)
-
     DLTS(name, newDFA, alph.toSet)
   }
 

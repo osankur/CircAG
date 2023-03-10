@@ -76,6 +76,8 @@ class MySuite extends munit.FunSuite {
 
     val cfg = HashMap[String, String]()
     cfg.put("model", "true");
+    // cfg.put("proof", "true");
+    cfg.put("unsat_core", "true")
     val ctx = Context(cfg);      
     /* do something with the context */
 
@@ -94,6 +96,14 @@ class MySuite extends munit.FunSuite {
     System.out.println("y:" + (m.evaluate(vary, false).getBoolValue() == Z3_lbool.Z3_L_TRUE))
     val a = m.evaluate(varx, false)
     System.out.println(a.getBoolValue().toInt())
+
+    val solver2 = ctx.mkSolver()
+    solver2.add(ctx.mkAnd(varx,ctx.mkNot(varx)))
+    System.out.println(solver2.check())
+    System.out.println("CORE:")
+    for x <- solver2.getUnsatCore() do {
+      System.out.println(s"\t$x")
+    }
     // val opt = ctx.mkOptimize()
 
     // // Set constraints.
@@ -251,7 +261,7 @@ class MySuite extends munit.FunSuite {
         .withAccepting("q0")
         .create()
   }
-  test("mus"){
+  test("mus-inline"){
     // {a,c,d}*
     val inputs1: Alphabet[String] = Alphabets.fromList(List("req1","req2", "rel1", "rel2"))
     val gUser =
@@ -361,4 +371,10 @@ class MySuite extends munit.FunSuite {
     // Visualization.visualize(baut, true)
   }
 
+}
+
+class AGBenchs extends munit.FunSuite {
+  test("MUS") {
+    
+  }
 }

@@ -19,6 +19,8 @@ import fr.irisa.circag.tchecker.TA
 import scala.collection.mutable
 import scala.collection.immutable
 import collection.JavaConverters._
+import scala.annotation.static
+import com.microsoft.z3
 
 object Main {
 
@@ -42,9 +44,18 @@ object Main {
               c.copy(err = x)
             )
           .text("err is the label indicating an error; so that the property to be checked is 'G not err'."),
+        opt[Boolean]("ar")
+          .valueName("<ar>")
+          .optional()
+          .action((x, c) => 
+              c.copy(alphabetRefinement = x)
+            )
+          .text("Use automatic alphabet refinement."),
         opt[Boolean]("verbose")
           .action((_, c) => c.copy(verbose = true))
           .valueName("(true|false)"),
+        opt[Int]("seed")
+          .action((x, c) => c.copy(randomSeed = x)),
         opt[Boolean]("keepTmpFiles")
           .action((_, c) => c.copy(keepTmpFiles = true))
           .valueName("(true|false)"),
@@ -54,12 +65,13 @@ object Main {
           .text("Visualize the DFAs that were learned"),
         cmd("product")
           .action((_, c) => c.copy(cmd = "product")),
+        cmd("dfa-aag")
+          .action((_, c) => c.copy(cmd = "dfa-aag")),
         cmd("ag")
-          .action((_, c) => c.copy(cmd = "ag")),
-        cmd("aag")
-          .action((_, c) => c.copy(cmd = "aag"))
+          .action((_, c) => c.copy(cmd = "ag"))
       )
     }
+    val beginTime = System.nanoTime()
     try {
       OParser.parse(parser1, args, Configuration()) match {
         case None => ()
@@ -70,13 +82,16 @@ object Main {
               throw Exception(("%sFile " + file.getAbsolutePath() + " does not exist%s").format(RED,RESET))
             }
           }
+          z3.Global.setParameter("smt.random_seed",s"${config.randomSeed}")
+          z3.Global.setParameter("sat.random_seed",s"${config.randomSeed}")
+
           config.cmd match {
             case "product" =>
               val tas = configuration.get().ltsFiles.map(TA.fromFile(_))
               val product = tchecker.TA.synchronousProduct(tas.toList)
               System.out.println(product.toString())
-            case "ag" =>
-              tchecker.TCheckerAssumeGuaranteeVerifier(configuration.get().ltsFiles, configuration.get().err).check()
+            case "dfa-aag" =>
+              tchecker.TCheckerAssumeGuaranteeVerifier(configuration.get().ltsFiles, configuration.get().err, config.alphabetRefinement).check()
               match {
                 case None => System.out.println(s"${GREEN}${BOLD}Success${RESET}")
                 case Some(cex) => System.out.println(s"${RED}${BOLD}Counterexample${RESET} ${cex}")
@@ -92,7 +107,9 @@ object Main {
         e.printStackTrace()
         System.err.println(e.getMessage())
     }
-    System.out.println(s"RPNI time: ${statistics.rpniTime.toFloat/1e9d}s")
-    System.out.println(s"Z3 time: ${statistics.z3Time.toFloat/1e9d}s")
+    val totalTime = (System.nanoTime() - beginTime)/1e9d
+    System.out.println(s"Timers: ${statistics.Timers}")
+    System.out.println(s"Total: ${totalTime}")
+    System.out.println(s"Relative times: ${statistics.Timers.timer.map({(k,value) => f"${k}:${(value/1e7d)/totalTime}%.2f%%"}).toString()}")
   }
 }
