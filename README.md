@@ -1,9 +1,15 @@
 ## Automatic Circular Assume Guarantee Model Checker
+You need 
+- Scala 3.1
+- Java 1.7
+- sbt 1.8
+
+You can use sbt to compile and run as shown below. To create a jar, run `sbt assembly`.
 
 ## DFA-based N-way Assume-Guarantee Reasoning with Learning
 The algorithm of the CAV16 paper is currently implemented. This can be tried as follows.
 
-    run dfa-ag --lts "examples/ums/machine.ta,examples/ums/scheduler.ta,examples/ums/user.ta" --err "err"
+    sbt run dfa-aag --lts "examples/ums/machine.ta,examples/ums/scheduler.ta,examples/ums/user.ta" --err "err" --ar false
 
 Here, the list of automata are given wuth the option --lts: each file must contain a single process TChecker file (with or without clocks).
 All variables and clocks must have distinct names. These processes synchronize on all declared events but those that start with _.
@@ -13,7 +19,12 @@ The difference with CAV16 is that a SAT solver is used to compute a satisfying v
 
 You can add the option `visualizeDFA true` to see the assumption DFAs that were learned.
 ### Other examples
-    run dfa-aag --lts "examples/toy/lts1.ta,examples/toy/lts2.ta,examples/toy/lts3.ta" --err "err" --verbose true
+Two toy examples easy to understand:
+
+    run dfa-aag --lts "examples/toy/lts1.ta,examples/toy/lts2.ta,examples/toy/lts3.ta" --err "err" --verbose true --ar false
+    run dfa-aag --lts "examples/seq-toy/lts0.ta,examples/seq-toy/lts1.ta,examples/seq-toy/lts2.ta,examples/seq-toy/lts3.ta" --err "err" --ar false
+
+To enable automatic alphabet refinement, use `--ar true`.
 
 ## Utilities
 The synchronized product of the processes can be output to stdout as a single TChecker file using
