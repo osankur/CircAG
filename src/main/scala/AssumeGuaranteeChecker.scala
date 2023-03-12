@@ -295,17 +295,18 @@ object TCheckerAssumeGuaranteeOracles {
     * @param guarantee
     * @pre guarantee.alphabet <= lts.alphabet (checked by assertion)
     * @pre All reachable states of the assumptions and ta are accepting (not checked by assertion)
+    * @pre assumptions do not contain the assumption for the process itself
     * @return None if the premise holds; and Some(cexTrace) otherwise
     */
   def checkInductivePremise(ta : TA, assumptions : List[DLTS], guarantee : DLTS) : Option[Trace] =
     { 
-      statistics.Counters.incrementCounter("inductive-premise")
-      var beginTime = System.nanoTime()
       require(guarantee.alphabet.toSet.subsetOf(ta.alphabet))
-      // require(assumptions.forall({dlts => !dlts.dfa.getStates().forall(_.isAccepting())}))
+      statistics.Counters.incrementCounter("inductive-premise")
       if configuration.get().verbose then {
-        System.out.println(s"Checking inductive premise for ${ta.systemName}")
+        System.out.println(s"Checking inductive premise for ${ta.systemName} whose assumption is over alphabet: ${guarantee.alphabet}")
       }
+      var beginTime = System.nanoTime()
+      // require(assumptions.forall({dlts => !dlts.dfa.getStates().forall(_.isAccepting())}))
       val guaranteeAlphabet = Alphabets.fromList(guarantee.alphabet.toList)
       val compG = DLTS(
         s"_comp_${guarantee.name}", 
@@ -461,21 +462,32 @@ class AGContinue extends AGIntermediateResult
 case class AGFalse(cex : Trace) extends AGIntermediateResult
 
 /**
-  * AG Proof skeleton that specifies which the dependencies for each premise of the N-way AG rule,
+  * AG Proof skeleton specifies the dependencies for each premise of the N-way AG rule,
   * and the alphabets to be used for the assumption DFA of each TA.
   * 
   * @param processDependencies the set of process indices on which the proof of process(i) must depend.
-  * @param propertyDependencies
-  * @param assumptionAlphabets
+  * @param propertyDependencies the set of process indices on which the proof of the final premise must depend.
+  * @param assumptionAlphabets alphabets of the assumption DFAs for each process
   */
-class AGProofSkeleton(var processDependencies : Buffer[Set[Int]],
-                      var propertyDependencies : Set[Int],
-                      var assumptionAlphabets : Buffer[Set[String]]) {
-  require(processDependencies.size > 0)
-  require(processDependencies.size == assumptionAlphabets.size)
-  def update(processAlphabets : Buffer[Set[String]], propertyAlphabet : Set[String], newAssumptionAlphabet : Set[String]) : Unit = {
-    require(processDependencies.size == processAlphabets.size)
-    val nbProcesses = processDependencies.size
+class AGProofSkeleton {
+  var processDependencies = Buffer[Set[Int]]()
+  var propertyDependencies = Set[Int]()
+  var assumptionAlphabets = Buffer[Set[String]]()
+
+  def this(processAlphabets : Buffer[Set[String]], propertyAlphabet : Set[String], newAssumptionAlphabet : Set[String]) = {
+    this()
+    update(processAlphabets, propertyAlphabet, newAssumptionAlphabet)
+  }
+  /**
+    * Update the fields from the given assumption alphabet
+    *
+    * @param processAlphabets alphabets of the TAs
+    * @param propertyAlphabet alphabet of the property
+    * @param newAssumptionAlphabet the common assumption alphabet
+    */
+  def update(processAlphabets : Buffer[Set[String]], propertyAlphabet : Set[String], newAssumptionAlphabet : Set[String]) = {
+    val nbProcesses = processAlphabets.size
+    processDependencies = Buffer.tabulate(nbProcesses)({_ => Set[Int]()})
     // Compute simplified sets of assumptions for the new alphabet
     // adj(i)(j) iff (i = j) or (i and j have a common symbol) or (i has a common symbol with k such that adj(k)(j))
     // Index nbProcesses represents the property.
@@ -502,10 +514,17 @@ class AGProofSkeleton(var processDependencies : Buffer[Set[Int]],
       }
     }
     for i <- 0 until nbProcesses do {
-      processDependencies(i) = adj(i).zipWithIndex.filter({(b,i) => b}).map(_._2).toSet
+      processDependencies(i) = adj(i).zipWithIndex.filter({(b,i) => b}).map(_._2).toSet.diff(Set[Int](i, nbProcesses))
     }
-    propertyDependencies = adj(nbProcesses).zipWithIndex.filter({(b,i) => b}).map(_._2).toSet
+    propertyDependencies = adj(nbProcesses).zipWithIndex.filter({(b,i) => b}).map(_._2).toSet - nbProcesses
+    assumptionAlphabets = processAlphabets.map(_.intersect(newAssumptionAlphabet))
+    if configuration.get().verbose then {
+      System.out.println(s"Ass alphabets: $assumptionAlphabets")
+      System.out.println(s"Prop dependencies: $propertyDependencies")
+      System.out.println(s"Process deps: $processDependencies")
+    }
   }
+  
 }
 
 class TCheckerAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useAlphabetRefinement : Boolean = false) {
@@ -576,26 +595,20 @@ class TCheckerAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useA
   }
 
 
-  val proofSkeleton = 
-    val processDependencies : Buffer[Set[Int]] = 
-      (0 until ltsFiles.size)
-      .map({i =>(0 until ltsFiles.size).toSet - i})
-      .toBuffer
-    val propertyDependencies : Set[Int] = 
-      (0 until ltsFiles.size)
-      .toSet
-    AGProofSkeleton(processDependencies, propertyDependencies, assumptions.map(_.alphabet))
-  val constraintManager = ConstraintManager(proofSkeleton)
+  val proofSkeleton = AGProofSkeleton(processes.map(_.alphabet), propertyAlphabet, assumptionAlphabet)
+  var constraintManager = ConstraintManager(proofSkeleton)
 
   /**
     * Updates assumptionAlphabet, and consequently processDependencies, propertyDependencies, and resets constraint manager.
     *
     * @param newAlphabet
     */
-  private def updateAssumptionAlphabet(newAssumptionAlphabet : Set[String]) : Unit = {
-    require(assumptionAlphabet.subsetOf(newAssumptionAlphabet))
-    proofSkeleton.update(processes.map(_.alphabet), propertyAlphabet, newAssumptionAlphabet)
-    constraintManager.reset()
+  private def addSymbolToAssumptionAlphabet(newSymbols : Set[String]) : Unit = {
+    assumptionAlphabet |= newSymbols
+    proofSkeleton.update(processes.map(_.alphabet), propertyAlphabet, assumptionAlphabet)
+    // Create a new constraint manager initialized with the incremental traces from the previous instance
+    constraintManager = ConstraintManager(proofSkeleton, constraintManager.incrementalTraces)
+    configuration.resetCEX()
   }
 
   def generateAssumptions() : Unit = {
@@ -606,6 +619,13 @@ class TCheckerAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useA
   }
 
   def applyAG() : AGIntermediateResult = {
+    // A proof for a process must not depend on itself    
+    require(proofSkeleton.assumptionAlphabets.zipWithIndex.forall({(ass,i) => !ass.contains(i)}))
+    if (configuration.get().verbose) then {
+      System.out.println(s"applyAG with alphabets: ${assumptions.map(_.alphabet)}")
+    }
+    for (ta,i) <- processes.zipWithIndex do {
+    }
     try{
       for (ta,i) <- processes.zipWithIndex do {
         TCheckerAssumeGuaranteeOracles.checkInductivePremise(ta, proofSkeleton.processDependencies(i).map(assumptions(_)).toList, assumptions(i))
@@ -616,9 +636,11 @@ class TCheckerAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useA
             System.out.println(s"${RED}Premise ${i} failed with cex: ${cexTrace}${RESET}")
             if (configuration.cex(i).contains(cexTrace)) then {
               for j <- proofSkeleton.processDependencies(i) do {
-                System.out.println(s"Dependency ${assumptions(j).name}")
-                Visualization.visualize(assumptions(j).dfa, Alphabets.fromList(assumptions(j).alphabet.toList))
+                System.out.println(s"Dependency: Assumption for ${processes(j).systemName}")
+                assumptions(j).visualize()
               }
+              System.out.println(s"Assumption for this process ${processes(i).systemName}")
+              assumptions(i).visualize()
               throw Exception("Repeated CEX")
             } else {
               configuration.cex(i) = configuration.cex(i) + cexTrace
@@ -639,7 +661,8 @@ class TCheckerAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useA
             TCheckerAssumeGuaranteeOracles.checkTraceMembership(ta, cexTrace, Some(assumptions(i).alphabet))
             match {
               case None => 
-                System.out.println(s"\tCex does not apply to process ${i}. Continuing...")
+                if configuration.get().verbose then
+                  System.out.println(s"\tCex does not apply to process ${i}. Continuing...")
                 // for ass <- assumptions do {
                 //   System.out.println(ass.name)
                 //   Visualization.visualize(ass.dfa, Alphabets.fromList(ass.alphabet.toList))
@@ -649,7 +672,8 @@ class TCheckerAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useA
               case _ => ()
             }
           }
-          System.out.println(s"\tConfirming cex: ${cexTrace}")
+          if configuration.get().verbose then
+            System.out.println(s"\tConfirming cex: ${cexTrace}")
           throw AGFalse(cexTrace)
       }
     } catch {
@@ -663,34 +687,89 @@ class TCheckerAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useA
       // All alphabets are complete; we can conclude
       AGFalse(cexTrace)
     } else {
-      // Extend the trace to the alphabet of each TA separately (projected to the TA's external alphabet)
-      val processTraces = processes.map{
-        p => TCheckerAssumeGuaranteeOracles.checkTraceMembership(p, cexTrace) match {
-          case Some(processTrace) => processTrace.filter(p.alphabet)
-          case None => throw Exception(s"Trace $cexTrace fails the final premise but cannot be reproduced here")
-        }
-      }
-      System.out.println(processTraces)
-      // MATCH: Check if each pair of traces match when projected to common alphabet
-      var tracesMatch = true
-      for i <- 0 until this.processes.size do {
-        for j <- 0 until i do {
-          val commonAlphabet = processes(i).alphabet.intersect(processes(j).alphabet)
-          if (processTraces(i).filter(commonAlphabet) != processTraces(j).filter(commonAlphabet)) then {
-            tracesMatch = false
+      // MATCH: Check if each pair of traces match when projected to their common alphabet
+      def findMismatch(processTraces: Buffer[List[String]]) : Option[(Int,Int)] = {
+        var result : Option[(Int,Int)] = None
+        for i <- 0 until this.processes.size do {
+          for j <- 0 until i do {
+            val commonAlphabet = processes(i).alphabet.intersect(processes(j).alphabet)
+            if (processTraces(i).filter(commonAlphabet) != processTraces(j).filter(commonAlphabet)) then {
+              result = Some((i,j))
+            }
           }
         }
+        result
       }
-      if (tracesMatch) then{
-        AGFalse(cexTrace)
-      } else {
-        // Choose a symbol that appears in a process trace but not in the current alphabet
-        val traceSymbols = processTraces.map(_.toSet).fold(Set[String]())({(a,b) => a | b})
-        val newSymbols = traceSymbols.diff(this.assumptionAlphabet)
+      def refineWithArbitrarySymbol() : Unit = {
+        val newSymbols = interfaceAlphabet.diff(this.assumptionAlphabet)
         assert(!newSymbols.isEmpty)
-        throw Exception("inconc")
-        AGContinue()
+        if configuration.get().verbose then {
+          System.out.println(s"${YELLOW}Adding arbitrary symbol: ${newSymbols.head}${RESET}")
+        }
+        this.addSymbolToAssumptionAlphabet(Set(newSymbols.head))
       }
+      def findNewSymbol(cex : List[String]) : AGIntermediateResult = {
+        // Extend the trace to the alphabet of each TA separately (projected to the TA's external alphabet)
+        // This cannot fail when cex == cexTrace, but can afterwards
+        try {
+          val processTraces = processes.zipWithIndex.map{
+            (p,i) => TCheckerAssumeGuaranteeOracles.checkTraceMembership(p, cex) match {
+              case Some(processTrace) => 
+                val interfaceTrace = processTrace.filter(interfaceAlphabet.contains(_))
+                if configuration.get().verbose then {
+                  System.out.println(s"Concretized trace for process ${p.systemName}: ${processTrace}")
+                  System.out.println(s"\tProjected to completeAlphabet: ${interfaceTrace}")
+                }
+                interfaceTrace
+              case None if cex == cexTrace => throw Exception(s"Trace $cex fails the final premise but cannot be reproduced here")
+              case _ => 
+                refineWithArbitrarySymbol()
+                throw AGContinue()
+            }
+          }
+          findMismatch(processTraces) match {          
+            case None => 
+              // All processes agree on these traces: check also if cex is rejected by the property
+              if (!propertyDLTS.dfa.accepts(cex.filter(propertyDLTS.alphabet.contains(_)))) then 
+                AGFalse(cex)
+              else {
+                // If not, then we cannot conclude: so we add an arbitrary new symbol from the traces or from interface alphabet
+                // Add some random symbol
+                val newTraceSymbols = processTraces.map(_.toSet).fold(Set[String]())({(a,b) => a | b}).diff(assumptionAlphabet)
+                if (!newTraceSymbols.isEmpty) then {
+                  this.addSymbolToAssumptionAlphabet(Set(newTraceSymbols.head))
+                } else {
+                  refineWithArbitrarySymbol()
+                }
+                AGContinue()
+              }
+            case Some((i,j)) =>
+              // Otherwise choose a symbol that appears in a process trace but not in the current alphabet, and iterate
+              val traceSymbols = processTraces.map(_.toSet).fold(Set[String]())({(a,b) => a | b})
+              val newSymbols = traceSymbols.diff(this.assumptionAlphabet)
+              if (!newSymbols.isEmpty) then {
+                val newSymbol = newSymbols.head
+                if (configuration.get().verbose)
+                  System.out.println(s"${YELLOW}Adding new symbol to assumption alphabet: ${newSymbol}${RESET}")
+
+                this.addSymbolToAssumptionAlphabet(Set(newSymbol))
+                AGContinue()
+              } else if (processTraces(i).size > cex.size || processTraces(j).size > cex.size ) then {
+                // System.out.println(s"The following traces mismatch and one of them is longer than current cex: ${processTraces(i)} and ${processTraces(j)}")
+                val k = if processTraces(i).size > cex.size then i else j
+                findNewSymbol(processTraces(k))
+              } else {
+                // Add some random symbol from the interface alphabet
+                refineWithArbitrarySymbol()
+                AGContinue()
+              }
+          }
+        } catch {
+          case e : AGIntermediateResult => e
+          case e => throw e
+        }
+      }
+      findNewSymbol(cexTrace)
     }
   }
 
@@ -707,7 +786,10 @@ class TCheckerAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useA
           case AGFalse(cex) =>
             alphabetRefine(cex) match {
               case AGFalse(cex) => throw AGFalse(cex)
-              case _ => ()
+              case _ => 
+                if configuration.get().verbose then
+                  System.out.println(s"New assumption alphabet: ${assumptionAlphabet}")
+                ()
             }
           case e : AGSuccess =>
             // We are done here

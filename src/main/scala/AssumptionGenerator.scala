@@ -33,6 +33,7 @@ import net.automatalib.automata.fsa.NFA
 
 import com.microsoft.z3
 import fr.irisa.circag.tchecker.AGProofSkeleton
+
 trait AssumptionGenerator{
   def getAssumption() : DFA[String, String]
 }
@@ -63,7 +64,6 @@ class ConstraintManager(proofSkeleton : AGProofSkeleton){
   private val z3ctx = {
     val cfg = HashMap[String, String]()
     cfg.put("model", "true")
-    cfg.put("proof", "true")
     z3.Context(cfg);
   }
 
@@ -74,7 +74,7 @@ class ConstraintManager(proofSkeleton : AGProofSkeleton){
   private val toVars = HashMap[(Int,Trace), z3.BoolExpr]()
   private val toIndexedTraces = HashMap[z3.BoolExpr, (Int,Trace)]()
   // Those traces that can be kept when alphabet extends
-  private val incrementalTraces = Buffer[(Int, Trace, Int)]()
+  val incrementalTraces = Buffer[(Int, Trace, Int)]()
 
   private var constraint = z3ctx.mkTrue()
   private var theoryConstraints = z3ctx.mkTrue()
@@ -87,6 +87,11 @@ class ConstraintManager(proofSkeleton : AGProofSkeleton){
   private var previousValuation = HashMap[z3.BoolExpr,Boolean]()
 
   this.reset()
+
+  def this(proofSkeleton : AGProofSkeleton, incrementalTraces : Buffer[(Int, Trace, Int)]) = {
+    this(proofSkeleton)
+    incrementalTraces.foreach({ tr => addConstraint(tr._1, tr._2, tr._3)})
+  }
 
   /**
     * Return the unique SAT variable to the given pair (process, trace)
@@ -171,8 +176,8 @@ class ConstraintManager(proofSkeleton : AGProofSkeleton){
     // the empty word must be accepted by all  
     constraint = z3ctx.mkAnd((0 until nbProcesses).map({i => varOfIndexedTrace(i, List[String]())}) : _*)
 
-    incrementalTraces.foreach({ tr => addConstraint(tr._1, tr._2, tr._3)})
-    (0 until nbProcesses).foreach({i => updateTheoryConstraints(i)})
+    // incrementalTraces.foreach({ tr => addConstraint(tr._1, tr._2, tr._3)})
+    // (0 until nbProcesses).foreach({i => updateTheoryConstraints(i)})
     this.positiveSamples = Buffer.tabulate(nbProcesses)({_ => mutable.Set[Trace]()})
     this.negativeSamples = Buffer.tabulate(nbProcesses)({_ => mutable.Set[Trace]()})
   }
@@ -181,7 +186,8 @@ class ConstraintManager(proofSkeleton : AGProofSkeleton){
     var positiveSamples = Buffer.tabulate(nbProcesses)({_ => mutable.Set[Trace]()})
     var negativeSamples = Buffer.tabulate(nbProcesses)({_ => mutable.Set[Trace]()})
     var beginTime = System.nanoTime()
-    System.out.println(s"Assumption alphabets: $proofSkeleton.assumptionAlphabets")
+    // System.out.println(s"nbProcesses: ${oldAssumptions.size}")
+    // System.out.println(s"Assumption alphabets: ${proofSkeleton.assumptionAlphabets}")
     solver.add(constraint)
     solver.add(theoryConstraints)
     if(solver.check() == z3.Status.UNSATISFIABLE){
@@ -239,7 +245,7 @@ class ConstraintManager(proofSkeleton : AGProofSkeleton){
         }
       } else {
         if configuration.get().verbose then {
-          System.out.println(s"${BLUE}Updating assumption ${i}...${RESET}")
+          System.out.println(s"${BLUE}Updating assumption ${i}...${RESET} with alphabet: ${proofSkeleton.assumptionAlphabets(i).toList}")
         }
         statistics.Counters.incrementCounter("RPNI")
         val learner = BlueFringeRPNIDFA(Alphabets.fromList(proofSkeleton.assumptionAlphabets(i).toList))
@@ -250,7 +256,8 @@ class ConstraintManager(proofSkeleton : AGProofSkeleton){
         statistics.Timers.incrementTimer("rpni", System.nanoTime() - beginTime)
         newAssumptions.append(
           oldAssumptions(i).copy(
-            dfa = DLTS.makePrefixClosed(initialModel, proofSkeleton.assumptionAlphabets(i), removeNonAcceptingStates = true)
+            dfa = DLTS.makePrefixClosed(initialModel, proofSkeleton.assumptionAlphabets(i), removeNonAcceptingStates = true),
+            alphabet = proofSkeleton.assumptionAlphabets(i)
           )
         )
         this.positiveSamples(i) = positiveSamples(i)
@@ -282,13 +289,13 @@ class ConstraintManager(proofSkeleton : AGProofSkeleton){
 
         if projTrace_i.startsWith(projTrace_j) then{
           theoryConstraints = z3ctx.mkAnd(theoryConstraints, z3ctx.mkImplies(vi, vj))
-          System.out.println(s"\t $projTrace_i -> $projTrace_j ")
-          System.out.println(s"\t $vi -> $vj ")
+          // System.out.println(s"\t $projTrace_i -> $projTrace_j ")
+          // System.out.println(s"\t $vi -> $vj ")
         }
         if projTrace_j.startsWith(projTrace_i) then{
           theoryConstraints = z3ctx.mkAnd(theoryConstraints, z3ctx.mkImplies(vj, vi))
-          System.out.println(s"\t $projTrace_i <- $projTrace_j ")
-          System.out.println(s"\t   $vi <- $vj  ")
+          // System.out.println(s"\t $projTrace_i <- $projTrace_j ")
+          // System.out.println(s"\t   $vi <- $vj  ")
         }
       }
     }

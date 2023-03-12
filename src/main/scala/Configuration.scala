@@ -10,6 +10,12 @@ case class ParseError(msg: String) extends Exception(msg)
 var g1 = false
 val cex = Buffer.tabulate(4)({_ => Set[Trace]()})
 
+def resetCEX() : Unit = {
+  for i <- 0 until cex.size do {
+    cex(i) = Set[Trace]()
+  }
+}
+
 object FSM {
   sealed trait FSMFormat
   case object SMV extends FSMFormat

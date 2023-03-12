@@ -96,7 +96,7 @@ object Main {
                 case None => System.out.println(s"${GREEN}${BOLD}Success${RESET}")
                 case Some(cex) => System.out.println(s"${RED}${BOLD}Counterexample${RESET} ${cex}")
               }
-              System.out.println(statistics.Counters.toString)
+              
             case _ => 
               System.err.println("Unknown command")
           }
@@ -108,6 +108,7 @@ object Main {
         System.err.println(e.getMessage())
     }
     val totalTime = (System.nanoTime() - beginTime)/1e9d
+    System.out.println(s"Counters: ${statistics.Counters.toString}")
     System.out.println(s"Timers: ${statistics.Timers}")
     System.out.println(s"Total: ${totalTime}")
     System.out.println(s"Relative times: ${statistics.Timers.timer.map({(k,value) => f"${k}:${(value/1e7d)/totalTime}%.2f%%"}).toString()}")
