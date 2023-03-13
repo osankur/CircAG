@@ -457,8 +457,22 @@ class AssumeGuaranteeVerifier[LTS, Property](ltss : List[LTS], property : Proper
 
 
 abstract class AGIntermediateResult extends Exception
-class AGSuccess extends AGIntermediateResult
-class AGContinue extends AGIntermediateResult
+class AGSuccess extends AGIntermediateResult {
+  override def equals(x: Any): Boolean = {
+    x match {
+      case _ : AGSuccess => true
+      case _ => false
+    }
+  }
+}
+class AGContinue extends AGIntermediateResult {
+  override def equals(x: Any): Boolean = {
+    x match {
+      case _ : AGContinue => true
+      case _ => false
+    }
+  }
+}
 case class AGFalse(cex : Trace) extends AGIntermediateResult
 
 /**
@@ -532,7 +546,6 @@ class TCheckerAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useA
   val propertyAlphabet = Set[String](err)
   val processes = ltsFiles.map(TA.fromFile(_)).toBuffer
 
-  val wholeAlphabet = processes.foldLeft(propertyAlphabet)({(alph, pr) => alph | pr.alphabet})
   val propertyDLTS = {
     val errDFA = {
       val alph= Alphabets.fromList(propertyAlphabet.toList)
@@ -596,7 +609,10 @@ class TCheckerAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useA
 
 
   val proofSkeleton = AGProofSkeleton(processes.map(_.alphabet), propertyAlphabet, assumptionAlphabet)
-  var constraintManager = ConstraintManager(proofSkeleton)
+  private var constraintManager = ConstraintManager(proofSkeleton)
+
+  // Latest cex encountered in any premise check
+  private var latestCex = List[String]()
 
   /**
     * Updates assumptionAlphabet, and consequently processDependencies, propertyDependencies, and resets constraint manager.
@@ -611,20 +627,31 @@ class TCheckerAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useA
     configuration.resetCEX()
   }
 
-  def generateAssumptions() : Unit = {
-  }
-
   def updateConstraints(process : Int, cexTrace : Trace) : Unit = {
+    val prefixInP = propertyDLTS.dfa.accepts(cexTrace.dropRight(1).filter(propertyAlphabet.contains(_)))
+    val traceInP = propertyDLTS.dfa.accepts(cexTrace.filter(propertyAlphabet.contains(_)))
     constraintManager.addConstraint(process, cexTrace, 34)
+    // if (prefixInP && !traceInP) then {
+    //   System.out.println("Case 22")
+    //   constraintManager.addConstraint(process, cexTrace, 22)
+    // } else 
+    if (cexTrace.size > 0 && !prefixInP && !traceInP) then {
+      System.out.println("Case 29")
+      constraintManager.addConstraint(process, cexTrace, 29)
+    } else {
+      System.out.println("Case 34")
+      constraintManager.addConstraint(process, cexTrace, 34)
+    }
   }
 
+  /**
+   * Check the AG rule once for the current assumption alphabet and DFAs
+   */
   def applyAG() : AGIntermediateResult = {
     // A proof for a process must not depend on itself    
     require(proofSkeleton.assumptionAlphabets.zipWithIndex.forall({(ass,i) => !ass.contains(i)}))
     if (configuration.get().verbose) then {
       System.out.println(s"applyAG with alphabets: ${assumptions.map(_.alphabet)}")
-    }
-    for (ta,i) <- processes.zipWithIndex do {
     }
     try{
       for (ta,i) <- processes.zipWithIndex do {
@@ -633,6 +660,7 @@ class TCheckerAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useA
           case None =>
             System.out.println(s"${GREEN}Premise ${i} passed${RESET}")
           case Some(cexTrace) => 
+            latestCex = cexTrace
             System.out.println(s"${RED}Premise ${i} failed with cex: ${cexTrace}${RESET}")
             if (configuration.cex(i).contains(cexTrace)) then {
               for j <- proofSkeleton.processDependencies(i) do {
@@ -655,6 +683,7 @@ class TCheckerAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useA
           System.out.println(s"${GREEN}Final premise succeeded${RESET}")
           AGSuccess()
         case Some(cexTrace) =>
+          latestCex = cexTrace
           System.out.println(s"${RED}Final premise failed with cex: ${cexTrace}${RESET}")
           // If all processes contain proj(cexTrace), then return false, otherwise continue
           for (ta,i) <- processes.zipWithIndex do {
@@ -665,7 +694,7 @@ class TCheckerAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useA
                   System.out.println(s"\tCex does not apply to process ${i}. Continuing...")
                 // for ass <- assumptions do {
                 //   System.out.println(ass.name)
-                //   Visualization.visualize(ass.dfa, Alphabets.fromList(ass.alphabet.toList))
+                //   ass.visualize()
                 // }
                 constraintManager.addFinalPremiseConstraint(cexTrace)
                 throw AGContinue()
@@ -681,7 +710,17 @@ class TCheckerAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useA
       case ex : AGFalse => ex
     }
   }
-  def alphabetRefine(cexTrace : Trace) : AGIntermediateResult = {
+
+  private def refineWithArbitrarySymbol() : Unit = {
+    val newSymbols = interfaceAlphabet.diff(this.assumptionAlphabet)
+    assert(!newSymbols.isEmpty)
+    // if configuration.get().verbose then {
+      System.out.println(s"${YELLOW}Extending alphabet by arbitrarily chosen symbol: ${newSymbols.head}${RESET}")
+    // }
+    this.addSymbolToAssumptionAlphabet(Set(newSymbols.head))
+  }
+
+  private def alphabetRefine(cexTrace : Trace) : AGIntermediateResult = {
     val currentAlphabets = assumptions.map(_.alphabet)
     if ( this.completeAlphabets == currentAlphabets ) then {
       // All alphabets are complete; we can conclude
@@ -699,14 +738,6 @@ class TCheckerAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useA
           }
         }
         result
-      }
-      def refineWithArbitrarySymbol() : Unit = {
-        val newSymbols = interfaceAlphabet.diff(this.assumptionAlphabet)
-        assert(!newSymbols.isEmpty)
-        if configuration.get().verbose then {
-          System.out.println(s"${YELLOW}Adding arbitrary symbol: ${newSymbols.head}${RESET}")
-        }
-        this.addSymbolToAssumptionAlphabet(Set(newSymbols.head))
       }
       def findNewSymbol(cex : List[String]) : AGIntermediateResult = {
         // Extend the trace to the alphabet of each TA separately (projected to the TA's external alphabet)
@@ -749,7 +780,7 @@ class TCheckerAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useA
               val newSymbols = traceSymbols.diff(this.assumptionAlphabet)
               if (!newSymbols.isEmpty) then {
                 val newSymbol = newSymbols.head
-                if (configuration.get().verbose)
+                // if (configuration.get().verbose)
                   System.out.println(s"${YELLOW}Adding new symbol to assumption alphabet: ${newSymbol}${RESET}")
 
                 this.addSymbolToAssumptionAlphabet(Set(newSymbol))
@@ -774,32 +805,43 @@ class TCheckerAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useA
   }
 
   /**
-    * Simplify propertyDependencies and processDependencies 
-    */
-  def simplifyDependencies() : Unit = {}
+   * Apply automatic AG; retrun None on succes, and a confirmed cex otherwise.
+   */
   def check() : Option[Trace] = {
-    try{
-      while(true) {
-        this.assumptions = constraintManager.generateAssumptions(this.assumptions)
-
-        this.applyAG() match {
-          case AGFalse(cex) =>
-            alphabetRefine(cex) match {
-              case AGFalse(cex) => throw AGFalse(cex)
-              case _ => 
-                if configuration.get().verbose then
-                  System.out.println(s"New assumption alphabet: ${assumptionAlphabet}")
-                ()
-            }
-          case e : AGSuccess =>
-            // We are done here
-            throw e
-          case e : AGContinue => 
-            ()
+    var currentState : AGIntermediateResult = AGContinue()
+    while(currentState == AGContinue()) {
+      var newAss = constraintManager.generateAssumptions(this.assumptions)
+      // If the constraints are unsat, then refine the alphabet and try again
+      // They cannot be unsat if the alphabets are complete
+      while(newAss == None) do {
+        if configuration.get().verbose then {
+          System.out.println("Refining alphabet due to constraints being unsat")
         }
+        val newSymbols = this.latestCex.filter(interfaceAlphabet.contains(_)).toSet.diff(this.assumptionAlphabet)
+        if (!newSymbols.isEmpty) then {
+          System.out.println(s"${YELLOW}Extending alphabet with symbol: ${newSymbols.head}${RESET}")
+          this.addSymbolToAssumptionAlphabet(Set(newSymbols.head))
+        } else {
+          refineWithArbitrarySymbol()
+        }
+        newAss = constraintManager.generateAssumptions(this.assumptions)
       }
-      None
-    } catch {
+      newAss match {
+        case Some(newAss) => this.assumptions = newAss
+        case None => throw Exception("Not possible")
+      }
+      currentState = this.applyAG() 
+      currentState match {
+        case AGFalse(cex) =>
+          currentState = alphabetRefine(cex) 
+          if currentState == AGContinue() then {
+            if configuration.get().verbose then
+              System.out.println(s"New assumption alphabet: ${assumptionAlphabet}")
+          }
+        case _ => ()
+      }
+    }
+    currentState match {
       case AGFalse(cex) => Some(cex)
       case e: AGSuccess =>
         if configuration.get().visualizeDFA then {
@@ -809,6 +851,7 @@ class TCheckerAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useA
           }
         }
         None
+      case _ => throw Exception("Inconclusive")
     }
   }
 }

@@ -140,10 +140,56 @@ class ConstraintManager(proofSkeleton : AGProofSkeleton){
         val newConstr = z3ctx.mkOr(
             z3ctx.mkOr(lhs : _*),
             varOfIndexedTrace(process, trace))
-        if configuration.get().verbose then {            
+        if configuration.get().verbose then {
           System.out.println(s"Adding constraint ${newConstr}")
         }
         constraint = z3ctx.mkAnd(constraint, newConstr)
+        incrementalTraces.append((process, trace, constraintType))
+      case 22 =>
+        val prefix = trace.dropRight(1)
+        val term1 = 
+          z3ctx.mkOr(
+            proofSkeleton.processDependencies(process).map(
+            {
+              j => z3ctx.mkNot(varOfIndexedTrace(j, prefix))
+            }).toSeq : _*
+          )
+        val term2 = 
+          z3ctx.mkAnd(
+            varOfIndexedTrace(process, trace),
+            z3ctx.mkOr(
+              (proofSkeleton.propertyDependencies - process).map(
+              {
+                j => z3ctx.mkNot(varOfIndexedTrace(j, trace))
+              }).toSeq : _*
+            )
+          )
+        if configuration.get().verbose then 
+          System.out.println(s"Adding ${z3ctx.mkOr(term1, term2)}")
+        constraint = z3ctx.mkAnd(constraint, z3ctx.mkOr(term1, term2))
+        incrementalTraces.append((process, trace, constraintType))
+      case 29 =>
+        val prefix = trace.dropRight(1)
+        val term1 = 
+          z3ctx.mkOr(
+            proofSkeleton.processDependencies(process).map(
+            {
+              j => z3ctx.mkNot(varOfIndexedTrace(j, prefix))
+            }).toSeq : _*
+          )
+        val term2 = 
+          z3ctx.mkAnd(
+            varOfIndexedTrace(process, trace),
+            z3ctx.mkOr(
+              (proofSkeleton.propertyDependencies -- proofSkeleton.processDependencies(process) - process).map(
+              {
+                j => z3ctx.mkNot(varOfIndexedTrace(j, trace))
+              }).toSeq : _*
+            )
+          )
+        if configuration.get().verbose then 
+          System.out.println(s"Adding ${z3ctx.mkOr(term1, term2)}")
+        constraint = z3ctx.mkAnd(constraint, z3ctx.mkOr(term1, term2))
         incrementalTraces.append((process, trace, constraintType))
     }
   }
@@ -182,7 +228,7 @@ class ConstraintManager(proofSkeleton : AGProofSkeleton){
     this.negativeSamples = Buffer.tabulate(nbProcesses)({_ => mutable.Set[Trace]()})
   }
 
-  def generateAssumptions(oldAssumptions : Buffer[DLTS]) : Buffer[DLTS] = {
+  def generateAssumptions(oldAssumptions : Buffer[DLTS]) : Option[Buffer[DLTS]] = {
     var positiveSamples = Buffer.tabulate(nbProcesses)({_ => mutable.Set[Trace]()})
     var negativeSamples = Buffer.tabulate(nbProcesses)({_ => mutable.Set[Trace]()})
     var beginTime = System.nanoTime()
@@ -191,81 +237,80 @@ class ConstraintManager(proofSkeleton : AGProofSkeleton){
     solver.add(constraint)
     solver.add(theoryConstraints)
     if(solver.check() == z3.Status.UNSATISFIABLE){
-      System.out.println(constraint)
-      System.out.println("Theory constraints:")
-      System.out.println(theoryConstraints)
-      // System.out.println("proof: " + solver.getProof());      
-      System.out.println(s"CORE:")
-      for x <- solver.getUnsatCore() do {
-        System.out.println(x)
-      }
-      throw Exception("Constraints are unsatisfiable")
-    }
-    val m = solver.getModel()
-    // Compute sets of negative samples, and prefix-closed sets of pos samples from the valuation
-    samples.zipWithIndex.foreach({
-      (isamples, i) => 
-        isamples.foreach({
-          (trace, v) =>
-            m.evaluate(v, false).getBoolValue() match {
-              case z3.enumerations.Z3_lbool.Z3_L_TRUE =>
-                val sample = trace.filter(proofSkeleton.assumptionAlphabets(i))
-                // Add all prefixes
-                for k <- 0 to sample.size do {
-                  positiveSamples(i).add(sample.dropRight(k))
-                }
-              case z3.enumerations.Z3_lbool.Z3_L_FALSE => 
-                negativeSamples(i).add(trace.filter(proofSkeleton.assumptionAlphabets(i)))
-              case _ =>
-                ()
-            }
-        })
-    })
-    statistics.Timers.incrementTimer("z3", (System.nanoTime() - beginTime))
-    val newAssumptions = Buffer[DLTS]()
-    for i <- 0 until nbProcesses do {
       if configuration.get().verbose then {
-        System.out.println(s"#POS(${i}) = ${positiveSamples(i).size}:\n")
-        for w <- positiveSamples(i) do {
-          System.out.println(s"\t${w}")
-        }
-        System.out.println(s"#NEG(${i}) = ${negativeSamples(i).size}:\n")
-        for w <- negativeSamples(i) do {
-          System.out.println(s"\t${w}")
-        }
+        System.out.println(constraint)
+        System.out.println("Theory constraints:")
+        System.out.println(theoryConstraints)
       }
-      // checkPrefixIndependance(positiveSamples(i), negativeSamples(i))
-      if( positiveSamples(i).toSet == this.positiveSamples(i).toSet
-          && negativeSamples(i).toSet == this.negativeSamples(i).toSet
-          && oldAssumptions(i).alphabet == proofSkeleton.assumptionAlphabets(i)
-      ){
-        newAssumptions.append(oldAssumptions(i))
+      statistics.Timers.incrementTimer("z3", (System.nanoTime() - beginTime))
+      None
+    } else {
+      val m = solver.getModel()
+      // Compute sets of negative samples, and prefix-closed sets of pos samples from the valuation
+      samples.zipWithIndex.foreach({
+        (isamples, i) => 
+          isamples.foreach({
+            (trace, v) =>
+              m.evaluate(v, false).getBoolValue() match {
+                case z3.enumerations.Z3_lbool.Z3_L_TRUE =>
+                  val sample = trace.filter(proofSkeleton.assumptionAlphabets(i))
+                  // Add all prefixes
+                  for k <- 0 to sample.size do {
+                    positiveSamples(i).add(sample.dropRight(k))
+                  }
+                case z3.enumerations.Z3_lbool.Z3_L_FALSE => 
+                  negativeSamples(i).add(trace.filter(proofSkeleton.assumptionAlphabets(i)))
+                case _ =>
+                  ()
+              }
+          })
+      })
+      statistics.Timers.incrementTimer("z3", (System.nanoTime() - beginTime))
+      val newAssumptions = Buffer[DLTS]()
+      for i <- 0 until nbProcesses do {
         if configuration.get().verbose then {
-          System.out.println(s"Keeping assumption ${i}...")
+          System.out.println(s"#POS(${i}) = ${positiveSamples(i).size}:\n")
+          for w <- positiveSamples(i) do {
+            System.out.println(s"\t${w}")
+          }
+          System.out.println(s"#NEG(${i}) = ${negativeSamples(i).size}:\n")
+          for w <- negativeSamples(i) do {
+            System.out.println(s"\t${w}")
+          }
         }
-      } else {
-        if configuration.get().verbose then {
-          System.out.println(s"${BLUE}Updating assumption ${i}...${RESET} with alphabet: ${proofSkeleton.assumptionAlphabets(i).toList}")
-        }
-        statistics.Counters.incrementCounter("RPNI")
-        val learner = BlueFringeRPNIDFA(Alphabets.fromList(proofSkeleton.assumptionAlphabets(i).toList))
-        learner.addPositiveSamples(positiveSamples(i).map(Word.fromList(_)))
-        learner.addNegativeSamples(negativeSamples(i).map(Word.fromList(_)))
-        var beginTime = System.nanoTime()
-        val initialModel = learner.computeModel()
-        statistics.Timers.incrementTimer("rpni", System.nanoTime() - beginTime)
-        newAssumptions.append(
-          oldAssumptions(i).copy(
-            dfa = DLTS.makePrefixClosed(initialModel, proofSkeleton.assumptionAlphabets(i), removeNonAcceptingStates = true),
-            alphabet = proofSkeleton.assumptionAlphabets(i)
+        // checkPrefixIndependance(positiveSamples(i), negativeSamples(i))
+        if( positiveSamples(i).toSet == this.positiveSamples(i).toSet
+            && negativeSamples(i).toSet == this.negativeSamples(i).toSet
+            && oldAssumptions(i).alphabet == proofSkeleton.assumptionAlphabets(i)
+        ){
+          newAssumptions.append(oldAssumptions(i))
+          if configuration.get().verbose then {
+            System.out.println(s"Keeping assumption ${i}...")
+          }
+        } else {
+          if configuration.get().verbose then {
+            System.out.println(s"${BLUE}Updating assumption ${i}...${RESET} with alphabet: ${proofSkeleton.assumptionAlphabets(i).toList}")
+          }
+          statistics.Counters.incrementCounter("RPNI")
+          val learner = BlueFringeRPNIDFA(Alphabets.fromList(proofSkeleton.assumptionAlphabets(i).toList))
+          learner.addPositiveSamples(positiveSamples(i).map(Word.fromList(_)))
+          learner.addNegativeSamples(negativeSamples(i).map(Word.fromList(_)))
+          var beginTime = System.nanoTime()
+          val initialModel = learner.computeModel()
+          statistics.Timers.incrementTimer("rpni", System.nanoTime() - beginTime)
+          newAssumptions.append(
+            oldAssumptions(i).copy(
+              dfa = DLTS.makePrefixClosed(initialModel, proofSkeleton.assumptionAlphabets(i), removeNonAcceptingStates = true),
+              alphabet = proofSkeleton.assumptionAlphabets(i)
+            )
           )
-        )
-        this.positiveSamples(i) = positiveSamples(i)
-        this.negativeSamples(i) = negativeSamples(i)
+          this.positiveSamples(i) = positiveSamples(i)
+          this.negativeSamples(i) = negativeSamples(i)
+        }
       }
+      statistics.Timers.incrementTimer("generate-assumptions", System.nanoTime() - beginTime)
+      Some(newAssumptions)
     }
-    statistics.Timers.incrementTimer("generate-assumptions", System.nanoTime() - beginTime)
-    newAssumptions
   }
   /**
     * Compute boolean expression with the following property:
