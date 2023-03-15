@@ -358,7 +358,7 @@ object TCheckerAssumeGuaranteeOracles {
     * @return
     */
   def extendTrace(ta : TA, word : Trace, projectionAlphabet : Option[Set[String]]) : Option[Trace] ={
-    val wordDLTS = DLTS.fromTrace(word,None)
+    val wordDLTS = DLTS.fromTrace(word)
     val productTA = TA.synchronousProduct(ta, List(wordDLTS), acceptingLabelSuffix = Some("_accept_"))
     checkReachability(productTA, s"${wordDLTS.name}_accept_") 
   }
@@ -373,7 +373,7 @@ object TCheckerAssumeGuaranteeOracles {
   def attemptToExtendTraceToAllProcesses(tas : Array[TA], word : Trace, projectionAlphabet : Option[Set[String]]) : Trace = {
     var currentTrace = word
     for ta <- tas do {
-      val wordDLTS = DLTS.fromTrace(currentTrace,None)
+      val wordDLTS = DLTS.fromTrace(currentTrace)
       val productTA = TA.synchronousProduct(ta, List(wordDLTS), acceptingLabelSuffix = Some("_accept_"))
       checkReachability(productTA, s"${wordDLTS.name}_accept_") match {
         case None => ()
@@ -384,17 +384,16 @@ object TCheckerAssumeGuaranteeOracles {
   }
 
   /**
-    * Check whether ta contains an exec whose trace, projected to projectionAlphabet is word.
+    * Check the intersection of ta with trace seen as a DFA on given alphabet (default is trace.toSet)
     *
     * @param ta
     * @param word
     * @param projectionAlphabet
     * @return None if no such execution exists, and Some(execution) otherwise.
     */
-  def checkTraceMembership(ta : TA, word : Trace, projectionAlphabet : Option[Set[String]] = None) : Option[Trace] = {  
+  def checkTraceMembership(ta : TA, word : Trace, alphabet : Option[Set[String]] = None) : Option[Trace] = {  
     statistics.Counters.incrementCounter("trace-membership")
-
-    val traceProcess = DLTS.fromTrace(word, projectionAlphabet)
+    val traceProcess = DLTS.fromTrace(word, alphabet)
     val productTA = TA.synchronousProduct(ta, List(traceProcess), Some("_accept_"))
     val label = s"${traceProcess.name}_accept_"
     this.checkReachability(productTA, label)
@@ -631,10 +630,10 @@ class TCheckerAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useA
     val prefixInP = propertyDLTS.dfa.accepts(cexTrace.dropRight(1).filter(propertyAlphabet.contains(_)))
     val traceInP = propertyDLTS.dfa.accepts(cexTrace.filter(propertyAlphabet.contains(_)))
     constraintManager.addConstraint(process, cexTrace, 34)
-    // if (prefixInP && !traceInP) then {
-    //   System.out.println("Case 22")
-    //   constraintManager.addConstraint(process, cexTrace, 22)
-    // } else 
+    if (prefixInP && !traceInP) then {
+      System.out.println("Case 22")
+      constraintManager.addConstraint(process, cexTrace, 22)
+    } else 
     if (cexTrace.size > 0 && !prefixInP && !traceInP) then {
       System.out.println("Case 29")
       constraintManager.addConstraint(process, cexTrace, 29)
@@ -648,6 +647,24 @@ class TCheckerAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useA
    * Check the AG rule once for the current assumption alphabet and DFAs
    */
   def applyAG() : AGIntermediateResult = {
+    // val concreteVal = processes.zipWithIndex.map({
+    //   (p,i) => 
+    //       val valFori = 
+    //         this.constraintManager.samples(i).map({
+    //         (trace,v) => 
+    //           TCheckerAssumeGuaranteeOracles.checkTraceMembership(p,trace, Some(p.alphabet)) match {
+    //             case None => constraintManager.z3ctx.mkNot(v)
+    //           case Some(_) => v
+    //           }
+    //         })
+    //       constraintManager.z3ctx.mkAnd(valFori.toSeq : _*)        
+    // })
+    // System.out.println("Displaying concrete val:")
+    // for (p,exp) <- processes.zip(concreteVal) do {
+    //   System.out.println(s"${p.systemName}: ${exp}")
+    // }
+    // constraintManager.checkValuation(constraintManager.z3ctx.mkAnd(concreteVal.toSeq : _*))
+
     // A proof for a process must not depend on itself    
     require(proofSkeleton.assumptionAlphabets.zipWithIndex.forall({(ass,i) => !ass.contains(i)}))
     if (configuration.get().verbose) then {
@@ -665,10 +682,10 @@ class TCheckerAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useA
             if (configuration.cex(i).contains(cexTrace)) then {
               for j <- proofSkeleton.processDependencies(i) do {
                 System.out.println(s"Dependency: Assumption for ${processes(j).systemName}")
-                assumptions(j).visualize()
+                // assumptions(j).visualize()
               }
               System.out.println(s"Assumption for this process ${processes(i).systemName}")
-              assumptions(i).visualize()
+              // assumptions(i).visualize()
               throw Exception("Repeated CEX")
             } else {
               configuration.cex(i) = configuration.cex(i) + cexTrace
@@ -687,7 +704,7 @@ class TCheckerAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useA
           System.out.println(s"${RED}Final premise failed with cex: ${cexTrace}${RESET}")
           // If all processes contain proj(cexTrace), then return false, otherwise continue
           for (ta,i) <- processes.zipWithIndex do {
-            TCheckerAssumeGuaranteeOracles.checkTraceMembership(ta, cexTrace, Some(assumptions(i).alphabet))
+            TCheckerAssumeGuaranteeOracles.checkTraceMembership(ta, cexTrace.filter(assumptions(i).alphabet))
             match {
               case None => 
                 if configuration.get().verbose then

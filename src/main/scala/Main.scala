@@ -114,3 +114,16 @@ object Main {
     System.out.println(s"Relative times: ${statistics.Timers.timer.map({(k,value) => f"${k}:${(value/1e7d)/totalTime}%.2f%%"}).toString()}")
   }
 }
+
+// object DebugMain {
+
+//   def main(args: Array[String]): Unit = {
+//     val ltsFiles = Array[File](File("examples/toy/lts1.ta"),File("examples/toy/lts2.ta"),File("examples/toy/lts3.ta"))
+//     configuration.globalConfiguration = configuration.get().copy(verbose = true)
+//     tchecker.TCheckerAssumeGuaranteeVerifier(ltsFiles, "err", false).check()
+//     match {
+//       case None => System.out.println(s"${GREEN}${BOLD}Success${RESET}")
+//       case Some(cex) => System.out.println(s"${RED}${BOLD}Counterexample${RESET} ${cex}")
+//     }
+//  }
+// }

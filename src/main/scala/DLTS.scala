@@ -138,22 +138,20 @@ object DLTS {
     * @param projectionAlphabet
     * @return
     */
-  def fromTrace(trace: Trace, projectionAlphabet: Option[Set[String]]): DLTS = {
-    val alph = projectionAlphabet.getOrElse(trace.toSet)
-    val projTrace = trace.filter(alph.contains(_))
-
+  def fromTrace(trace: Trace, alphabet : Option[Set[String]] = None): DLTS = {
+    val alph = alphabet.getOrElse(trace.toSet) | trace.toSet
     val dfa = FastDFA(Alphabets.fromList(alph.toList))
     val newStates = Buffer[FastDFAState]()
     newStates.append(dfa.addState())
-    for i <- 1 to projTrace.size do {
-      newStates.append(dfa.addState(i == projTrace.size))
+    for i <- 1 to trace.size do {
+      newStates.append(dfa.addState(i == trace.size))
     }
-    if(projTrace.size == 0) then{
+    if(trace.size == 0) then{
       newStates(0).setAccepting(true)
     }
     dfa.setInitialState(newStates(0))
-    projTrace
-      .zip(0 until projTrace.size)
+    trace
+      .zip(0 until trace.size)
       .foreach({ (sigma, i) =>
         dfa.setTransition(newStates(i), sigma, newStates(i + 1))
       })

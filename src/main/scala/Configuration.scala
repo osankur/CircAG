@@ -38,7 +38,7 @@ case class Configuration(
     keepTmpFiles: Boolean = false,
     verbose: Boolean = false,
     verbose_MembershipQueries : Boolean = false,
-    tmpDirName: String = ".tmp/",
+    tmpDirName: String = "/tmp/circag",
     visualizeDFA : Boolean = false,
     alphabetRefinement : Boolean = true,
     randomSeed : Int = 0

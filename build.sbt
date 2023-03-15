@@ -6,7 +6,9 @@ resolvers += "mvrep" at "https://repo1.maven.org/maven2/"
 
 val jarName = "CircAG.jar"
 assembly/assemblyJarName := jarName
-
+//mainClass in (Compile, packageBin) := Some("fr.irisa.circag.Main")
+run / mainClass := Some("fr.irisa.circag.Main")
+assembly / mainClass := Some("fr.irisa.circag.Main")
 lazy val root = project
   .in(file("."))
   .settings(

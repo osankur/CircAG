@@ -61,7 +61,7 @@ abstract class IDFAAssumptionGenerator extends AssumptionGenerator
   */
 class ConstraintManager(proofSkeleton : AGProofSkeleton){
 
-  private val z3ctx = {
+  val z3ctx = {
     val cfg = HashMap[String, String]()
     cfg.put("model", "true")
     z3.Context(cfg);
@@ -69,13 +69,14 @@ class ConstraintManager(proofSkeleton : AGProofSkeleton){
 
   private val nbProcesses = proofSkeleton.processDependencies.size
   // Set of all samples added so far
-  private val samples = Buffer.tabulate(nbProcesses)({_ => Buffer[(Trace,z3.BoolExpr)]()})
+  val samples = Buffer.tabulate(nbProcesses)({_ => Buffer[(Trace,z3.BoolExpr)]()})
   // Boolean variable corresponding to each pair (pr,trace)
   private val toVars = HashMap[(Int,Trace), z3.BoolExpr]()
   private val toIndexedTraces = HashMap[z3.BoolExpr, (Int,Trace)]()
   // Those traces that can be kept when alphabet extends
   val incrementalTraces = Buffer[(Int, Trace, Int)]()
 
+  // The constraint and theoryConstraints are kept for debugging and display. Invariant: solver contains these as assertions
   private var constraint = z3ctx.mkTrue()
   private var theoryConstraints = z3ctx.mkTrue()
   private var solver = z3ctx.mkSolver()
@@ -121,7 +122,6 @@ class ConstraintManager(proofSkeleton : AGProofSkeleton){
       }
     }
   }
-
   def addConstraint(process : Int, trace : Trace, constraintType : Int) : Unit = {
     constraintType match {
       case 34 =>
@@ -144,6 +144,7 @@ class ConstraintManager(proofSkeleton : AGProofSkeleton){
           System.out.println(s"Adding constraint ${newConstr}")
         }
         constraint = z3ctx.mkAnd(constraint, newConstr)
+        solver.add(newConstr)
         incrementalTraces.append((process, trace, constraintType))
       case 22 =>
         val prefix = trace.dropRight(1)
@@ -164,9 +165,11 @@ class ConstraintManager(proofSkeleton : AGProofSkeleton){
               }).toSeq : _*
             )
           )
+        val newConstr = z3ctx.mkOr(term1, term2)
+        constraint = z3ctx.mkAnd(constraint, newConstr)
+        solver.add(newConstr)
         if configuration.get().verbose then 
-          System.out.println(s"Adding ${z3ctx.mkOr(term1, term2)}")
-        constraint = z3ctx.mkAnd(constraint, z3ctx.mkOr(term1, term2))
+          System.out.println(s"Adding ${newConstr}")
         incrementalTraces.append((process, trace, constraintType))
       case 29 =>
         val prefix = trace.dropRight(1)
@@ -189,7 +192,9 @@ class ConstraintManager(proofSkeleton : AGProofSkeleton){
           )
         if configuration.get().verbose then 
           System.out.println(s"Adding ${z3ctx.mkOr(term1, term2)}")
-        constraint = z3ctx.mkAnd(constraint, z3ctx.mkOr(term1, term2))
+        val newConstraint = z3ctx.mkOr(term1, term2)
+        constraint = z3ctx.mkAnd(constraint, newConstraint)
+        solver.add(newConstraint)
         incrementalTraces.append((process, trace, constraintType))
     }
   }
@@ -202,6 +207,7 @@ class ConstraintManager(proofSkeleton : AGProofSkeleton){
       System.out.println(s"Adding constraint ${newConstraint}")
     }
     constraint = z3ctx.mkAnd(constraint, newConstraint)
+    solver.add(newConstraint)
   }
 
   /**
@@ -221,11 +227,25 @@ class ConstraintManager(proofSkeleton : AGProofSkeleton){
 
     // the empty word must be accepted by all  
     constraint = z3ctx.mkAnd((0 until nbProcesses).map({i => varOfIndexedTrace(i, List[String]())}) : _*)
+    solver.add(constraint)
 
     // incrementalTraces.foreach({ tr => addConstraint(tr._1, tr._2, tr._3)})
     // (0 until nbProcesses).foreach({i => updateTheoryConstraints(i)})
     this.positiveSamples = Buffer.tabulate(nbProcesses)({_ => mutable.Set[Trace]()})
     this.negativeSamples = Buffer.tabulate(nbProcesses)({_ => mutable.Set[Trace]()})
+  }
+
+  /**
+    * Check if the current constraints are compatible with exp (still sat)
+    *
+    * @param exp
+    */
+  def checkValuation(exp : z3.BoolExpr) : Unit = {
+    val s = z3ctx.mkSolver()
+    s.add(constraint)
+    s.add(theoryConstraints)
+    s.add(exp)
+    assert(solver.check() == z3.Status.SATISFIABLE)
   }
 
   def generateAssumptions(oldAssumptions : Buffer[DLTS]) : Option[Buffer[DLTS]] = {
@@ -234,8 +254,16 @@ class ConstraintManager(proofSkeleton : AGProofSkeleton){
     var beginTime = System.nanoTime()
     // System.out.println(s"nbProcesses: ${oldAssumptions.size}")
     // System.out.println(s"Assumption alphabets: ${proofSkeleton.assumptionAlphabets}")
-    solver.add(constraint)
-    solver.add(theoryConstraints)
+    // System.out.println("Constraints")
+    // System.out.println(constraint)
+    // System.out.println("Theroy Constraints")
+    // System.out.println(theoryConstraints)
+    // System.out.println(s"Displaying assertions")
+    // for e <- solver.getAssertions() do {
+    //   System.out.println(e)
+    // }
+    // solver.add(constraint)
+    // solver.add(theoryConstraints)
     if(solver.check() == z3.Status.UNSATISFIABLE){
       if configuration.get().verbose then {
         System.out.println(constraint)
@@ -334,11 +362,13 @@ class ConstraintManager(proofSkeleton : AGProofSkeleton){
 
         if projTrace_i.startsWith(projTrace_j) then{
           theoryConstraints = z3ctx.mkAnd(theoryConstraints, z3ctx.mkImplies(vi, vj))
+          solver.add(z3ctx.mkImplies(vi, vj))
           // System.out.println(s"\t $projTrace_i -> $projTrace_j ")
           // System.out.println(s"\t $vi -> $vj ")
         }
         if projTrace_j.startsWith(projTrace_i) then{
           theoryConstraints = z3ctx.mkAnd(theoryConstraints, z3ctx.mkImplies(vj, vi))
+          solver.add(z3ctx.mkImplies(vj, vi))
           // System.out.println(s"\t $projTrace_i <- $projTrace_j ")
           // System.out.println(s"\t   $vi <- $vj  ")
         }
