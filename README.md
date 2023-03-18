@@ -3,6 +3,11 @@ You need
 - Scala 3.1
 - Java 1.7
 - sbt 1.8
+- maven
+
+Execute the following in `lib` directory
+mvn install:install-file -Dfile=jhoafparser-1.1.1.jar -DgroupId=jhoafparser -DartifactId=jhoafparser -Dversion=1.1.1 -Dpackaging=jar -DgeneratePom=true
+
 
 You can use sbt to compile and run as shown below. To create a jar, run `sbt assembly`.
 
@@ -35,3 +40,4 @@ The synchronized product of the processes can be output to stdout as a single TC
 - Write TChecker script to decompose a given model into components as separate files. Here processes accessing the same shared variables must be kept together. The minimal alphabet must be inferred as well for all components.
 - Write various assumption generators based on a SAT solver, passive algs from learnlib, minimal separating automata etc.
 - Connect to spot for omega-regular properties
+

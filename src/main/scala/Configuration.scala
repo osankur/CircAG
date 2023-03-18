@@ -17,12 +17,8 @@ def resetCEX() : Unit = {
 }
 
 object FSM {
-  sealed trait FSMFormat
-  case object SMV extends FSMFormat
-  case object AIG extends FSMFormat
-  case object Murphi extends FSMFormat
-  case object TCheckerTA extends FSMFormat
-  case object Verilog extends FSMFormat
+  enum FSMFormat:
+    case SMV, AIG, Murphi, TCheckerTA, Verilog
 
   sealed trait ModelChecker
   case object TCheckerModelChecker extends ModelChecker {
@@ -34,7 +30,7 @@ case class Configuration(
     cmd : String = "",
     ltsFiles : Array[File] = Array[File](),
     err: String = "",
-    ltsFormat: FSM.FSMFormat = FSM.TCheckerTA,
+    ltsFormat: FSM.FSMFormat = FSM.FSMFormat.TCheckerTA,
     keepTmpFiles: Boolean = false,
     verbose: Boolean = false,
     verbose_MembershipQueries : Boolean = false,

@@ -43,7 +43,7 @@ import fr.irisa.circag.DLTS
 import fr.irisa.circag.Trace
 import fr.irisa.circag.configuration
 import fr.irisa.circag.statistics
-import fr.irisa.circag.ConstraintManager
+//import fr.irisa.circag.dfa.ConstraintManager
 import com.microsoft.z3
 
 case class BadTimedAutomaton(msg: String) extends Exception(msg)
@@ -205,6 +205,10 @@ object TA{
       taB.append(strStates.append(strTransitions.toString).toString)
     ta.core = taB.toString()
     ta
+  }
+
+  def fromHOA(automatonString : String, acceptingLabel : Option[String]) : TA = {
+    TA.fromDLTS(DLTS.fromHOA(automatonString), acceptingLabel)
   }
 
   /**

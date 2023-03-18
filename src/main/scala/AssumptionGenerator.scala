@@ -1,4 +1,4 @@
-package fr.irisa.circag
+package fr.irisa.circag.tchecker
 
 import java.util.HashMap
 import scala.collection.mutable.Buffer
@@ -32,23 +32,11 @@ import net.automatalib.serialization.aut.AUTSerializationProvider
 import net.automatalib.automata.fsa.NFA
 
 import com.microsoft.z3
-import fr.irisa.circag.tchecker.AGProofSkeleton
 
-trait AssumptionGenerator{
-  def getAssumption() : DFA[String, String]
-}
-
-abstract class LStarAssumptionGenerator extends AssumptionGenerator{
-  
-}
-class SATAssumptionGenerator {
-  def doSomething() : Unit =
-    {
-
-    }
-}
-abstract class IDFAAssumptionGenerator extends AssumptionGenerator
-
+import fr.irisa.circag.statistics
+import fr.irisa.circag.configuration
+import fr.irisa.circag.Trace
+import fr.irisa.circag.DLTS
 
 /**
   * Manages constraints and generates satisfying valuations.

@@ -61,6 +61,8 @@ import fr.irisa.circag.tchecker.TCheckerAssumeGuaranteeVerifier
 import fr.irisa.circag.tchecker.AGContinue
 import fr.irisa.circag.tchecker.AGSuccess
 import com.microsoft.z3.enumerations.Z3_lbool
+import fr.irisa.circag.tchecker.HOA
+
 
 class MySuite extends munit.FunSuite {
   test("SAT Solver") {
@@ -370,11 +372,52 @@ class MySuite extends munit.FunSuite {
     // val baut : AbstractBricsAutomaton = BricsNFA(aut)
     // Visualization.visualize(baut, true)
   }
-
 }
 
 class AGBenchs extends munit.FunSuite {
   test("MUS") {
     
+  }
+  test("HOA"){
+    val automatonString = """
+        HOA: v1
+        name: "G((!a | !b) & Fa & Fb)"
+        States: 3
+        Start: 0
+        AP: 2 "a" "b"
+        acc-name: Buchi
+        Acceptance: 1 Inf(0)
+        properties: trans-labels explicit-labels state-acc deterministic
+        properties: stutter-invariant
+        --BODY--
+        State: 0
+        [!1] 0
+        [!0&1] 1
+        State: 1
+        [!0] 1
+        [0&!1] 2
+        State: 2 {0}
+        [!1] 0
+        [!0&1] 1
+        --END--
+    """
+    val str2 = """
+HOA: v1
+States: 2
+Start: 0
+acc-name: Rabin 1
+Acceptance: 2 (Fin(0) & Inf(1))
+AP: 2 "a" "b"
+--BODY--
+State: 0 "a U b"   /* An example of named state */
+  [0 & !1] 0 {0}
+  [1] 1 {0}
+State: 1
+  [t] 1 {1}
+--END--
+    """
+    // val ltl2hoa = LTL2TChecker(Set[String]("0", "1"))
+    HOA.hoa2dlts(str2)
+    // HOA.hoa2dlts(automatonString)
   }
 }
