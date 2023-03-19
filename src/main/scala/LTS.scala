@@ -48,7 +48,6 @@ type Trace = List[String]
   * @param dfa
   * @param alphabet
   */
-// trait LTS[FA <: Automaton[?, String, ?]](
 trait LTS[FA <: FiniteStateAcceptor[?, String] with Automaton[?, String, ?]](
     val name: String,
     val dfa: FA,
@@ -195,6 +194,18 @@ object DLTS {
     DLTS("_trace_", dfa, alph)
   }
 
+  /**
+    * Build deterministic LTS from possbly non-deterministic HOA Buchi automaton description.
+    *
+    * @param automatonString
+    * @param acceptingLabel
+    * @return
+    */
+  def fromHOA(automatonString : String) : DLTS = {
+      val nlts = HOA.toLTS(automatonString)
+      DLTS(nlts.name, NFAs.determinize(nlts.dfa, nlts.dfa.getInputAlphabet()).toFastDFA, nlts.alphabet)
+  }
+
   def fromRegExp(name : String, regexp : String ) : DLTS = {
     var currentChar = 'a'
     val names = HashMap[Character, String]()
@@ -256,8 +267,6 @@ object DLTS {
     val statesMap = HashMap((dfa.getInitialState(), FastDFAState(0,false)))
     val newDFA =
      new FastDFA(Alphabets.fromList(alphabet.toList))
-    // val newDFA =
-    //   CompactDFA.Creator().createAutomaton(Alphabets.fromList(alphabet.toList))
     dfa
       .getStates()
       .foreach({ state =>
@@ -323,6 +332,44 @@ object DLTS {
           )
       }
     }
+    newDFA
+  }
+}
+
+
+extension(dfa : CompactDFA[?]){
+  def toFastDFA = {
+    val statesMap = HashMap((dfa.getInitialState(), FastDFAState(0,false)))
+    val alphabet = dfa.getInputAlphabet()
+    val newDFA =
+     new FastDFA(alphabet)
+    dfa
+      .getStates()
+      .foreach({ state =>
+        statesMap.put(state, newDFA.addState(dfa.isAccepting(state)))
+      })
+    newDFA.setInitial(statesMap(dfa.getInitialState()), true)
+    dfa
+      .getStates()
+      .foreach(
+        { s =>
+          for a <- alphabet do {
+            dfa
+              .getSuccessors(s, a)
+              .foreach(
+                { snext =>
+                  newDFA.setTransition(statesMap(s), a, statesMap(snext))
+                }
+              )
+          }
+        }
+      )
+    newDFA
+      .getStates()
+      .filter(!newDFA.isAccepting(_))
+      .foreach({ s =>
+        newDFA.removeAllTransitions(s)
+      })
     newDFA
   }
 }
