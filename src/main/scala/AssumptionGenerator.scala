@@ -315,9 +315,10 @@ class ConstraintManager(proofSkeleton : AGProofSkeleton){
           val initialModel = learner.computeModel()
           statistics.Timers.incrementTimer("rpni", System.nanoTime() - beginTime)
           newAssumptions.append(
-            oldAssumptions(i).copy(
-              dfa = DLTS.makePrefixClosed(initialModel, proofSkeleton.assumptionAlphabets(i), removeNonAcceptingStates = true),
-              alphabet = proofSkeleton.assumptionAlphabets(i)
+            DLTS(
+                oldAssumptions(i).name,
+                dfa = DLTS.makePrefixClosed(initialModel, proofSkeleton.assumptionAlphabets(i), removeNonAcceptingStates = true),
+                alphabet = proofSkeleton.assumptionAlphabets(i)
             )
           )
           this.positiveSamples(i) = positiveSamples(i)

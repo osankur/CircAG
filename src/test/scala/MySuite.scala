@@ -54,14 +54,9 @@ import de.learnlib.api.query.DefaultQuery;
 // For more information on writing tests, see
 // https://scalameta.org/munit/docs/getting-started.html
 
-import fr.irisa.circag.DLTS
-import fr.irisa.circag.Trace
-import fr.irisa.circag.tchecker.TCheckerAssumeGuaranteeOracles
-import fr.irisa.circag.tchecker.TCheckerAssumeGuaranteeVerifier
-import fr.irisa.circag.tchecker.AGContinue
-import fr.irisa.circag.tchecker.AGSuccess
+import fr.irisa.circag.{DLTS, Trace, HOA}
+import fr.irisa.circag.tchecker._
 import com.microsoft.z3.enumerations.Z3_lbool
-import fr.irisa.circag.tchecker.HOA
 
 
 class MySuite extends munit.FunSuite {
@@ -417,7 +412,9 @@ State: 1
 --END--
     """
     // val ltl2hoa = LTL2TChecker(Set[String]("0", "1"))
-    HOA.hoa2dlts(str2)
-    // HOA.hoa2dlts(automatonString)
+    // HOA.hoa2dlts(str2)
+    val nlts = HOA.toLTS(automatonString)
+    nlts.visualize()
+    System.out.println(TA.fromLTS(nlts,Some("_acc_")))
   }
 }
