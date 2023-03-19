@@ -321,6 +321,7 @@ class ConstraintManager(proofSkeleton : AGProofSkeleton){
                 alphabet = proofSkeleton.assumptionAlphabets(i)
             )
           )
+          System.out.println(s"${BLUE}Size of DFA ${newAssumptions(i).dfa.size()}...${RESET}")
           this.positiveSamples(i) = positiveSamples(i)
           this.negativeSamples(i) = negativeSamples(i)
         }

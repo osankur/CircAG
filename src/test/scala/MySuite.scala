@@ -259,7 +259,6 @@ class MySuite extends munit.FunSuite {
         .create()
   }
   test("mus-inline"){
-    // {a,c,d}*
     val inputs1: Alphabet[String] = Alphabets.fromList(List("req1","req2", "rel1", "rel2"))
     val gUser =
     AutomatonBuilders
@@ -334,6 +333,138 @@ class MySuite extends munit.FunSuite {
     }
   
   }
+
+  test("mus-inline-self"){
+    val inputs1: Alphabet[String] = Alphabets.fromList(List("req1","req2", "rel1", "rel2", "grant1", "grant2"))
+    val gUser =
+    AutomatonBuilders
+      .forDFA(FastDFA(inputs1))
+      .withInitial("i")
+      .from("i")
+      .on("req1")
+      .to("r1")
+      .from("i")
+      .on("req2")
+      .to("r2")
+      .from("r1")
+      .on("grant1")
+      .to("g1")
+      .from("r2")
+      .on("grant2")
+      .to("g2")
+      .from("g1")
+      .on("rel1")
+      .to("i")
+      .from("g2")
+      .on("rel2")
+      .to("i")
+      .withAccepting("i")
+      .withAccepting("r2")
+      .withAccepting("r1")
+      .withAccepting("g1")
+      .withAccepting("g2")
+     .create();
+  
+    val inputs2: Alphabet[String] = Alphabets.fromList(List("start1", "start2", "end1", "end2","req1","req2", "rel1", "rel2", "grant1", "grant2"))
+    val gSched =
+    AutomatonBuilders
+      .forDFA(FastDFA(inputs2))
+      .withInitial("q0")
+      .from("q0").on("req1").to("r1")
+      .from("r1").on("grant1").to("g1")
+      .from("g1").on("start1").to("s1")
+      .from("s1").on("end1").to("e1")
+      .from("e1").on("rel1").to("q0")
+
+      .from("g1").on("req2").to("r2")
+      .from("r1").on("req2").to("r2")
+      .from("s1").on("req2").to("r2")
+
+      .from("q0").on("req2").to("r2")
+      .from("r2").on("grant2").to("g2")
+      .from("g2").on("start2").to("s2")
+      .from("s2").on("end2").to("e2")
+      .from("e2").on("rel2").to("q0")
+
+      .from("g2").on("req1").to("r1")
+      .from("r2").on("req1").to("r1")
+      .from("s2").on("req1").to("r1")
+
+      .withAccepting("q0")
+      .withAccepting("r1")
+      .withAccepting("r2")
+      .withAccepting("g1")
+      .withAccepting("g2")
+      .withAccepting("s1")
+      .withAccepting("s2")
+      .withAccepting("e1")
+      .withAccepting("e2")
+
+      .create();
+
+    val err = "err"
+    val gMachine : FastDFA[String] =
+      AutomatonBuilders
+        .forDFA(FastDFA(Alphabets.fromList(List(err,"start1","start2","end1", "end2"))))
+        .withInitial("q0")
+        .from("q0")
+        .on("start1")
+        .to("q1")
+        .from("q0")
+        .on("start2")
+        .to("q2")
+        .from("q1")
+        .on("end1")
+        .to("q0")
+        .from("q2")
+        .on("end2")
+        .to("q0")
+        // error
+        .from("q1")
+        .on("start1")
+        .to("qerr")
+        .from("q1")
+        .on("start2")
+        .to("qerr")
+        .from("q2")
+        .on("start1")
+        .to("qerr")
+        .from("q2")
+        .on("start2")
+        .to("qerr")
+        .from("qerr")
+        .on("err")
+        .to("qerr")
+        .withAccepting("q0")
+        .withAccepting("q1")
+        .withAccepting("q2")
+        .withAccepting("qerr")
+        .create();
+    Visualization.visualize(gMachine, gMachine.getInputAlphabet())
+    Visualization.visualize(gUser, gUser.getInputAlphabet())
+    Visualization.visualize(gSched, gSched.getInputAlphabet())
+    val errDFA : FastDFA[String] =
+      AutomatonBuilders
+        .forDFA(FastDFA(Alphabets.fromList(List(err))))
+        .withInitial("q0")
+        .from("q0")
+        .on(err)
+        .to("q1")
+        .withAccepting("q0")
+        .create();
+
+    val ver = tchecker.TCheckerAssumeGuaranteeVerifier(Array(File("examples/ums/user.ta"), File("examples/ums/scheduler.ta"), File("examples/ums/machine.ta")), "err")
+    ver.assumptions(0) = DLTS("user", gUser, gUser.getInputAlphabet().toSet)
+    ver.assumptions(1) = DLTS("sched", gSched, gSched.getInputAlphabet().toSet)
+    ver.assumptions(2) = DLTS("machine", gMachine, gMachine.getInputAlphabet().toSet)
+    System.out.println(TCheckerAssumeGuaranteeOracles.checkFinalPremise(ver.assumptions.toList, DLTS("prop", errDFA, errDFA.getInputAlphabet().toSet)))
+    ver.applyAG() match {
+      case e : tchecker.AGSuccess => ()
+      case _ => throw Exception("AG Verification failed")
+    }
+
+  }
+
   test("rpni"){
     class Event(label : String, var id : Int) extends MutableNumericID{
       def getId() : Int = {
@@ -343,7 +474,6 @@ class MySuite extends munit.FunSuite {
         this.id = id
       }
     }
-    // val alph = List("c","a","b", "err").zipWithIndex.map(Event(_ : _*))
     val alph = Alphabets.fromList(List("c","a","b", "err"))
     val learner = BlueFringeRPNIDFA(alph)
     learner.addPositiveSamples(Buffer(List("a","b","c"), List("a","a","c")).map(Word.fromList(_)))
@@ -397,24 +527,22 @@ class AGBenchs extends munit.FunSuite {
         --END--
     """
     val str2 = """
-HOA: v1
-States: 2
-Start: 0
-acc-name: Rabin 1
-Acceptance: 2 (Fin(0) & Inf(1))
-AP: 2 "a" "b"
---BODY--
-State: 0 "a U b"   /* An example of named state */
-  [0 & !1] 0 {0}
-  [1] 1 {0}
-State: 1
-  [t] 1 {1}
---END--
+        HOA: v1
+        States: 2
+        Start: 0
+        acc-name: Rabin 1
+        Acceptance: 2 (Fin(0) & Inf(1))
+        AP: 2 "a" "b"
+        --BODY--
+        State: 0 "a U b"   /* An example of named state */
+          [0 & !1] 0 {0}
+          [1] 1 {0}
+        State: 1
+          [t] 1 {1}
+        --END--
     """
-    // val ltl2hoa = LTL2TChecker(Set[String]("0", "1"))
-    // HOA.hoa2dlts(str2)
     val nlts = HOA.toLTS(automatonString)
-    nlts.visualize()
+    // nlts.visualize()
     System.out.println(TA.fromLTS(nlts,Some("_acc_")))
   }
 }
