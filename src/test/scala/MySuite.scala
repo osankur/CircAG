@@ -7,7 +7,7 @@ import collection.convert.ImplicitConversions._
 import collection.mutable.Buffer
 import com.microsoft.z3._
 
-
+import net.automatalib.serialization.aut.AUTWriter
 import dk.brics.automaton.Automaton
 import dk.brics.automaton.RegExp
 
@@ -440,9 +440,9 @@ class MySuite extends munit.FunSuite {
         .withAccepting("q2")
         .withAccepting("qerr")
         .create();
-    Visualization.visualize(gMachine, gMachine.getInputAlphabet())
-    Visualization.visualize(gUser, gUser.getInputAlphabet())
-    Visualization.visualize(gSched, gSched.getInputAlphabet())
+    // Visualization.visualize(gMachine, gMachine.getInputAlphabet())
+    // Visualization.visualize(gUser, gUser.getInputAlphabet())
+    // Visualization.visualize(gSched, gSched.getInputAlphabet())
     val errDFA : FastDFA[String] =
       AutomatonBuilders
         .forDFA(FastDFA(Alphabets.fromList(List(err))))
@@ -452,7 +452,12 @@ class MySuite extends munit.FunSuite {
         .to("q1")
         .withAccepting("q0")
         .create();
-
+    // Visualization.visualize(errDFA, true)
+    assert(!errDFA.isPrunedSafety)
+    assert(errDFA.isSafety)
+    assert(errDFA.pruned.isPrunedSafety)
+    assert(gUser.isPrunedSafety)
+    assert(gUser.isSafety)
     val ver = tchecker.TCheckerAssumeGuaranteeVerifier(Array(File("examples/ums/user.ta"), File("examples/ums/scheduler.ta"), File("examples/ums/machine.ta")), "err")
     ver.assumptions(0) = DLTS("user", gUser, gUser.getInputAlphabet().toSet)
     ver.assumptions(1) = DLTS("sched", gSched, gSched.getInputAlphabet().toSet)
@@ -484,25 +489,26 @@ class MySuite extends munit.FunSuite {
 
   test("regexp"){
     // DLTS.fromRegExp("ocan", "@a@b+(@c|@d)*@e?")
-    // DLTS.fromRegExp("ocan", "(~(.*@start1[^@end1]*@start1.*)) & (~(.*@start2[^@end2]*@start2.*))")
-    // val r = new RegExp("ab+(c|d)*e?");
+    val dlts = DLTS.fromRegExp("ocan", "(~(.*@start1[^@end1]*@start1.*))&(~(.*@start2[^@end2]*@start2.*))")
+    // dlts.visualize()
+    // val r = new RegExp("~(ab+(c|d)*e?)");
+    val r = new RegExp("(a*b*c*)&(a*c*)");
+    // val r = new RegExp("(a*)&(a*)");
+    System.out.println(r)
     // val r = new RegExp("(~(.*a[^b]*a.*)) ")
-    // val a = r.toAutomaton();
-    // val ba = new BricsNFA(a);
-
-    // // Then, display a DOT representation of this automaton
+    val a = r.toAutomaton();
+    val ba = new BricsNFA(a);
+    // AUTWriter.writeAutomaton(ba, ba.getIn)
+    // Then, display a DOT representation of this automaton
     // Visualization.visualize(ba, true);
-    // val r = dk.brics.automaton.RegExp("~(ab)")
-    // val aut = r.toAutomaton()
+    // val r2 = dk.brics.automaton.RegExp("~(ab)")
+    // val aut = r2.toAutomaton()
     // val baut : AbstractBricsAutomaton = BricsNFA(aut)
     // Visualization.visualize(baut, true)
   }
 }
 
 class AGBenchs extends munit.FunSuite {
-  test("MUS") {
-    
-  }
   test("HOA"){
     val automatonString = """
         HOA: v1

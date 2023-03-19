@@ -211,7 +211,7 @@ object DLTS {
     val names = HashMap[Character, String]()
     val identifierReg = ".*?@([a-zA-Z0-9]+).*".r
 
-    var modifiedRegexp = regexp
+    var modifiedRegexp = regexp.replaceAll(" ", "")
     def addIdentifier() : Boolean = {
       modifiedRegexp match {
         case identifierReg(name) => 
@@ -259,6 +259,15 @@ object DLTS {
     DLTS(name, newDFA, alph.toSet)
   }
 
+  /**
+    * Make the DFA prefix-closed by removing all transitions from non-accepting states;
+    * and removing non-accepting states if removeNonAcceptingStates is true
+    *
+    * @param dfa
+    * @param alphabet
+    * @param removeNonAcceptingStates
+    * @return
+    */
   def makePrefixClosed(
       dfa: DFA[?, String],
       alphabet: Set[String],
@@ -348,7 +357,7 @@ extension(dfa : CompactDFA[?]){
       .foreach({ state =>
         statesMap.put(state, newDFA.addState(dfa.isAccepting(state)))
       })
-    newDFA.setInitial(statesMap(dfa.getInitialState()), true)
+    newDFA.setInitial(statesMap(dfa.getInitialState()), dfa.isAccepting(dfa.getInitialState()))
     dfa
       .getStates()
       .foreach(
@@ -370,6 +379,98 @@ extension(dfa : CompactDFA[?]){
       .foreach({ s =>
         newDFA.removeAllTransitions(s)
       })
+    newDFA
+  }
+}
+extension(dfa : FastDFA[?]){
+  /**
+    * Check if all states reachable from init are accepting
+    *
+    * @return
+    */
+  def isPrunedSafety : Boolean = {
+    def isAllReachableAccepting(s: FastDFAState): Boolean = {
+      val visited = Array.fill(dfa.size)(false)
+      def dfs(s: FastDFAState): Boolean = {
+        if !dfa.isAccepting(s) then {
+          false
+        } else if !visited(s.getId()) then {
+          visited(s.getId()) = true
+          // System.out.println(alphabet.toSeq.map(newDFA.getSuccessors(s, _)))
+          dfa.getInputAlphabet().toSeq
+            .map(dfa.getSuccessors(s, _).forall({ dfs(_) }))
+            .forall({ x => x })
+        } else {
+          true
+        }
+      }
+      dfs(s)
+    }
+    dfa.size == 0 || isAllReachableAccepting(dfa.getInitialState())
+  }
+
+  /**
+    * Check if non-accepting states are traps (i.e. no accepting state is reachable)
+    *
+    * @return
+    */
+  def isSafety : Boolean = {
+    def isAcceptingReachable(s: FastDFAState): Boolean = {
+      val visited = Array.fill(dfa.size)(false)
+      def checkAcceptingReachable(s: FastDFAState): Boolean = {
+        if dfa.isAccepting(s) then {
+          true
+        } else if !visited(s.getId()) then {
+          visited(s.getId()) = true
+          // System.out.println(alphabet.toSeq.map(newDFA.getSuccessors(s, _)))
+          dfa.getInputAlphabet().toSeq
+            .map(dfa.getSuccessors(s, _).exists({ checkAcceptingReachable(_) }))
+            .exists({ x => x })
+        } else {
+          false
+        }
+      }
+      checkAcceptingReachable(s)
+    }
+    dfa.size == 0 || 
+    dfa.getStates().filter(!dfa.isAccepting(_)).forall(!isAcceptingReachable(_))
+  }
+
+  /**
+    * Copy the DFA by removing all non-accepting states and associated transitions
+    *
+    * @return non-complete DFA equivalent to given DFA with all states accepting
+    */
+  def pruned = {    
+    val statesMap = HashMap((dfa.getInitialState(), FastDFAState(0,false)))
+    val alphabet = dfa.getInputAlphabet()
+    val newDFA =
+     new FastDFA(alphabet)
+    if dfa.isAccepting(dfa.getInitialState()) then {
+      dfa
+        .getStates()
+        .foreach({ state =>
+          if dfa.isAccepting(state) then 
+            statesMap.put(state, newDFA.addState(true))
+        })
+      newDFA.setInitial(statesMap(dfa.getInitialState()), true)
+      dfa
+        .getStates()
+        .foreach(
+          { s =>
+            for a <- alphabet do {
+              dfa
+                .getSuccessors(s, a)
+                .foreach(
+                  { snext =>
+                    if(dfa.isAccepting(s) && dfa.isAccepting(snext)) then
+                      newDFA.setTransition(statesMap(s), a, statesMap(snext))
+                  }
+                )
+            }
+          }
+        )
+    }
     newDFA
   }
 }

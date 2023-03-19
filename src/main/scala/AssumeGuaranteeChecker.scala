@@ -45,6 +45,7 @@ import fr.irisa.circag.configuration
 import fr.irisa.circag.statistics
 //import fr.irisa.circag.dfa.ConstraintManager
 import com.microsoft.z3
+import fr.irisa.circag.isPrunedSafety
 
 case class BadTimedAutomaton(msg: String) extends Exception(msg)
 case class FailedTAModelChecking(msg: String) extends Exception(msg)
@@ -71,6 +72,7 @@ object TCheckerAssumeGuaranteeOracles {
   def checkInductivePremise(ta : TA, assumptions : List[DLTS], guarantee : DLTS) : Option[Trace] =
     { 
       require(guarantee.alphabet.toSet.subsetOf(ta.alphabet))
+      require(assumptions.forall({dlts => dlts.dfa.isPrunedSafety}))
       statistics.Counters.incrementCounter("inductive-premise")
       if configuration.get().verbose then {
         System.out.println(s"Checking inductive premise for ${ta.systemName} whose assumption is over alphabet: ${guarantee.alphabet}")
