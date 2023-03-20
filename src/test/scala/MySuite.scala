@@ -547,8 +547,7 @@ class AGBenchs extends munit.FunSuite {
           [t] 1 {1}
         --END--
     """
-    val nlts = HOA.toLTS(automatonString)
-    // nlts.visualize()
-    System.out.println(TA.fromLTS(nlts,Some("_acc_")))
+    val nlts = NLTS.fromLTL("G~(a U b)")
+    nlts.visualize()
   }
 }

@@ -65,9 +65,9 @@ object TCheckerAssumeGuaranteeOracles {
     * @param assumptions List of complete DFAs
     * @param guarantee
     * @pre guarantee.alphabet <= lts.alphabet (checked by assertion)
-    * @pre All reachable states of the assumptions and ta are accepting (not checked by assertion)
-    * @pre assumptions do not contain the assumption for the process itself
-    * @return None if the premise holds; and Some(cexTrace) otherwise
+    * @pre All reachable states of the assumptions and ta are accepting (checked by assertion)
+    * @pre assumptions do not contain the assumption for the process itself (not checked)
+    * @return A counterexample to the premise: None if the premise holds; and Some(cexTrace) otherwise
     */
   def checkInductivePremise(ta : TA, assumptions : List[DLTS], guarantee : DLTS) : Option[Trace] =
     { 

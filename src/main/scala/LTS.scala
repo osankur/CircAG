@@ -5,17 +5,16 @@ import scala.collection.mutable.HashMap
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.immutable.Set
 import collection.convert.ImplicitConversions._
+import scala.sys.process._
+import java.nio.file.Files
 import java.io.ByteArrayInputStream
 import dk.brics.automaton
 import net.automatalib.brics.BricsNFA
 import net.automatalib.automata.fsa.MutableDFA
 import net.automatalib.automata.fsa.DFA;
 import net.automatalib.automata.fsa.impl.compact.CompactDFA;
-import net.automatalib.automata.fsa.impl.FastDFA
-import net.automatalib.automata.fsa.impl.FastNFA
-import net.automatalib.automata.fsa.impl.FastDFAState
-import net.automatalib.util.automata.fsa.DFAs
-import net.automatalib.util.automata.fsa.NFAs
+import net.automatalib.automata.fsa.impl.{FastDFA, FastNFA, FastDFAState}
+import net.automatalib.util.automata.fsa.{DFAs, NFAs}
 import net.automatalib.automata.fsa.impl.compact.CompactDFA;
 import net.automatalib.util.automata.builders.AutomatonBuilders;
 import net.automatalib.visualization.Visualization;
@@ -27,9 +26,7 @@ import jhoafparser.consumer.HOAConsumerPrint;
 import jhoafparser.parser.HOAFParser;
 import jhoafparser.parser.generated.ParseException;
 import jhoafparser.consumer.HOAConsumerStore
-import jhoafparser.ast.BooleanExpression
-import jhoafparser.ast.AtomLabel
-import jhoafparser.ast.AtomAcceptance
+import jhoafparser.ast.{AtomLabel, AtomAcceptance, BooleanExpression}
 
 import com.microsoft.z3
 
@@ -355,7 +352,9 @@ extension(dfa : CompactDFA[?]){
     dfa
       .getStates()
       .foreach({ state =>
-        statesMap.put(state, newDFA.addState(dfa.isAccepting(state)))
+        val newstate = newDFA.addState(dfa.isAccepting(state))
+        // System.out.println(newstate)
+        statesMap.put(state, newstate)
       })
     newDFA.setInitial(statesMap(dfa.getInitialState()), dfa.isAccepting(dfa.getInitialState()))
     dfa
@@ -373,12 +372,6 @@ extension(dfa : CompactDFA[?]){
           }
         }
       )
-    newDFA
-      .getStates()
-      .filter(!newDFA.isAccepting(_))
-      .foreach({ s =>
-        newDFA.removeAllTransitions(s)
-      })
     newDFA
   }
 }
@@ -473,4 +466,25 @@ extension(dfa : FastDFA[?]){
     }
     newDFA
   }
+}
+
+object NLTS {
+
+  def fromLTL(ltlString : String) : NLTS = {
+    def printToFile(f: java.io.File)(op: java.io.PrintWriter => Unit) = {
+      val p = new java.io.PrintWriter(f)
+      try { op(p) } finally { p.close() }
+    }    
+    val tmpFile = Files.createTempFile("tmp", ".ltl").toFile()
+    printToFile(tmpFile)({ (p : java.io.PrintWriter) => p.println(ltlString)})
+    val proc = s"cat ${tmpFile.getAbsolutePath()}" #| "ltl2tgba -B -"
+    val hoaString = proc.!!
+    // System.out.println(hoaString)
+    fromHOA(hoaString)
+  }
+  def fromHOA(automatonString : String) : NLTS = {
+      val nlts = HOA.toLTS(automatonString)
+      NLTS(nlts.name, nlts.dfa, nlts.alphabet)
+  }
+
 }
