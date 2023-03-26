@@ -54,7 +54,7 @@ trait AssumeGuaranteeOracles[LTS, Property] {
   def extendTrace(lts : LTS, word : Trace, extendedAlphabet : Set[String]) : Trace
 }
 
-object TCheckerAssumeGuaranteeOracles {
+object DFAAssumeGuaranteeVerifier {
   
   /**
     * ta |= lhs |> guarantee
@@ -435,7 +435,7 @@ class DFAAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useAlphab
     }
     try{
       for (ta,i) <- processes.zipWithIndex do {
-        TCheckerAssumeGuaranteeOracles.checkInductivePremise(ta, proofSkeleton.processDependencies(i).map(assumptions(_)).toList, assumptions(i))
+        DFAAssumeGuaranteeVerifier.checkInductivePremise(ta, proofSkeleton.processDependencies(i).map(assumptions(_)).toList, assumptions(i))
         match {
           case None =>
             System.out.println(s"${GREEN}Premise ${i} passed${RESET}")
@@ -457,7 +457,7 @@ class DFAAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useAlphab
             throw AGContinue()
         }
       }
-      TCheckerAssumeGuaranteeOracles.checkFinalPremise(proofSkeleton.propertyDependencies.map(assumptions(_)).toList, propertyDLTS)
+      DFAAssumeGuaranteeVerifier.checkFinalPremise(proofSkeleton.propertyDependencies.map(assumptions(_)).toList, propertyDLTS)
       match {
         case None => 
           System.out.println(s"${GREEN}Final premise succeeded${RESET}")
@@ -467,7 +467,7 @@ class DFAAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useAlphab
           System.out.println(s"${RED}Final premise failed with cex: ${cexTrace}${RESET}")
           // If all processes contain proj(cexTrace), then return false, otherwise continue
           for (ta,i) <- processes.zipWithIndex do {
-            TCheckerAssumeGuaranteeOracles.checkTraceMembership(ta, cexTrace.filter(assumptions(i).alphabet))
+            DFAAssumeGuaranteeVerifier.checkTraceMembership(ta, cexTrace.filter(assumptions(i).alphabet))
             match {
               case None => 
                 if configuration.get().verbose then
@@ -524,7 +524,7 @@ class DFAAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useAlphab
         // This cannot fail when cex == cexTrace, but can afterwards
         try {
           val processTraces = processes.zipWithIndex.map{
-            (p,i) => TCheckerAssumeGuaranteeOracles.checkTraceMembership(p, cex) match {
+            (p,i) => DFAAssumeGuaranteeVerifier.checkTraceMembership(p, cex) match {
               case Some(processTrace) => 
                 val interfaceTrace = processTrace.filter(interfaceAlphabet.contains(_))
                 if configuration.get().verbose then {

@@ -58,7 +58,7 @@ import fr.irisa.circag.{DLTS, Trace, HOA}
 import fr.irisa.circag.tchecker._
 import com.microsoft.z3.enumerations.Z3_lbool
 import fr.irisa.circag.tchecker.ltl
-import fr.irisa.circag.tchecker.TCheckerAssumeGuaranteeVerifier
+import fr.irisa.circag.tchecker.dfa._
 
 
 class MySuite extends munit.FunSuite {
@@ -173,8 +173,8 @@ class MySuite extends munit.FunSuite {
         .create();
 
     val dltss = List(DLTS("ass1p", dfa1, dfa1.getInputAlphabet().toSet), DLTS("ass2", dfa2, dfa2.getInputAlphabet().toSet))
-    val agv = tchecker.TCheckerAssumeGuaranteeVerifier(Array(File("examples/lts1.ta")), err)
-    val cex = tchecker.TCheckerAssumeGuaranteeOracles.checkInductivePremise(agv.processes(0), dltss, agv.propertyDLTS)
+    val agv = tchecker.dfa.DFAAssumeGuaranteeVerifier(Array(File("examples/lts1.ta")), err)
+    val cex = tchecker.dfa.DFAAssumeGuaranteeVerifier.checkInductivePremise(agv.processes(0), dltss, agv.propertyDLTS)
     assert(cex != None)
     //System.out.println(checker)
 
@@ -196,7 +196,7 @@ class MySuite extends munit.FunSuite {
       .create();
     
     val dltss_p = List(DLTS("ass1p", dfa1_p, dfa1_p.getInputAlphabet().toSet), DLTS("ass2", dfa2, dfa2.getInputAlphabet().toSet))
-    val checker_p = tchecker.TCheckerAssumeGuaranteeOracles.checkInductivePremise(agv.processes(0), dltss_p, agv.propertyDLTS)
+    val checker_p = tchecker.dfa.DFAAssumeGuaranteeVerifier.checkInductivePremise(agv.processes(0), dltss_p, agv.propertyDLTS)
     assertEquals(checker_p, None)
 
  
@@ -241,14 +241,14 @@ class MySuite extends munit.FunSuite {
       .withAccepting("q3")
       .create();
  
-    val cex3 = tchecker.TCheckerAssumeGuaranteeOracles.checkFinalPremise(DLTS("ass3", dfa3, dfa3.getInputAlphabet().toSet)::dltss_p, agv.propertyDLTS)
+    val cex3 = tchecker.dfa.DFAAssumeGuaranteeVerifier.checkFinalPremise(DLTS("ass3", dfa3, dfa3.getInputAlphabet().toSet)::dltss_p, agv.propertyDLTS)
     assertEquals(cex3, None)
 
-    assert(None == tchecker.TCheckerAssumeGuaranteeOracles.checkTraceMembership(agv.processes(0), List[String]("c", "c", "err", "err"), Some(Set[String]("c", "err"))))
-    assert(None != tchecker.TCheckerAssumeGuaranteeOracles.checkTraceMembership(agv.processes(0), List[String]("c", "c", "err"), Some(Set[String]("c", "err"))))
-    assert(None != tchecker.TCheckerAssumeGuaranteeOracles.checkTraceMembership(agv.processes(0), List[String]("c", "b", "err"), Some(Set[String]("c", "err"))))
+    assert(None == tchecker.dfa.DFAAssumeGuaranteeVerifier.checkTraceMembership(agv.processes(0), List[String]("c", "c", "err", "err"), Some(Set[String]("c", "err"))))
+    assert(None != tchecker.dfa.DFAAssumeGuaranteeVerifier.checkTraceMembership(agv.processes(0), List[String]("c", "c", "err"), Some(Set[String]("c", "err"))))
+    assert(None != tchecker.dfa.DFAAssumeGuaranteeVerifier.checkTraceMembership(agv.processes(0), List[String]("c", "b", "err"), Some(Set[String]("c", "err"))))
     // (checker_p.processes(0), dltss_p, DLTS("guarantee", errDFA, errDFA.getInputAlphabet()))
-    val cex4 = tchecker.TCheckerAssumeGuaranteeOracles.extendTrace(agv.processes(0), List[String]("c", "c", "err"), None)
+    val cex4 = tchecker.dfa.DFAAssumeGuaranteeVerifier.extendTrace(agv.processes(0), List[String]("c", "c", "err"), None)
     // System.out.println(s"CEX4: ${cex4}")
     assert(cex4
       == Some(List("c","a","c", "err")))
@@ -326,13 +326,13 @@ class MySuite extends munit.FunSuite {
         .withAccepting("q0")
         .create();
 
-    val ver = tchecker.TCheckerAssumeGuaranteeVerifier(Array(File("examples/ums/user.ta"), File("examples/ums/scheduler.ta"), File("examples/ums/machine.ta")), "err")
+    val ver = tchecker.dfa.DFAAssumeGuaranteeVerifier(Array(File("examples/ums/user.ta"), File("examples/ums/scheduler.ta"), File("examples/ums/machine.ta")), "err")
     ver.assumptions(0) = DLTS("user", gUser, gUser.getInputAlphabet().toSet)
     ver.assumptions(1) = DLTS("sched", gSched, gSched.getInputAlphabet().toSet)
     ver.assumptions(2) = DLTS("machine", gMachine, gMachine.getInputAlphabet().toSet)
-    System.out.println(TCheckerAssumeGuaranteeOracles.checkFinalPremise(ver.assumptions.toList, DLTS("prop", errDFA, errDFA.getInputAlphabet().toSet)))
+    System.out.println(dfa.DFAAssumeGuaranteeVerifier.checkFinalPremise(ver.assumptions.toList, DLTS("prop", errDFA, errDFA.getInputAlphabet().toSet)))
     ver.applyAG() match {
-      case e : tchecker.AGSuccess => ()
+      case e : tchecker.dfa.AGSuccess => ()
       case _ => throw Exception("AG Verification failed")
     }
   
@@ -462,13 +462,13 @@ class MySuite extends munit.FunSuite {
     assert(errDFA.pruned.isPrunedSafety)
     assert(gUser.isPrunedSafety)
     assert(gUser.isSafety)
-    val ver = tchecker.TCheckerAssumeGuaranteeVerifier(Array(File("examples/ums/user.ta"), File("examples/ums/scheduler.ta"), File("examples/ums/machine.ta")), "err")
+    val ver = tchecker.dfa.DFAAssumeGuaranteeVerifier(Array(File("examples/ums/user.ta"), File("examples/ums/scheduler.ta"), File("examples/ums/machine.ta")), "err")
     ver.assumptions(0) = DLTS("user", gUser, gUser.getInputAlphabet().toSet)
     ver.assumptions(1) = DLTS("sched", gSched, gSched.getInputAlphabet().toSet)
     ver.assumptions(2) = DLTS("machine", gMachine, gMachine.getInputAlphabet().toSet)
-    System.out.println(TCheckerAssumeGuaranteeOracles.checkFinalPremise(ver.assumptions.toList, DLTS("prop", errDFA, errDFA.getInputAlphabet().toSet)))
+    System.out.println(dfa.DFAAssumeGuaranteeVerifier.checkFinalPremise(ver.assumptions.toList, DLTS("prop", errDFA, errDFA.getInputAlphabet().toSet)))
     ver.applyAG() match {
-      case e : tchecker.AGSuccess => ()
+      case e : tchecker.dfa.AGSuccess => ()
       case _ => throw Exception("AG Verification failed")
     }
 
