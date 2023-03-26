@@ -1,4 +1,4 @@
-package fr.irisa.circag.tchecker
+package fr.irisa.circag.tchecker.dfa
 
 import java.util.HashMap
 import scala.collection.mutable.Buffer
@@ -365,5 +365,4 @@ class ConstraintManager(proofSkeleton : AGProofSkeleton){
       }
     }
   }
-
 }

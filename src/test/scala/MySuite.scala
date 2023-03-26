@@ -57,6 +57,8 @@ import de.learnlib.api.query.DefaultQuery;
 import fr.irisa.circag.{DLTS, Trace, HOA}
 import fr.irisa.circag.tchecker._
 import com.microsoft.z3.enumerations.Z3_lbool
+import fr.irisa.circag.tchecker.ltl
+import fr.irisa.circag.tchecker.TCheckerAssumeGuaranteeVerifier
 
 
 class MySuite extends munit.FunSuite {
@@ -172,8 +174,8 @@ class MySuite extends munit.FunSuite {
 
     val dltss = List(DLTS("ass1p", dfa1, dfa1.getInputAlphabet().toSet), DLTS("ass2", dfa2, dfa2.getInputAlphabet().toSet))
     val agv = tchecker.TCheckerAssumeGuaranteeVerifier(Array(File("examples/lts1.ta")), err)
-    val checker = tchecker.TCheckerAssumeGuaranteeOracles.checkInductivePremise(agv.processes(0), dltss, agv.propertyDLTS)
-    assert(checker != None)
+    val cex = tchecker.TCheckerAssumeGuaranteeOracles.checkInductivePremise(agv.processes(0), dltss, agv.propertyDLTS)
+    assert(cex != None)
     //System.out.println(checker)
 
     val dfa1_p: FastDFA[String] =
@@ -246,8 +248,10 @@ class MySuite extends munit.FunSuite {
     assert(None != tchecker.TCheckerAssumeGuaranteeOracles.checkTraceMembership(agv.processes(0), List[String]("c", "c", "err"), Some(Set[String]("c", "err"))))
     assert(None != tchecker.TCheckerAssumeGuaranteeOracles.checkTraceMembership(agv.processes(0), List[String]("c", "b", "err"), Some(Set[String]("c", "err"))))
     // (checker_p.processes(0), dltss_p, DLTS("guarantee", errDFA, errDFA.getInputAlphabet()))
-    assert(tchecker.TCheckerAssumeGuaranteeOracles.extendTrace(agv.processes(0), List[String]("c", "c", "err"), None)
-      == Some(List("c","c","a","err")))
+    val cex4 = tchecker.TCheckerAssumeGuaranteeOracles.extendTrace(agv.processes(0), List[String]("c", "c", "err"), None)
+    // System.out.println(s"CEX4: ${cex4}")
+    assert(cex4
+      == Some(List("c","a","c", "err")))
   }
   test("fromTrace"){
     val _ = DLTS.fromTrace(List("a","b","c","a"),Some(Set("a", "b")))
@@ -506,6 +510,26 @@ class MySuite extends munit.FunSuite {
     // val baut : AbstractBricsAutomaton = BricsNFA(aut)
     // Visualization.visualize(baut, true)
   }
+
+  test("ltl skeleton"){
+    val skeleton = ltl.AGProofSkeleton(3)
+    var processAlphabets = Buffer(Set[String]("a","b","c"), Set[String]("a","d"), Set[String]("d","e"))
+    var propertyAlphabet = Set[String]("e")
+    var commonAssumptionAlphabet = Set[String]("a","b","c","d","e")
+    skeleton.updateDefault(processAlphabets, propertyAlphabet, commonAssumptionAlphabet)
+    assert((0 until 3).forall(skeleton.isCircular(_)))
+    assert((0 until 3).forall({i => (0 until 3).forall({j => i == j || skeleton.processDependencies(i).contains(j)})}))
+
+    skeleton.setProcessDependencies(0,Set(1))
+    skeleton.setProcessDependencies(1,Set(0))
+    assert((0 to 1).forall(skeleton.isCircular(_)))
+    assert(!skeleton.isCircular(2))
+    // System.out.println("Process dependencies:")
+    // (0 until 3).foreach({i => System.out.println(skeleton.processDependencies(i))})
+    // System.out.println(s"Property deps: ${skeleton.propertyDependencies}")
+    // System.out.println("Circularity:")
+    // (0 until 3).foreach({i => System.out.println(skeleton.isCircular(i))})
+  }
 }
 
 class AGBenchs extends munit.FunSuite {
@@ -548,6 +572,6 @@ class AGBenchs extends munit.FunSuite {
         --END--
     """
     val nlts = NLTS.fromLTL("G~(a U b)")
-    nlts.visualize()
+    // nlts.visualize()
   }
 }

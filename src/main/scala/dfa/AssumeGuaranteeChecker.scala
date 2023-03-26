@@ -1,4 +1,4 @@
-package fr.irisa.circag.tchecker
+package fr.irisa.circag.tchecker.dfa
 
 import io.AnsiColor._
 
@@ -39,6 +39,7 @@ import net.automatalib.automata.fsa.impl.compact.CompactNFA;
 import net.automatalib.serialization.aut.AUTSerializationProvider 
 import net.automatalib.automata.fsa.NFA
 
+import fr.irisa.circag.tchecker._
 import fr.irisa.circag.DLTS
 import fr.irisa.circag.Trace
 import fr.irisa.circag.configuration
@@ -46,9 +47,6 @@ import fr.irisa.circag.statistics
 //import fr.irisa.circag.dfa.ConstraintManager
 import com.microsoft.z3
 import fr.irisa.circag.isPrunedSafety
-
-case class BadTimedAutomaton(msg: String) extends Exception(msg)
-case class FailedTAModelChecking(msg: String) extends Exception(msg)
 
 trait AssumeGuaranteeOracles[LTS, Property] {
   def checkInductivePremise(lts : LTS, assumptions : List[Property], guarantee : Property) : Option[Trace]
@@ -188,7 +186,7 @@ object TCheckerAssumeGuaranteeOracles {
 
     val certFile =
       Files.createTempFile(configuration.get().getTmpDirPath(), "circag-cert", ".cert").toFile()
-    val cmd = "tck-reach -a reach %s -l %s -c %s"
+    val cmd = "tck-reach -a reach %s -l %s -C symbolic -o %s"
             .format(modelFile.toString, label, certFile.toString)
 
     if configuration.get().verbose then
@@ -216,13 +214,6 @@ object TCheckerAssumeGuaranteeOracles {
 
 class AssumeGuaranteeVerifier[LTS, Property](ltss : List[LTS], property : Property) {
   var assumptions : Array[List[Int]] = Array()
-
-  def simplifyAssumptions() : Unit = {
-  }
-  def refineAssumptionAlphabet(trace : Trace) : Unit = {}
-  def check() : Option[Trace] = {
-    None
-  }
 }
 
 
@@ -312,7 +303,7 @@ class AGProofSkeleton {
   
 }
 
-class TCheckerAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useAlphabetRefinement : Boolean = false) {
+class DFAAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useAlphabetRefinement : Boolean = false) {
   val nbProcesses = ltsFiles.size
   val propertyAlphabet = Set[String](err)
   val processes = ltsFiles.map(TA.fromFile(_)).toBuffer

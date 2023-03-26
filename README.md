@@ -37,7 +37,12 @@ The synchronized product of the processes can be output to stdout as a single TC
     run product --lts "examples/ums/machine.ta,examples/ums/scheduler.ta,examples/ums/user.ta"
 
 ## Tasks
+- Write and test assumption generators: 
+  - DFA: SAT solver, other passive algs from learnlib, minimal separating automata etc.
+  - LTL: SAT-based, perhaps other passive ones
+- Write manual AG algorithm for LTL
+
+- Write simplified API for Scala notebook interface
+  
 - Write TChecker script to decompose a given model into components as separate files. Here processes accessing the same shared variables must be kept together. The minimal alphabet must be inferred as well for all components.
-- Write various assumption generators based on a SAT solver, passive algs from learnlib, minimal separating automata etc.
-- Connect to spot for omega-regular properties
 

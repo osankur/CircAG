@@ -20,6 +20,10 @@ import net.automatalib.automata.Automaton
 import net.automatalib.automata.fsa.FiniteStateAcceptor
 
 import fr.irisa.circag.{LTS, DLTS, Trace, HOA}
+
+case class BadTimedAutomaton(msg: String) extends Exception(msg)
+case class FailedTAModelChecking(msg: String) extends Exception(msg)
+
 /** 
  *  Light parser that reads TChecker TA from given file, and stores the tuple (events,
   * eventsOfProcesses, core, syncs) where 
