@@ -1,5 +1,8 @@
 package fr.irisa.circag.tchecker.dfa
 
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
+
 import io.AnsiColor._
 
 import collection.JavaConverters._
@@ -55,7 +58,7 @@ trait AssumeGuaranteeOracles[LTS, Property] {
 }
 
 object DFAAssumeGuaranteeVerifier {
-  
+  val logger = LoggerFactory.getLogger("CircAG")
   /**
     * ta |= lhs |> guarantee
     *
@@ -72,9 +75,7 @@ object DFAAssumeGuaranteeVerifier {
       require(guarantee.alphabet.toSet.subsetOf(ta.alphabet))
       require(assumptions.forall({dlts => dlts.dfa.isPrunedSafety}))
       statistics.Counters.incrementCounter("inductive-premise")
-      if configuration.get().verbose then {
-        System.out.println(s"Checking inductive premise for ${ta.systemName} whose assumption is over alphabet: ${guarantee.alphabet}")
-      }
+      logger.debug(s"Checking inductive premise for ${ta.systemName} whose assumption is over alphabet: ${guarantee.alphabet}")
       var beginTime = System.nanoTime()
       // require(assumptions.forall({dlts => !dlts.dfa.getStates().forall(_.isAccepting())}))
       val guaranteeAlphabet = Alphabets.fromList(guarantee.alphabet.toList)
@@ -165,8 +166,7 @@ object DFAAssumeGuaranteeVerifier {
     statistics.Counters.incrementCounter("trace-membership")
     val traceProcess = DLTS.fromTrace(word, alphabet)
     val productTA = TA.synchronousProduct(ta, List(traceProcess), Some("_accept_"))
-    val label = s"${traceProcess.name}_accept_"
-    this.checkReachability(productTA, label)
+    this.checkReachability(productTA, s"${traceProcess.name}_accept_")
   }
 
   /**

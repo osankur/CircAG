@@ -57,7 +57,7 @@ import de.learnlib.api.query.DefaultQuery;
 import fr.irisa.circag.{DLTS, Trace, HOA}
 import fr.irisa.circag.tchecker._
 import com.microsoft.z3.enumerations.Z3_lbool
-import fr.irisa.circag.tchecker.ltl
+import fr.irisa.circag.tchecker.ltl._
 import fr.irisa.circag.tchecker.dfa._
 
 
@@ -66,12 +66,12 @@ class MySuite extends munit.FunSuite {
     Global.ToggleWarningMessages(true);
     Log.open("test.log");
 
-    System.out.print("Z3 Major Version: ");
-    System.out.println(Version.getMajor());
-    System.out.print("Z3 Full Version: ");
-    System.out.println(Version.getString());
-    System.out.print("Z3 Full Version String: ");
-    System.out.println(Version.getFullVersion());
+    // System.out.print("Z3 Major Version: ");
+    // System.out.println(Version.getMajor());
+    // System.out.print("Z3 Full Version: ");
+    // System.out.println(Version.getString());
+    // System.out.print("Z3 Full Version String: ");
+    // System.out.println(Version.getFullVersion());
 
     val cfg = HashMap[String, String]()
     cfg.put("model", "true");
@@ -87,22 +87,24 @@ class MySuite extends munit.FunSuite {
     val e = ctx.mkEq(varx, ctx.mkNot(vary))
     val solver = ctx.mkSolver()
     solver.add(e)
-    System.out.println(e)
-    System.out.println(solver.check())
+    // System.out.println(e)
+    // System.out.println(solver.check())
+    assert(solver.check() == Status.SATISFIABLE)
     val m = solver.getModel()
-    System.out.println(m)
-    System.out.println("x:" + (m.evaluate(varx, false).getBoolValue() == Z3_lbool.Z3_L_TRUE))
-    System.out.println("y:" + (m.evaluate(vary, false).getBoolValue() == Z3_lbool.Z3_L_TRUE))
+    // System.out.println(m)
+    // System.out.println("x:" + (m.evaluate(varx, false).getBoolValue() == Z3_lbool.Z3_L_TRUE))
+    // System.out.println("y:" + (m.evaluate(vary, false).getBoolValue() == Z3_lbool.Z3_L_TRUE))
     val a = m.evaluate(varx, false)
-    System.out.println(a.getBoolValue().toInt())
+    // System.out.println(a.getBoolValue().toInt())
 
     val solver2 = ctx.mkSolver()
     solver2.add(ctx.mkAnd(varx,ctx.mkNot(varx)))
-    System.out.println(solver2.check())
-    System.out.println("CORE:")
-    for x <- solver2.getUnsatCore() do {
-      System.out.println(s"\t$x")
-    }
+    assert(solver2.check() == Status.UNSATISFIABLE)
+    // System.out.println(solver2.check())
+    // System.out.println("CORE:")
+    // for x <- solver2.getUnsatCore() do {
+    //   System.out.println(s"\t$x")
+    // }
     // val opt = ctx.mkOptimize()
 
     // // Set constraints.
@@ -197,9 +199,8 @@ class MySuite extends munit.FunSuite {
     
     val dltss_p = List(DLTS("ass1p", dfa1_p, dfa1_p.getInputAlphabet().toSet), DLTS("ass2", dfa2, dfa2.getInputAlphabet().toSet))
     val checker_p = tchecker.dfa.DFAAssumeGuaranteeVerifier.checkInductivePremise(agv.processes(0), dltss_p, agv.propertyDLTS)
+    System.out.println(s"inductive check 0: ${checker_p}")
     assertEquals(checker_p, None)
-
- 
  
     val dfa3 =
     AutomatonBuilders
@@ -330,7 +331,7 @@ class MySuite extends munit.FunSuite {
     ver.assumptions(0) = DLTS("user", gUser, gUser.getInputAlphabet().toSet)
     ver.assumptions(1) = DLTS("sched", gSched, gSched.getInputAlphabet().toSet)
     ver.assumptions(2) = DLTS("machine", gMachine, gMachine.getInputAlphabet().toSet)
-    System.out.println(dfa.DFAAssumeGuaranteeVerifier.checkFinalPremise(ver.assumptions.toList, DLTS("prop", errDFA, errDFA.getInputAlphabet().toSet)))
+    assert( None == dfa.DFAAssumeGuaranteeVerifier.checkFinalPremise(ver.assumptions.toList, DLTS("prop", errDFA, errDFA.getInputAlphabet().toSet)))
     ver.applyAG() match {
       case e : tchecker.dfa.AGSuccess => ()
       case _ => throw Exception("AG Verification failed")
@@ -466,7 +467,7 @@ class MySuite extends munit.FunSuite {
     ver.assumptions(0) = DLTS("user", gUser, gUser.getInputAlphabet().toSet)
     ver.assumptions(1) = DLTS("sched", gSched, gSched.getInputAlphabet().toSet)
     ver.assumptions(2) = DLTS("machine", gMachine, gMachine.getInputAlphabet().toSet)
-    System.out.println(dfa.DFAAssumeGuaranteeVerifier.checkFinalPremise(ver.assumptions.toList, DLTS("prop", errDFA, errDFA.getInputAlphabet().toSet)))
+    assert( None == dfa.DFAAssumeGuaranteeVerifier.checkFinalPremise(ver.assumptions.toList, DLTS("prop", errDFA, errDFA.getInputAlphabet().toSet)))
     ver.applyAG() match {
       case e : tchecker.dfa.AGSuccess => ()
       case _ => throw Exception("AG Verification failed")
@@ -498,7 +499,7 @@ class MySuite extends munit.FunSuite {
     // val r = new RegExp("~(ab+(c|d)*e?)");
     val r = new RegExp("(a*b*c*)&(a*c*)");
     // val r = new RegExp("(a*)&(a*)");
-    System.out.println(r)
+    // System.out.println(r)
     // val r = new RegExp("(~(.*a[^b]*a.*)) ")
     val a = r.toAutomaton();
     val ba = new BricsNFA(a);
@@ -516,7 +517,7 @@ class MySuite extends munit.FunSuite {
     var processAlphabets = Buffer(Set[String]("a","b","c"), Set[String]("a","d"), Set[String]("d","e"))
     var propertyAlphabet = Set[String]("e")
     var commonAssumptionAlphabet = Set[String]("a","b","c","d","e")
-    skeleton.updateDefault(processAlphabets, propertyAlphabet, commonAssumptionAlphabet)
+    skeleton.updateDefault(processAlphabets, propertyAlphabet)
     assert((0 until 3).forall(skeleton.isCircular(_)))
     assert((0 until 3).forall({i => (0 until 3).forall({j => i == j || skeleton.processDependencies(i).contains(j)})}))
 
@@ -574,4 +575,26 @@ class AGBenchs extends munit.FunSuite {
     val nlts = NLTS.fromLTL("G~(a U b)")
     // nlts.visualize()
   }
+  test("ltl parsing"){
+    val input = "X M \"a\" | ! \"b\" \"c\""
+    val ltl = LTL.fromLBT(input)
+    assert(!ltl.isUniversal)
+    val input2 = "G M \"a\" | ! \"b\" \"c\""
+    val ltl2 = LTL.fromLBT(input2)
+    assert(ltl2.isUniversal)
+    assert(LTL.fromSpot("G F (a & !b)").isUniversal)
+    // System.out.println(ltl)
+  }
+  test("ltl inductive check"){
+    val ass = List("G a", "G F b", "G !e")
+    val ltl = ass.map(LTL.fromSpot)
+    System.out.println(s"LTL assumptions: ${ltl}")
+    val tas = Array(File("examples/ums/user.ta"), File("examples/ums/scheduler.ta"), File("examples/ums/machine.ta"))
+    val checker = LTLAssumeGuaranteeVerifier(tas, LTLTrue())
+    ltl.zipWithIndex.foreach( (ltl,i) => checker.setAssumption(i, ltl))
+    checker.checkInductivePremise(0)
+    checker.checkInductivePremise(1)
+    checker.checkInductivePremise(2)
+  }
+
 }

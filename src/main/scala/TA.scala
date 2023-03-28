@@ -19,7 +19,7 @@ import java.io.ByteArrayInputStream
 import net.automatalib.automata.Automaton
 import net.automatalib.automata.fsa.FiniteStateAcceptor
 
-import fr.irisa.circag.{LTS, DLTS, Trace, HOA}
+import fr.irisa.circag._
 
 case class BadTimedAutomaton(msg: String) extends Exception(msg)
 case class FailedTAModelChecking(msg: String) extends Exception(msg)
@@ -178,9 +178,13 @@ object TA{
     ta.core = taB.toString()
     ta
   }
-    def fromHOA(automatonString : String, acceptingLabel : Option[String]) : TA = {
-        TA.fromLTS(HOA.toLTS(automatonString), acceptingLabel)
-    }
+
+  def fromHOA(automatonString : String, acceptingLabel : Option[String]) : TA = {
+      TA.fromLTS(HOA.toLTS(automatonString), acceptingLabel)
+  }
+  def fromLTL(ltlString : String, acceptingLabel : Option[String] = None) : TA = {
+      this.fromLTS(NLTS.fromLTL(ltlString), acceptingLabel)
+  }
 
   /**
     * @param ta timed automaton
@@ -257,5 +261,13 @@ object TA{
         case _ => ()
       })
       word.toList
+  }
+
+  /** 
+   *  Given the counterexample description output by TChecker, given as a list of lines,
+   *  return the trace, that is, the sequence of events in the alphabet encoded by the said counterexample.
+   */
+  def getLassoFromCounterExampleOutput(cexDescription : List[String], events : Set[String]) : Lasso = {
+    (List[String](),List[String]())
   }
 }

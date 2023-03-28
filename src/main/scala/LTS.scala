@@ -33,11 +33,11 @@ import com.microsoft.z3
 import fr.irisa.circag.statistics
 import fr.irisa.circag.configuration
 import fr.irisa.circag.Trace
-import fr.irisa.circag.DLTS
-
+import fr.irisa.circag.tchecker.ltl.{LTL, MalformedLTL}
 type Symbol = String
 type Alphabet = Set[Symbol]
 type Trace = List[String]
+type Lasso = (Trace, Trace)
 
 /** Deterministic LTS used as hypotheses and properties.
   *
@@ -73,7 +73,7 @@ object DLTS {
 
   /** Given (dfa, alphabet), compute the lifting of the dfa to extendedAlphabet
     * by copying it and adding self-loops at all states on symbols in
-    * extendedAlphabet \ alphabet.
+    * extendedAlphabet \\ alphabet.
     *
     * @param dfa
     * @param alphabet
@@ -477,10 +477,12 @@ object NLTS {
     }    
     val tmpFile = Files.createTempFile("tmp", ".ltl").toFile()
     printToFile(tmpFile)({ (p : java.io.PrintWriter) => p.println(ltlString)})
+    val output = StringBuffer()
     val proc = s"cat ${tmpFile.getAbsolutePath()}" #| "ltl2tgba -B -"
-    val hoaString = proc.!!
-    // System.out.println(hoaString)
-    fromHOA(hoaString)
+    if (proc.run(BasicIO(false,output,None)).exitValue != 0 ){
+      throw (MalformedLTL(output.toString()))
+    }
+    fromHOA(output.toString())
   }
   def fromHOA(automatonString : String) : NLTS = {
       val nlts = HOA.toLTS(automatonString)

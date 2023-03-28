@@ -7,7 +7,7 @@ resolvers += "mvrep" at "https://repo1.maven.org/maven2/"
 val jarName = "CircAG.jar"
 assembly/assemblyJarName := jarName
 //mainClass in (Compile, packageBin) := Some("fr.irisa.circag.Main")
-run / mainClass := Some("fr.irisa.circag.Main")
+// run / mainClass := Some("fr.irisa.circag.Main")
 assembly / mainClass := Some("fr.irisa.circag.Main")
 lazy val root = project
   .in(file("."))
@@ -26,8 +26,8 @@ lazy val root = project
 		"dk.brics" % "automaton" % "1.12-4",
 		"net.automatalib" % "automata-core" % "0.10.0",
 		"com.github.scopt" %% "scopt" % "4.1.0",
-		// "org.slf4j" % "slf4j-api" % "1.7.9",
-        // "org.slf4j" % "slf4j-simple" % "1.7.9",
+		"org.slf4j" % "slf4j-api" % "1.7.9",
+        "org.slf4j" % "slf4j-simple" % "1.7.9",
 		"tools.aqua" % "z3-turnkey" % "4.11.2",
 		"jhoafparser" % "jhoafparser" % "1.1.1"
   		)

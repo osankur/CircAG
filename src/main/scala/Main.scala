@@ -1,8 +1,8 @@
 package fr.irisa.circag
 
 import scala.sys.process._
-// import org.slf4j.Logger
-// import org.slf4j.LoggerFactory
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 import io.AnsiColor._
 import scopt.OParser
 import java.io._
@@ -23,6 +23,7 @@ import scala.annotation.static
 import com.microsoft.z3
 
 object Main {
+  val logger = LoggerFactory.getLogger("CircAG")
 
   def main(args: Array[String]): Unit = {
     val builder = OParser.builder[Configuration]
@@ -98,9 +99,8 @@ object Main {
               }
               
             case _ => 
-              System.err.println("Unknown command")
+              logger.error("Unknown command")
           }
-          // checker.checkInductivePremises(checker.processes(0),)
         }
     } catch {
       case e => 
@@ -108,10 +108,10 @@ object Main {
         System.err.println(e.getMessage())
     }
     val totalTime = (System.nanoTime() - beginTime)/1e9d
-    System.out.println(s"Counters: ${statistics.Counters.toString}")
-    System.out.println(s"Timers: ${statistics.Timers}")
-    System.out.println(s"Total: ${totalTime}")
-    System.out.println(s"Relative times: ${statistics.Timers.timer.map({(k,value) => f"${k}:${(value/1e7d)/totalTime}%.2f%%"}).toString()}")
+    logger.info(s"Counters: ${statistics.Counters.toString}")
+    logger.info(s"Timers: ${statistics.Timers}")
+    logger.info(s"Total: ${totalTime}")
+    logger.info(s"Relative times: ${statistics.Timers.timer.map({(k,value) => f"${k}:${(value/1e7d)/totalTime}%.2f%%"}).toString()}")
   }
 }
 
