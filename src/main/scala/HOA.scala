@@ -132,8 +132,7 @@ object HOA {
                 assert(edge.getConjSuccessors().size == 1)
                 val succ = edge.getConjSuccessors().head
                 val labels = singletonValuations(edge.getLabelExpr())
-                System.out.println(s"${s} -> $succ: ${labels}")
-                 
+                // System.out.println(s"${s} -> $succ: ${labels}")
                 for sigma <- labels do {
                     nfa.addTransition(s, alphabet(sigma).toString, newStates(succ))
                 }

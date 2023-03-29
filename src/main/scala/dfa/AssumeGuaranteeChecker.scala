@@ -39,15 +39,15 @@ import net.automatalib.words._
 import net.automatalib.util.automata.builders.AutomatonBuilders;
 import net.automatalib.visualization.Visualization;
 import net.automatalib.automata.fsa.impl.compact.CompactNFA;
-import net.automatalib.serialization.aut.AUTSerializationProvider 
 import net.automatalib.automata.fsa.NFA
+import net.automatalib.serialization.aut.AUTWriter 
 
 import fr.irisa.circag.tchecker._
 import fr.irisa.circag.DLTS
 import fr.irisa.circag.Trace
 import fr.irisa.circag.configuration
 import fr.irisa.circag.statistics
-//import fr.irisa.circag.dfa.ConstraintManager
+
 import com.microsoft.z3
 import fr.irisa.circag.isPrunedSafety
 
@@ -83,9 +83,15 @@ object DFAAssumeGuaranteeVerifier {
         s"_comp_${guarantee.name}", 
         DFAs.complement(guarantee.dfa, guaranteeAlphabet, FastDFA(guaranteeAlphabet)),
         guarantee.alphabet)
-      // Visualization.visualize(compG.dfa, Alphabets.fromList(guarantee.alphabet.toList))
       val liftedAssumptions = 
         assumptions.map({ass => DLTS.liftAndStripNonAccepting(ass, ta.alphabet, Some(s"lifted_${ass.name}"))})
+      // for (ass, liftedAss) <- assumptions.zip(liftedAssumptions) do {
+      //   System.out.println(s"Displaying assumption ${ass.name} ")
+      //   AUTWriter.writeAutomaton(ass.dfa, Alphabets.fromList(ass.alphabet.toList), System.out)
+      //   System.out.println(s"Displaying lifted assumption ${ass.name} ")
+      //   AUTWriter.writeAutomaton(liftedAss.dfa, Alphabets.fromList(liftedAss.alphabet.toList), System.out)
+      // }
+      
       val premiseProduct = TA.synchronousProduct(ta, compG::liftedAssumptions, Some("_accept_"))
       statistics.Timers.incrementTimer("inductive-premise", System.nanoTime() - beginTime)
       checkReachability(premiseProduct, s"${compG.name}_accept_")
@@ -392,7 +398,6 @@ class DFAAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useAlphab
   def updateConstraints(process : Int, cexTrace : Trace) : Unit = {
     val prefixInP = propertyDLTS.dfa.accepts(cexTrace.dropRight(1).filter(propertyAlphabet.contains(_)))
     val traceInP = propertyDLTS.dfa.accepts(cexTrace.filter(propertyAlphabet.contains(_)))
-    constraintManager.addConstraint(process, cexTrace, 34)
     if (prefixInP && !traceInP) then {
       System.out.println("Case 22")
       constraintManager.addConstraint(process, cexTrace, 22)
@@ -444,11 +449,11 @@ class DFAAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useAlphab
             System.out.println(s"${RED}Premise ${i} failed with cex: ${cexTrace}${RESET}")
             if (configuration.cex(i).contains(cexTrace)) then {
               for j <- proofSkeleton.processDependencies(i) do {
-                System.out.println(s"Dependency: Assumption for ${processes(j).systemName}")
-                // assumptions(j).visualize()
+                System.out.println(s"Dependency: Assumption ${assumptions(j).name} for ${processes(j).systemName}")
+                assumptions(j).visualize()
               }
               System.out.println(s"Assumption for this process ${processes(i).systemName}")
-              // assumptions(i).visualize()
+              assumptions(i).visualize()
               throw Exception("Repeated CEX")
             } else {
               configuration.cex(i) = configuration.cex(i) + cexTrace
@@ -610,6 +615,10 @@ class DFAAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useAlphab
         case Some(newAss) => this.assumptions = newAss
         case None => throw Exception("Not possible")
       }
+      // for (ass,i) <- assumptions.zipWithIndex do {
+      //   System.out.println(s"${ass.name} for process ${processes(i).systemName} alphabet: ${ass.alphabet}")
+      //   ass.visualize()
+      // }
       currentState = this.applyAG() 
       currentState match {
         case AGFalse(cex) =>

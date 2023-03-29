@@ -216,13 +216,13 @@ class AGProofSkeleton(nbProcesses: Int) {
 }
 
 object LTLAssumeGuaranteeVerifier {
-  private val logger = LoggerFactory.getLogger("AGProofSkeleton")
+  private val logger = LoggerFactory.getLogger("CircAG")
 
   def checkLTL(ta: TA, ltlFormula: LTL): Option[Lasso] = {
     val accLabel = "_ltl_accept_"
     val ta_ltl = TA.fromLTL(ltlFormula.toString, Some(accLabel))
     val productTA = TA.synchronousProduct(List(ta, ta_ltl))
-    checkBuchi(productTA, accLabel)
+    checkBuchi(productTA, s"${ta_ltl.systemName}${accLabel}")
   }
 
   /** Check the reachability of a state labeled by label. Return such a trace if

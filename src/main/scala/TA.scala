@@ -246,13 +246,17 @@ object TA{
    */
   def getTraceFromCounterExampleOutput(cexDescription : List[String], events : Set[String]) : Trace = {
       val word = ListBuffer[String]()
-      val regEdge = ".*->.*vedge=\"<(.*)>\".*".r
+      val edges = HashMap[Int,(String,Int)]()
+      val parents = HashMap[Int,Int]()
+      val regEdge = "\\s*([0-9]+)\\s*->\\s*([0-9]+).*vedge=\"<(.*)>\".*".r
       cexDescription.foreach({
-        case regEdge(syncList) => 
+        case regEdge(src,tgt,syncList) => 
           val singleSync = syncList.split(",").map(_.split("@")(1)).toSet.intersect(events)
           if (singleSync.size == 1){
             val a = singleSync.toArray
-            word.append(a(0))
+            // word.append(a(0))
+            edges.put(src.trim.toInt, (a(0), tgt.trim.toInt))
+            parents.put(tgt.trim.toInt, src.trim.toInt)
           } else if (singleSync.size > 1){
             throw FailedTAModelChecking("The counterexample trace has a transition with syncs containing more than one letter of the alphabet:\n" + syncList)
           } else {
@@ -260,6 +264,20 @@ object TA{
           }
         case _ => ()
       })
+      if edges.size > 0 then {
+        val root =
+            var node = parents.keys().nextElement()
+            while ( parents.contains(node)) do {
+              node = parents(node)
+            }
+            node
+        var node = root
+        while( edges.contains(node)) do {
+          val (sigma, next) = edges(node)
+          word.append(sigma)
+          node = next
+        }
+      }
       word.toList
   }
 

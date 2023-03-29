@@ -129,9 +129,9 @@ class ConstraintManager(proofSkeleton : AGProofSkeleton){
             z3ctx.mkOr(lhs : _*),
             varOfIndexedTrace(process, trace))
         if configuration.get().verbose then {
-          System.out.println(s"Adding constraint ${newConstr}")
+          System.out.println(s"New constraint ${newConstr}")
         }
-        constraint = z3ctx.mkAnd(constraint, newConstr)
+        // constraint = z3ctx.mkAnd(constraint, newConstr)
         solver.add(newConstr)
         incrementalTraces.append((process, trace, constraintType))
       case 22 =>
@@ -154,7 +154,7 @@ class ConstraintManager(proofSkeleton : AGProofSkeleton){
             )
           )
         val newConstr = z3ctx.mkOr(term1, term2)
-        constraint = z3ctx.mkAnd(constraint, newConstr)
+        // constraint = z3ctx.mkAnd(constraint, newConstr)
         solver.add(newConstr)
         if configuration.get().verbose then 
           System.out.println(s"Adding ${newConstr}")
@@ -181,7 +181,7 @@ class ConstraintManager(proofSkeleton : AGProofSkeleton){
         if configuration.get().verbose then 
           System.out.println(s"Adding ${z3ctx.mkOr(term1, term2)}")
         val newConstraint = z3ctx.mkOr(term1, term2)
-        constraint = z3ctx.mkAnd(constraint, newConstraint)
+        // constraint = z3ctx.mkAnd(constraint, newConstraint)
         solver.add(newConstraint)
         incrementalTraces.append((process, trace, constraintType))
     }
@@ -252,6 +252,14 @@ class ConstraintManager(proofSkeleton : AGProofSkeleton){
     // }
     // solver.add(constraint)
     // solver.add(theoryConstraints)
+    // System.out.println("Z3 constraints:")
+    // for v <- this.toIndexedTraces.keys do {
+    //   System.out.println(s"(declare-const ${v} Bool)")
+    // }
+    // for ass <- solver.getAssertions() do {
+    //   System.out.println(s"(assert ${ass})")
+    // }
+    // System.out.println(samples)
     if(solver.check() == z3.Status.UNSATISFIABLE){
       if configuration.get().verbose then {
         System.out.println(constraint)
@@ -267,7 +275,7 @@ class ConstraintManager(proofSkeleton : AGProofSkeleton){
         (isamples, i) => 
           isamples.foreach({
             (trace, v) =>
-              m.evaluate(v, false).getBoolValue() match {
+              m.evaluate(v, true).getBoolValue() match {
                 case z3.enumerations.Z3_lbool.Z3_L_TRUE =>
                   val sample = trace.filter(proofSkeleton.assumptionAlphabets(i))
                   // Add all prefixes
@@ -277,7 +285,11 @@ class ConstraintManager(proofSkeleton : AGProofSkeleton){
                 case z3.enumerations.Z3_lbool.Z3_L_FALSE => 
                   negativeSamples(i).add(trace.filter(proofSkeleton.assumptionAlphabets(i)))
                 case _ =>
-                  ()
+                  val sample = trace.filter(proofSkeleton.assumptionAlphabets(i))
+                  // Add all prefixes
+                  for k <- 0 to sample.size do {
+                    positiveSamples(i).add(sample.dropRight(k))
+                  }
               }
           })
       })
@@ -285,11 +297,11 @@ class ConstraintManager(proofSkeleton : AGProofSkeleton){
       val newAssumptions = Buffer[DLTS]()
       for i <- 0 until nbProcesses do {
         if configuration.get().verbose then {
-          System.out.println(s"#POS(${i}) = ${positiveSamples(i).size}:\n")
+          System.out.println(s"#POS(${i}) = ${positiveSamples(i).size}:")
           for w <- positiveSamples(i) do {
             System.out.println(s"\t${w}")
           }
-          System.out.println(s"#NEG(${i}) = ${negativeSamples(i).size}:\n")
+          System.out.println(s"#NEG(${i}) = ${negativeSamples(i).size}:")
           for w <- negativeSamples(i) do {
             System.out.println(s"\t${w}")
           }

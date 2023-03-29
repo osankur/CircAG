@@ -1,5 +1,9 @@
 package fr.irisa.circag
 
+
+import net.automatalib.serialization.saf.SAFSerializationDFA 
+import net.automatalib.serialization.aut.AUTWriter 
+
 import java.util.HashMap
 import java.io.File
 import collection.JavaConverters._
@@ -10,6 +14,7 @@ import com.microsoft.z3._
 import net.automatalib.serialization.aut.AUTWriter
 import dk.brics.automaton.Automaton
 import dk.brics.automaton.RegExp
+import net.automatalib.serialization.taf.writer.TAFWriter 
 
 import de.learnlib.algorithms.rpni.BlueFringeRPNIDFA
 import de.learnlib.api.oracle._
@@ -60,12 +65,30 @@ import com.microsoft.z3.enumerations.Z3_lbool
 import fr.irisa.circag.tchecker.ltl._
 import fr.irisa.circag.tchecker.dfa._
 
-
-class MySuite extends munit.FunSuite {
+class TATests extends munit.FunSuite {
+  test("CEX Parsing from TChecker"){
+    // get cex from tchecker
+  }
+  test("CEX Parsing from String"){
+    val tck_output = """digraph _premise_lts1 {
+      0 [initial="true", intval="", labels="lifted_g_1_accept_,lifted_g_2_accept_", vloc="<q1,qs0,qs0,qs0>", zone="()"]
+      1 [intval="", labels="lifted_g_1_accept_,lifted_g_2_accept_", vloc="<q1,qs2,qs0,qs0>", zone="()"]
+      2 [intval="", labels="lifted_g_1_accept_,lifted_g_2_accept_", vloc="<q2,qs2,qs2,qs0>", zone="()"]
+      3 [final="true", intval="", labels="_comp_g_0_accept_,lifted_g_1_accept_,lifted_g_2_accept_", vloc="<q2,qs3,qs2,qs0>", zone="()"]
+      4 [intval="", labels="lifted_g_1_accept_,lifted_g_2_accept_", vloc="<q3,qs2,qs2,qs0>", zone="()"]
+      0 -> 2 [guard="", reset="", src_invariant="", tgt_invariant="", vedge="<lts1@a,_comp_g_0@a,lifted_g_1@a,lifted_g_2@a>"]
+      1 -> 3 [guard="", reset="", src_invariant="", tgt_invariant="", vedge="<lts1@a,_comp_g_0@a,lifted_g_1@a,lifted_g_2@a>"]
+      2 -> 4 [guard="", reset="", src_invariant="", tgt_invariant="", vedge="<lts1@b,lifted_g_1@b,lifted_g_2@b>"]
+      4 -> 1 [guard="", reset="", src_invariant="", tgt_invariant="", vedge="<lts1@c,_comp_g_0@c,lifted_g_1@c,lifted_g_2@c>"]
+    }""""
+    val trace = TA.getTraceFromCounterExampleOutput(tck_output.split("\n").toList, Set("a","b","c"))
+    assert(trace == List("a","b","c","a"))
+  }
+}
+class DFAAAG extends munit.FunSuite {
   test("SAT Solver") {
-    Global.ToggleWarningMessages(true);
-    Log.open("test.log");
-
+    // Global.ToggleWarningMessages(true);
+    // Log.open("test.log");
     // System.out.print("Z3 Major Version: ");
     // System.out.println(Version.getMajor());
     // System.out.print("Z3 Full Version: ");
@@ -95,34 +118,9 @@ class MySuite extends munit.FunSuite {
     // System.out.println("x:" + (m.evaluate(varx, false).getBoolValue() == Z3_lbool.Z3_L_TRUE))
     // System.out.println("y:" + (m.evaluate(vary, false).getBoolValue() == Z3_lbool.Z3_L_TRUE))
     val a = m.evaluate(varx, false)
-    // System.out.println(a.getBoolValue().toInt())
-
     val solver2 = ctx.mkSolver()
     solver2.add(ctx.mkAnd(varx,ctx.mkNot(varx)))
     assert(solver2.check() == Status.UNSATISFIABLE)
-    // System.out.println(solver2.check())
-    // System.out.println("CORE:")
-    // for x <- solver2.getUnsatCore() do {
-    //   System.out.println(s"\t$x")
-    // }
-    // val opt = ctx.mkOptimize()
-
-    // // Set constraints.
-    // val xExp : IntExpr = ctx.mkIntConst("x")
-    // val yExp : IntExpr = ctx.mkIntConst("y")
-
-    // opt.Add(ctx.mkEq(ctx.mkAdd(xExp, yExp), ctx.mkInt(10)),
-    //         ctx.mkGe(xExp, ctx.mkInt(0)),
-    //         ctx.mkGe(yExp, ctx.mkInt(0)))
-
-    // // Set objectives.
-    // val mx : Optimize.Handle[IntSort] = opt.MkMaximize(xExp)
-    // val my : Optimize.Handle[IntSort] = opt.MkMaximize(yExp)
-
-    // System.out.println(opt.Check())
-    // System.out.println(mx)
-    // System.out.println(my)
-    /* be kind to dispose manually and not wait for the GC. */
     ctx.close();      
   }
 
@@ -596,5 +594,31 @@ class AGBenchs extends munit.FunSuite {
     checker.checkInductivePremise(1)
     checker.checkInductivePremise(2)
   }
-
+  test("dfa to string"){
+   val inputs2: Alphabet[String] = Alphabets.fromList(List("start1", "start2", "end1", "end2"))
+   val aut : DFA[java.lang.Integer, String] =
+      AutomatonBuilders
+        .newDFA(inputs2)
+        // .forDFA(FastDFA(inputs2))
+        .withInitial("q0")
+        .from("q0")
+        .on("start1")
+        .to("q1")
+        .from("q1")
+        .on("end1")
+        .to("q0")
+        .from("q0")
+        .on("start2")
+        .to("q2")
+        .from("q2")
+        .on("end2")
+        .to("q0")
+        .withAccepting("q0")
+        .withAccepting("q1")
+        .withAccepting("q2")
+        .create();
+    // System.out.println(TAFWriter.dfaToString(gSched, inputs2))
+    // SAFSerializationDFA.getInstance().writeModel(System.out, aut, inputs2)
+    // System.out.println(AUTWriter.writeAutomaton(aut, inputs2, System.out))
+  }
 }
