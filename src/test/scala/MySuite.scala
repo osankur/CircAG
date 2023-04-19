@@ -59,7 +59,7 @@ import de.learnlib.api.query.DefaultQuery;
 // For more information on writing tests, see
 // https://scalameta.org/munit/docs/getting-started.html
 
-import fr.irisa.circag.{DLTS, Trace, HOA}
+import fr.irisa.circag.{DLTS, Trace}
 import fr.irisa.circag.tchecker._
 import com.microsoft.z3.enumerations.Z3_lbool
 import fr.irisa.circag.tchecker.ltl._
@@ -197,7 +197,7 @@ class DFAAAG extends munit.FunSuite {
     
     val dltss_p = List(DLTS("ass1p", dfa1_p, dfa1_p.getInputAlphabet().toSet), DLTS("ass2", dfa2, dfa2.getInputAlphabet().toSet))
     val checker_p = tchecker.dfa.DFAAssumeGuaranteeVerifier.checkInductivePremise(agv.processes(0), dltss_p, agv.propertyDLTS)
-    System.out.println(s"inductive check 0: ${checker_p}")
+    // System.out.println(s"inductive check 0: ${checker_p}")
     assertEquals(checker_p, None)
  
     val dfa3 =
@@ -253,13 +253,10 @@ class DFAAAG extends munit.FunSuite {
       == Some(List("c","a","c", "err")))
   }
   test("fromTrace"){
-    val _ = DLTS.fromTrace(List("a","b","c","a"),Some(Set("a", "b")))
-    val dfa3: CompactDFA[String] =
-      AutomatonBuilders
-        .newDFA(Alphabets.fromList(List("a")))
-        .withInitial("q0")
-        .withAccepting("q0")
-        .create()
+    val dlts = DLTS.fromTrace(List("a","b","c","a"))
+    assert(dlts.dfa.accepts(List("a","b","c", "a")))
+    assert(!dlts.dfa.accepts(List("a","a","a")))
+    assert(!dlts.dfa.accepts(List("a","b","b")))
   }
   test("mus-inline"){
     val inputs1: Alphabet[String] = Alphabets.fromList(List("req1","req2", "rel1", "rel2"))
@@ -501,6 +498,8 @@ class DFAAAG extends munit.FunSuite {
     // val r = new RegExp("(~(.*a[^b]*a.*)) ")
     val a = r.toAutomaton();
     val ba = new BricsNFA(a);
+    assert(ba.accepts(List[Character]('a','c')))
+    assert(!ba.accepts(List[Character]('a','b', 'c')))
     // AUTWriter.writeAutomaton(ba, ba.getIn)
     // Then, display a DOT representation of this automaton
     // Visualization.visualize(ba, true);
@@ -529,9 +528,36 @@ class DFAAAG extends munit.FunSuite {
     // System.out.println("Circularity:")
     // (0 until 3).foreach({i => System.out.println(skeleton.isCircular(i))})
   }
+  test("dfa to string"){
+   val inputs2: Alphabet[String] = Alphabets.fromList(List("start1", "start2", "end1", "end2"))
+   val aut : DFA[java.lang.Integer, String] =
+      AutomatonBuilders
+        .newDFA(inputs2)
+        // .forDFA(FastDFA(inputs2))
+        .withInitial("q0")
+        .from("q0")
+        .on("start1")
+        .to("q1")
+        .from("q1")
+        .on("end1")
+        .to("q0")
+        .from("q0")
+        .on("start2")
+        .to("q2")
+        .from("q2")
+        .on("end2")
+        .to("q0")
+        .withAccepting("q0")
+        .withAccepting("q1")
+        .withAccepting("q2")
+        .create();
+    // System.out.println(TAFWriter.dfaToString(gSched, inputs2))
+    // SAFSerializationDFA.getInstance().writeModel(System.out, aut, inputs2)
+    // System.out.println(AUTWriter.writeAutomaton(aut, inputs2, System.out))
+  }  
 }
 
-class AGBenchs extends munit.FunSuite {
+class LTLAGTests extends munit.FunSuite {
   test("HOA"){
     val automatonString = """
         HOA: v1
@@ -570,8 +596,9 @@ class AGBenchs extends munit.FunSuite {
           [t] 1 {1}
         --END--
     """
-    val nlts = NLTS.fromLTL("G~(a U b)")
-    // nlts.visualize()
+    val nlts = NLTS.fromLTL("G~(a U b)", Some(Set("a","b")))
+    assert(nlts.dfa.accepts(List("a","a")))
+    assert(!nlts.dfa.accepts(List("a","a","b")))
   }
   test("ltl parsing"){
     val input = "X M \"a\" | ! \"b\" \"c\""
@@ -580,45 +607,35 @@ class AGBenchs extends munit.FunSuite {
     val input2 = "G M \"a\" | ! \"b\" \"c\""
     val ltl2 = LTL.fromLBT(input2)
     assert(ltl2.isUniversal)
-    assert(LTL.fromSpot("G F (a & !b)").isUniversal)
+    assert(LTL.fromString("G F (a & !b)").isUniversal)
     // System.out.println(ltl)
   }
-  test("ltl inductive check"){
-    val ass = List("G a", "G F b", "G !e")
-    val ltl = ass.map(LTL.fromSpot)
+  test("ltl asynchronous transformation"){
+    val alph = Set("a","b")
+    val falph = Or(Atomic("a"),Atomic("b"))
+    val fnalph = And(Not(Atomic("a")),Not(Atomic("b")))
+    val f1 = LTL.asynchronousTransform(Atomic("b"),alph)
+    assert(f1 == U(And(Not(Atomic("a")),Not(Atomic("b"))), Atomic("b")))
+    val f2 = LTL.asynchronousTransform(X(Atomic("b")),alph)
+    val expected2 = U(fnalph, And(falph, X(U(fnalph, And(falph, f1)))))
+    assert(f2 == expected2)
+    val f3 = LTL.asynchronousTransform(U(Atomic("b"), X(Atomic("b"))), alph)
+    val expected3 = U(Implies(falph, f1), And(falph, f2))
+    assert(f3 == expected3)
+  }
+  test("ltl inductive check: ltl-toy1"){
+    val ass = List("G ((a -> X !a) & !c)", "G F b")
+    val ltl = ass.map(LTL.fromString)
     System.out.println(s"LTL assumptions: ${ltl}")
-    val tas = Array(File("examples/ums/user.ta"), File("examples/ums/scheduler.ta"), File("examples/ums/machine.ta"))
-    val checker = LTLAssumeGuaranteeVerifier(tas, LTLTrue())
+    val tas = Array(File("examples/ltl-toy1/a.ta"), File("examples/ltl-toy1/b.ta"))
+    val checker = LTLAssumeGuaranteeVerifier(tas, G(F(Atomic("a"))))
     ltl.zipWithIndex.foreach( (ltl,i) => checker.setAssumption(i, ltl))
-    checker.checkInductivePremise(0)
-    checker.checkInductivePremise(1)
-    checker.checkInductivePremise(2)
+    // Without instantaneous assumptions, the proof fails:
+    assert(checker.checkInductivePremise(0) != None)
+    // By making an instantaneous assumption, the proof passes:
+    checker.proofSkeleton.setProcessInstantaneousDependencies(0, Set(1))
+    assert(checker.checkInductivePremise(0) == None)
   }
-  test("dfa to string"){
-   val inputs2: Alphabet[String] = Alphabets.fromList(List("start1", "start2", "end1", "end2"))
-   val aut : DFA[java.lang.Integer, String] =
-      AutomatonBuilders
-        .newDFA(inputs2)
-        // .forDFA(FastDFA(inputs2))
-        .withInitial("q0")
-        .from("q0")
-        .on("start1")
-        .to("q1")
-        .from("q1")
-        .on("end1")
-        .to("q0")
-        .from("q0")
-        .on("start2")
-        .to("q2")
-        .from("q2")
-        .on("end2")
-        .to("q0")
-        .withAccepting("q0")
-        .withAccepting("q1")
-        .withAccepting("q2")
-        .create();
-    // System.out.println(TAFWriter.dfaToString(gSched, inputs2))
-    // SAFSerializationDFA.getInstance().writeModel(System.out, aut, inputs2)
-    // System.out.println(AUTWriter.writeAutomaton(aut, inputs2, System.out))
-  }
+
+ 
 }

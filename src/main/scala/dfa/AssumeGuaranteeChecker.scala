@@ -170,7 +170,7 @@ object DFAAssumeGuaranteeVerifier {
     */
   def checkTraceMembership(ta : TA, word : Trace, alphabet : Option[Set[String]] = None) : Option[Trace] = {  
     statistics.Counters.incrementCounter("trace-membership")
-    val traceProcess = DLTS.fromTrace(word, alphabet)
+    val traceProcess = DLTS.fromTrace(word)
     val productTA = TA.synchronousProduct(ta, List(traceProcess), Some("_accept_"))
     this.checkReachability(productTA, s"${traceProcess.name}_accept_")
   }

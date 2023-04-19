@@ -31,7 +31,7 @@ case class Configuration(
     ltsFiles : Array[File] = Array[File](),
     err: String = "",
     ltsFormat: FSM.FSMFormat = FSM.FSMFormat.TCheckerTA,
-    keepTmpFiles: Boolean = false,
+    keepTmpFiles: Boolean = true,
     verbose: Boolean = false,
     verbose_MembershipQueries : Boolean = false,
     tmpDirName: String = "/tmp/circag",

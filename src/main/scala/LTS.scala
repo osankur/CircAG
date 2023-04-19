@@ -13,7 +13,7 @@ import net.automatalib.brics.BricsNFA
 import net.automatalib.automata.fsa.MutableDFA
 import net.automatalib.automata.fsa.DFA;
 import net.automatalib.automata.fsa.impl.compact.CompactDFA;
-import net.automatalib.automata.fsa.impl.{FastDFA, FastNFA, FastDFAState}
+import net.automatalib.automata.fsa.impl.{FastDFA, FastNFA, FastDFAState, FastNFAState}
 import net.automatalib.util.automata.fsa.{DFAs, NFAs}
 import net.automatalib.automata.fsa.impl.compact.CompactDFA;
 import net.automatalib.util.automata.builders.AutomatonBuilders;
@@ -22,11 +22,14 @@ import net.automatalib.words.Alphabet;
 import net.automatalib.words.impl.Alphabets;
 import net.automatalib.automata.Automaton
 import net.automatalib.automata.fsa.FiniteStateAcceptor
+
 import jhoafparser.consumer.HOAConsumerPrint;
 import jhoafparser.parser.HOAFParser;
 import jhoafparser.parser.generated.ParseException;
 import jhoafparser.consumer.HOAConsumerStore
-import jhoafparser.ast.{AtomLabel, AtomAcceptance, BooleanExpression}
+import jhoafparser.ast.BooleanExpression
+import jhoafparser.ast.AtomLabel
+import jhoafparser.ast.AtomAcceptance
 
 import com.microsoft.z3
 
@@ -170,8 +173,8 @@ object DLTS {
     * @param projectionAlphabet
     * @return
     */
-  def fromTrace(trace: Trace, alphabet : Option[Set[String]] = None): DLTS = {
-    val alph = alphabet.getOrElse(trace.toSet) | trace.toSet
+  def fromTrace(trace: Trace): DLTS = {
+    val alph = trace.toSet
     val dfa = FastDFA(Alphabets.fromList(alph.toList))
     val newStates = Buffer[FastDFAState]()
     newStates.append(dfa.addState())
@@ -198,8 +201,8 @@ object DLTS {
     * @param acceptingLabel
     * @return
     */
-  def fromHOA(automatonString : String) : DLTS = {
-      val nlts = HOA.toLTS(automatonString)
+  def fromHOA(automatonString : String, fullAlphabet : Option[Alphabet]) : DLTS = {
+      val nlts = NLTS.fromHOA(automatonString, fullAlphabet : Option[Alphabet])
       DLTS(nlts.name, NFAs.determinize(nlts.dfa, nlts.dfa.getInputAlphabet()).toFastDFA, nlts.alphabet)
   }
 
@@ -470,7 +473,7 @@ extension(dfa : FastDFA[?]){
 
 object NLTS {
 
-  def fromLTL(ltlString : String) : NLTS = {
+  def fromLTL(ltlString : String, fullAlphabet : Option[Alphabet]) : NLTS = {
     def printToFile(f: java.io.File)(op: java.io.PrintWriter => Unit) = {
       val p = new java.io.PrintWriter(f)
       try { op(p) } finally { p.close() }
@@ -482,11 +485,159 @@ object NLTS {
     if (proc.run(BasicIO(false,output,None)).exitValue != 0 ){
       throw (MalformedLTL(output.toString()))
     }
-    fromHOA(output.toString())
+    // System.out.println(output)
+    fromHOA(output.toString(), fullAlphabet : Option[Alphabet])
   }
-  def fromHOA(automatonString : String) : NLTS = {
-      val nlts = HOA.toLTS(automatonString)
-      NLTS(nlts.name, nlts.dfa, nlts.alphabet)
+  /**
+  * Build a NLTS from the string description of a Buchi automaton in the HOA format.
+  * The HOA format has atomic predicates (AP), and the transitions are labeled by propositional formulas on AP.
+  * We build here NLTS where each transition is labeled by a single symbol.
+  * We thus enumerate all singular valuations, and keep only the transitions for these; moreover, for any transition
+  * labeled by a valuation assigning false to all APs, we add transitions labeled by fullAlphabet \\ APs.
+  *
+  * @param automatonString description of the Buchi automaton in the HOA format
+  * @param fullAlphabet the set of events on which to build the Buchi automaton; if None,
+  * then the alphabet of NLTS is the set of symbols that appear in the automaton description.
+  * @pre if fullAphabet is not None, then it contains all symbols that appear in the given automaton
+  * @return
+  */
+  def fromHOA(automatonString : String, fullAlphabet : Option[Alphabet]) : NLTS = {
+        val toVars = HashMap[Int, z3.BoolExpr]()
+        val toSymbol = HashMap[z3.BoolExpr, Int]()
+        val ctx = {
+            val cfg = HashMap[String, String]()
+            cfg.put("model", "true")
+            z3.Context(cfg);
+        }
+        val solver = ctx.mkSolver()
+        def varOfSymbol(symbol : Int) : z3.BoolExpr = {
+            if toVars.contains(symbol) then {
+                toVars(symbol)
+            } else {
+                val v = ctx.mkBoolConst(ctx.mkSymbol(symbol))
+                toVars.put(symbol, v)
+                toSymbol.put(v, symbol)
+                v
+            }
+        }
+        def toZ3(expr : BooleanExpression[AtomLabel]) : z3.BoolExpr = {
+            expr.getType() match {
+                case BooleanExpression.Type.EXP_TRUE => ctx.mkTrue()
+                case BooleanExpression.Type.EXP_FALSE => ctx.mkFalse()
+                case BooleanExpression.Type.EXP_ATOM => 
+                    varOfSymbol(expr.getAtom().getAPIndex())
+                case BooleanExpression.Type.EXP_AND => 
+                    ctx.mkAnd(toZ3(expr.getLeft()), toZ3(expr.getRight()))
+                case BooleanExpression.Type.EXP_OR => 
+                    ctx.mkOr(toZ3(expr.getLeft()), toZ3(expr.getRight()))
+                case BooleanExpression.Type.EXP_NOT => 
+                    ctx.mkNot(toZ3(expr.getLeft()))
+            }
+        }
+        // Register all APs and add pairwise disjointness constraint to solver
+        def singletonValuations(expr : BooleanExpression[AtomLabel]) : Seq[Int] = {
+            var constraints = toZ3(expr)
+            var labels = Buffer[Int]()
+            solver.push()
+            solver.add(constraints)
+            for (sigma, v) <- toVars do {
+                solver.push()
+                solver.add(v)
+                if solver.check() == z3.Status.SATISFIABLE then {
+                    labels.append(sigma)
+                }
+                solver.pop()
+            }
+            solver.pop()
+            labels.toSeq
+        }
+        // Determine whether the valuation false satisfies the expression
+        def hasFalseValuation(expr : BooleanExpression[AtomLabel]) : Boolean = {
+            solver.push()
+            var exp = ctx.mkTrue()
+            for (sigma, v) <- toVars do {
+                solver.add(ctx.mkNot(v))
+            }
+            solver.add(toZ3(expr))
+            val yes = solver.check() == z3.Status.SATISFIABLE
+            solver.pop()
+            yes
+        }
+
+        val autFactory = HOAConsumerStore()
+        HOAFParser.parseHOA(new ByteArrayInputStream(automatonString.getBytes()), autFactory);
+        val aut = autFactory.getStoredAutomaton()
+        val header = aut.getStoredHeader()
+        // Symbols of the given fullAlphabet that do not appear as APs in the HOA automaton
+        val alphabet = header.getAPs().toBuffer
+        val complementaryAlphabet = fullAlphabet match {
+            case None => Set[String]()
+            case Some(symbols) => 
+                if symbols.containsAll(alphabet) then {
+                     symbols.diff(alphabet.toSet)
+                } else {
+                    throw Exception(s"Cannot build NLTS from HOA: Not all atomic predicates of HOA are contained in the given alphabet: ${header.getAPs()} not contained in ${symbols}")
+                }
+        }
+        // System.out.println(s"Full Alphabet: ${fullAlphabet}")
+        // System.out.println(s"alphabet: ${alphabet}")
+        // System.out.println(s"Complementary alphabet: ${complementaryAlphabet}")
+        if(aut.hasEdgesImplicit()) then {
+            throw Exception("Implicit edges are not accepted")
+        }
+        if(aut.hasUniversalBranching()) then {
+            throw Exception("Universal branching is not accepted")
+        }
+        val accCondition = header.getAcceptanceCondition()
+        if(accCondition.getType() != BooleanExpression.Type.EXP_ATOM ) then {
+            throw Exception("Only Buchi acceptance is accepted")
+        }
+        if(accCondition.getAtom().getType() != AtomAcceptance.Type.TEMPORAL_INF) then{
+            throw Exception("Only Buchi acceptance is accepted")
+        }
+        for (sigma,i) <- alphabet.zipWithIndex do {
+            varOfSymbol(i)
+        }
+        for a <- 0 until header.getAPs().size
+            b <- 0 until header.getAPs().size do {
+                if a != b then {
+                    solver.add(ctx.mkAnd(ctx.mkNot(ctx.mkAnd(toVars(a), toVars(b)))))
+                }
+            }
+            
+        // val nfa = FastNFA(Alphabets.fromList(header.getAPs()))
+        val nfaAlphabet = header.getAPs().toSet | complementaryAlphabet
+        val nfa = FastNFA(Alphabets.fromList(nfaAlphabet.toList))
+        val newStates = Buffer[FastNFAState]()
+        for i <- 1 to aut.getNumberOfStates() do {
+            newStates.append(nfa.addState())
+        }
+        header.getStartStates().foreach(_.foreach({ i => nfa.setInitial(newStates(i), true) }))
+        for (s,i) <- newStates.zipWithIndex do {
+            if(aut.getStoredState(i).getAccSignature() != null) then
+                nfa.setAccepting(s, true)
+            for edge <- aut.getEdgesWithLabel(i) do {
+                assert(edge.getConjSuccessors().size == 1)
+                val succ = edge.getConjSuccessors().head
+                val labels = singletonValuations(edge.getLabelExpr())
+                
+                for sigma <- labels do {
+                    nfa.addTransition(s, alphabet(sigma).toString, newStates(succ))
+                }                
+                if (hasFalseValuation(edge.getLabelExpr())) then {
+                    // System.out.println(s"${s} -> s$succ: ${edge.getLabelExpr()}. has false as a valuation")
+                    for sigma <- complementaryAlphabet do {
+                        // System.out.println(s"Adding ${(s, sigma, newStates(succ))}")
+                        nfa.addTransition(s, sigma, newStates(succ))
+                    }
+                }
+            }
+        }
+        val nlts = NLTS("_hoa_", nfa, nfa.getInputAlphabet().toSet)
+        if header.getName() != null then 
+          nlts.comments = header.getName()
+        // System.out.println(nlts.alphabet)
+        nlts
   }
 
 }

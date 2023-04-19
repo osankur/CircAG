@@ -1,0 +1,15 @@
+system:A
+
+event:a
+event:b
+event:c
+event:d 
+process:A
+location:A:l1{initial:}
+location:A:l2
+location:A:l3
+
+edge:A:l1:l2:a
+edge:A:l2:l1:b
+edge:A:l2:l3:a
+edge:A:l3:l3:c

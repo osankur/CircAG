@@ -179,11 +179,18 @@ object TA{
     ta
   }
 
-  def fromHOA(automatonString : String, acceptingLabel : Option[String]) : TA = {
-      TA.fromLTS(HOA.toLTS(automatonString), acceptingLabel)
+  /**
+   * Build TA from the NLTS corresponding to the Buchi automaton given in the HOA format.
+   * @param automatonString the Buchi automaton description in the HOA format
+   * @param fullAlphabet if not None, an alphabet containing all symbols that appear in automatonString
+   * @param acceptingLabel if not None, the label of the accepting states in the produced TA
+   */
+  def fromHOA(automatonString : String, fullAlphabet : Option[Alphabet], acceptingLabel : Option[String]) : TA = {
+    TA.fromLTS(NLTS.fromHOA(automatonString, fullAlphabet), acceptingLabel)
   }
-  def fromLTL(ltlString : String, acceptingLabel : Option[String] = None) : TA = {
-      this.fromLTS(NLTS.fromLTL(ltlString), acceptingLabel)
+  def fromLTL(ltlString : String, fullAlphabet : Option[Alphabet], acceptingLabel : Option[String] = None) : TA = {
+    val nlts = NLTS.fromLTL(ltlString, fullAlphabet)
+    this.fromLTS(nlts, acceptingLabel)
   }
 
   /**

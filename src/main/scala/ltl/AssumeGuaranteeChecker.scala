@@ -21,7 +21,6 @@ import net.automatalib.util.automata.fsa.DFAs
 import net.automatalib.util.automata.fsa.NFAs
 import net.automatalib.automata.fsa.impl.compact.CompactDFA;
 import net.automatalib.util.automata.builders.AutomatonBuilders;
-import net.automatalib.visualization.Visualization;
 import net.automatalib.words.impl.Alphabets;
 
 import com.microsoft.z3
@@ -38,21 +37,18 @@ import fr.irisa.circag.tchecker.{TA, FailedTAModelChecking}
   *   - infeasible valuations such as "a & b" appear in transitions; that's OK
   *   - Make sure acceptance condition in on states (state-acc), and it is Buchi
   *     (not gen Buchi)
-  *   - Make sure there are no implicit labels Translate this to a TChecker
+  *   - Make sure there are no implicit labels 
+  *   - Translate this to a TChecker
   *     automaton by using Z3 to explicitly enumerate all valuations in which a
   *     single event is true
   *   - Discard other transitions Make the product with the process TA by
   *     synchronizing on common events Use tck-liveness to model check
   */
 
-// class LTLFormula(ltlString: String){
-//   override def toString: String = ltlString
-// }
-
-// case class UniversalLTLFormula(matrix: String) extends LTLFormula(s"G(${matrix})") {
-//   override def toString: String = super.toString
-// }
-
+/**
+ * Malformed proof skeleton, for instance, when instantaneous dependencies are circular.
+ */
+class BadProofSkeleton(msg : String) extends Exception(msg)
 
 /** Proof skeleton that stores the dependencies of the proof of the assumption
   * of each process, the alphabets of these assumptions and that of the
@@ -61,7 +57,7 @@ import fr.irisa.circag.tchecker.{TA, FailedTAModelChecking}
   * The skeleton can either be used in default mode using the update function:
   * in this case, a common assumption alphabet is specified and this will update
   * the skeleton to add dependencies between all pairs of processes that share a
-  * common symbol or with a thid process. Alternatively, one can set manually
+  * common symbol or with a third process. Alternatively, one can set manually
   * all these fields. In all cases, the circularity information is kept up to
   * date automatically.
   *
@@ -71,14 +67,20 @@ import fr.irisa.circag.tchecker.{TA, FailedTAModelChecking}
 class AGProofSkeleton(nbProcesses: Int) {
   private val logger = LoggerFactory.getLogger("AGProofSkeleton")
 
-  /** For each process, the set of process indices on which the proof depends
+  /** For each process, the set of process indices on which the proof inductively depends
     */
   private var _processDependencies =
+    Buffer.tabulate(nbProcesses)(_ => (0 to nbProcesses).toSet)
+
+  /** For each process, the set of process indices on which the proof depends both inductively and instantaneously: this relation must be acyclic
+   * Furthermore, we maintain the invariant _processInstantaneousDependencies(i) is a subset of _processDependencies
+    */
+  private var _processInstantaneousDependencies =
     Buffer.tabulate(nbProcesses)(_ => Set[Int]())
 
   /** The set of process indices on which the proof of the property depends
     */
-  private var _propertyDependencies = Set[Int]()
+  private var _propertyDependencies = (0 to nbProcesses).toSet
 
   /** Alphabet of the property
     */
@@ -93,13 +95,20 @@ class AGProofSkeleton(nbProcesses: Int) {
     */
   private var _isCircular = Buffer.tabulate(nbProcesses)(_ => false)
 
+  def processInstantaneousDependencies(i: Int) = _processInstantaneousDependencies(i)
   def processDependencies(i: Int) = _processDependencies(i)
   def assumptionAlphabet(i: Int) = _assumptionAlphabets(i)
   def isCircular(i: Int) = _isCircular(i)
   def propertyDependencies = _propertyDependencies
+  def propertyAlphabet = _propertyAlphabet
 
   def setProcessDependencies(i: Int, deps: Set[Int]) =
     _processDependencies(i) = deps
+    updateCircularity()
+
+  def setProcessInstantaneousDependencies(i: Int, deps: Set[Int]) =
+    _processInstantaneousDependencies(i) = deps
+    _processDependencies(i) |= deps
     updateCircularity()
 
   def setPropertyDependencies(deps: Set[Int]) =
@@ -119,11 +128,10 @@ class AGProofSkeleton(nbProcesses: Int) {
     updateDefault(assumptionAlphabets, propertyAlphabet)
   }
 
-  /** Update the proof skeleton from the given common assumption alphabet: the
-    * alphabet of the assumption of each process becomes the intersection of the
-    * propertyAlphabet with the process alphabet. Moreover, process dependencies
+  /** Update the proof skeleton from the given assumption and property alphabets.
+    * Process dependencies
     * are updated so as to include exactly all processes with which the
-    * assumptions share a common aymbol, or recursively, there is a third
+    * assumptions share a common symbol, or recursively, there is a third
     * process whose assumption shares a common symbol with each etc. Circularity
     * information is updated.
     *
@@ -200,18 +208,27 @@ class AGProofSkeleton(nbProcesses: Int) {
   }
 
   private def updateCircularity(): Unit = {
-    def isOnACycle(pr: Int): Boolean = {
+    def isOnACycle(deps : Buffer[Set[Int]], pr: Int): Boolean = {
       val visited = Buffer.tabulate(nbProcesses)(_ => false)
       def visit(i: Int): Boolean = {
         if !visited(i) then {
           visited(i) = true
-          _processDependencies(i).exists(visit(_))
+          deps(i).exists(visit(_))
         } else if i == pr then true
         else false
       }
       visit(pr)
     }
-    _isCircular = Buffer.tabulate(nbProcesses)(isOnACycle)
+    _isCircular = Buffer.tabulate(nbProcesses)(isOnACycle(_processDependencies,_))
+    val circularInstDeps = 
+      Buffer.tabulate(nbProcesses)(isOnACycle(_processInstantaneousDependencies,_))
+      .zipWithIndex
+      .filter( (b,i) => b )
+      .map(_._2)
+    if (circularInstDeps.size > 0 ) then {
+      throw BadProofSkeleton(s"The following instantaneous dependencies are on a cycle: ${circularInstDeps}")
+    }
+
   }
 }
 
@@ -220,7 +237,8 @@ object LTLAssumeGuaranteeVerifier {
 
   def checkLTL(ta: TA, ltlFormula: LTL): Option[Lasso] = {
     val accLabel = "_ltl_accept_"
-    val ta_ltl = TA.fromLTL(ltlFormula.toString, Some(accLabel))
+    val fullAlphabet = ta.alphabet | ltlFormula.alphabet
+    val ta_ltl = TA.fromLTL(ltlFormula.toString, Some(fullAlphabet), Some(accLabel))
     val productTA = TA.synchronousProduct(List(ta, ta_ltl))
     checkBuchi(productTA, s"${ta_ltl.systemName}${accLabel}")
   }
@@ -267,6 +285,7 @@ object LTLAssumeGuaranteeVerifier {
       certFile.delete()
     }
     statistics.Timers.incrementTimer("tchecker", System.nanoTime() - beginTime)
+    System.out.println(output)
     if (output.contains("CYCLE false")) then {
       None
     } else if (output.contains("CYCLE true")) then {
@@ -281,9 +300,7 @@ class LTLAssumeGuaranteeVerifier(ltsFiles: Array[File], property: LTL) {
   private val logger = LTLAssumeGuaranteeVerifier.logger
 
   val nbProcesses = ltsFiles.size
-  val propertyAlphabet = {
-    NLTS.fromLTL(property.toString).alphabet
-  }
+  val propertyAlphabet = property.alphabet
   private val processes = ltsFiles.map(TA.fromFile(_)).toBuffer
   private val assumptions : Buffer[LTL] = Buffer.fill(nbProcesses)(LTLTrue())
 
@@ -313,7 +330,6 @@ class LTLAssumeGuaranteeVerifier(ltsFiles: Array[File], property: LTL) {
     proofSkeleton.setAssumptionAlphabet(i, alpha)
   })
 
-
   def setAssumption(processID : Int, formula: LTL) : Unit = {
     assumptions(processID) = formula
   }
@@ -325,41 +341,60 @@ class LTLAssumeGuaranteeVerifier(ltsFiles: Array[File], property: LTL) {
     val dependencies = proofSkeleton.processDependencies(processID)
     if proofSkeleton.isCircular(processID) then {
       val guarantee_matrix = guarantee match {
-        case G(matrix) => matrix
+        case G(matrix) => 
+          LTL.asynchronousTransform(matrix, proofSkeleton.assumptionAlphabet(processID))
         case _ => throw Exception(s"Guarantee formula for circular process ${processID} must be universal: ${guarantee}")
       }
       val circularDeps = dependencies.filter(proofSkeleton.isCircular)
       val noncircularDeps = dependencies.filterNot(proofSkeleton.isCircular)
-      // Check for CEX of the form: /\_i noncircular-assumptions(i) /\ (/\_i circular-assumptions(i) U !guarantee)
+      // Check for CEX with an LTL formula of the form: /\_i noncircular-assumptions(i) /\ (/\_i circular-assumptions(i) U !guarantee)
+      def getAsynchronousMatrix(i : Int) : LTL = {
+          assumptions(i) match {
+            case G(subf) => 
+              val x = LTL.asynchronousTransform(subf, proofSkeleton.assumptionAlphabet(i))
+              // System.out.println(s"Transformed subf: ${x}")
+              x
+            case _ =>
+              throw Exception(
+                s"Non-universal dependency for circular assumption ${processID}"
+              )
+          }
+      }
+      val assumptionMatrices = 
+        circularDeps
+        .toSeq
+        .map(getAsynchronousMatrix)
       val circularLHS = 
-        val matrices = 
-          circularDeps
-          .toSeq
-          .map({ i =>
-            assumptions(i) match {
-              case G(subf) => subf
-              case _ =>
-                throw Exception(
-                  s"Non-universal dependency for circular assumption ${processID}"
-                )
-            }
-          })
-        if matrices.size == 0 then LTLTrue()
-        else matrices.tail.fold(matrices.head)({ (a,b) => And(a,b)})
+        if assumptionMatrices.size == 0 then LTLTrue()
+        else assumptionMatrices.tail.fold(assumptionMatrices.head)({ (a,b) => And(a,b)})
       val noncircularLHS =
         val formulas = 
           noncircularDeps
-          .map(assumptions.apply)
+          .map({i => LTL.asynchronousTransform(assumptions(i), proofSkeleton.assumptionAlphabet(i))})
           .toSeq
         if formulas.size == 0 then LTLTrue()
         else formulas.tail.fold(formulas.head)({ (a,b) => And(a,b)})
+      val rhs = 
+        if proofSkeleton.processInstantaneousDependencies(processID).isEmpty then 
+          Not(guarantee_matrix)
+        else {          
+          val matrices = proofSkeleton.processInstantaneousDependencies(processID).map(getAsynchronousMatrix)
+          matrices.foldLeft(Not(guarantee_matrix) : LTL)({ 
+            (f, mat) => 
+              // System.out.println(s"RHS term: ${mat}")
+              And(mat, f)}
+          )
+        }
+      // System.out.println(s"guarantee_matrix:\n${guarantee_matrix}")
       val f = noncircularLHS match {
         case _ : LTLTrue => 
-          U(circularLHS, Not(guarantee_matrix))
+          U(circularLHS, rhs)
         case _ => 
-          And(noncircularLHS,U(circularLHS, Not(guarantee_matrix)))
+          And(noncircularLHS,U(circularLHS, rhs))
       }
-      System.out.println(s"Checking inductive premise for process ${processID}: ${f} ")
+      // System.out.println(s"LHS:\n${circularLHS}")
+      // System.out.println(s"RHS:\n${rhs}")
+      // System.out.println(s"Checking circular inductive premise for process ${processID}: ${f} ")
       LTLAssumeGuaranteeVerifier.checkLTL(processes(processID), f)
     } else {
       // Check for CEX of the form: /\_i assumptions(i) /\ !guarantee
@@ -367,11 +402,11 @@ class LTLAssumeGuaranteeVerifier(ltsFiles: Array[File], property: LTL) {
         val formulas = 
           dependencies
           .toSeq
-          .map(assumptions.apply)
+          .map({i => LTL.asynchronousTransform(assumptions(i), proofSkeleton.assumptionAlphabet(i))})
         if formulas.size == 0 then LTLTrue()
         else formulas.tail.fold(formulas.head)({ (a,b) => And(a,b)})
       val f = And(noncircularLHS,Not(guarantee))
-      System.out.println(s"Checking formula: ${f} ")
+      System.out.println(s"Checking non-circular inductive permise for process ${processID}: ${f} ")
       LTLAssumeGuaranteeVerifier.checkLTL(processes(processID), f)
     }
   }
