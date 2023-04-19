@@ -653,6 +653,16 @@ class LTLAGTests extends munit.FunSuite {
     // The proof succeeds under fairness:
     assert(checker.checkInductivePremise(1) == None)
   }
+  test("ltl final premise check"){
+    val ass = List("G ((a -> X !a) & !c)", "G (d -> (X c))")
+    val ltl = ass.map(LTL.fromString)
+    // System.out.println(s"LTL assumptions: ${ltl}")
+    val tas = Array(File("examples/ltl-toy1/a.ta"), File("examples/ltl-toy1/b.ta"))
+    val checker = LTLAssumeGuaranteeVerifier(tas, G(Not(Atomic("d"))))
+    ltl.zipWithIndex.foreach( (ltl,i) => checker.setAssumption(i, ltl))
+    System.out.println(checker.checkFinalPremise(true))
+    assert(checker.checkFinalPremise(true) == None)
+  }
 
  
 }

@@ -29,6 +29,7 @@ import fr.irisa.circag.statistics
 import fr.irisa.circag.configuration
 import fr.irisa.circag._
 import fr.irisa.circag.tchecker.{TA, FailedTAModelChecking}
+import fr.irisa.circag.tchecker.ltl.LTLAssumeGuaranteeVerifier.checkBuchi
 
 /** LTL syntax: each event is an atomic predicate. Produce LTL formula from the
   * premise checker Use Spot to get HOA Buchi automaton, and read it back with
@@ -347,6 +348,7 @@ class LTLAssumeGuaranteeVerifier(ltsFiles: Array[File], property: LTL) {
     assumptions(processID) = formula
   }
 
+  
   /**
     * Check the inductive premise for process processID:
     * If processID is circular in the proof skeleton, then we require assumptions(processID)
@@ -454,5 +456,27 @@ class LTLAssumeGuaranteeVerifier(ltsFiles: Array[File], property: LTL) {
       System.out.println(s"Checking non-circular inductive permise for process ${processID}: ${f} ")
       LTLAssumeGuaranteeVerifier.checkLTL(processes(processID), f)
     }
+  }
+  def checkFinalPremise(
+      fairness : Boolean = true
+  ) : Option[Lasso] = {
+    val fairnessConstraint =
+      if fairness then {
+        (0 until processes.size).map({
+          i =>
+            G(F(proofSkeleton.assumptionAlphabet(i).foldLeft(LTLFalse() : LTL)({ (f, sigma) => Or(f, Atomic(sigma))})))
+        })
+        .foldLeft(LTLTrue() : LTL)({(a,b) => And(a,b)})
+      } else {
+        LTLTrue()
+      }
+    val assFormulas = 
+      assumptions
+      .zipWithIndex
+      .map({(f,i) => LTL.asynchronousTransform(f, proofSkeleton.assumptionAlphabet(i))})
+      .foldLeft(fairnessConstraint : LTL)({(a,b) => And(a,b)})
+    val cexFormula = And(assFormulas, LTL.asynchronousTransform(Not(property), property.alphabet))
+    val ta = TA.fromLTL(cexFormula.toString, None, Some("_ltl_acc_"))
+    checkBuchi(ta, s"${ta.systemName}_ltl_acc_")
   }
 }
