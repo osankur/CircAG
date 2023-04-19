@@ -347,9 +347,41 @@ class LTLAssumeGuaranteeVerifier(ltsFiles: Array[File], property: LTL) {
     assumptions(processID) = formula
   }
 
+  /**
+    * Check the inductive premise for process processID:
+    * If processID is circular in the proof skeleton, then we require assumptions(processID)
+    * as well as all dependency formulas to be universal (i.e. G _ ). We check for a counterexample for the premise
+    * according to McMillan's method: 
+    *  
+    *  ( /\\_{d} phi_d ) U ( ~phi /\\_{d'} phi_{d'} ) /\\ fairness
+    * 
+    * where the G(phi_d) are the set of all dependencies of processID, transformed for the asynchronous composition,
+    * and the G(phi_{d'}) are the subset of those dependencies that are instantaneous.
+    * fairness is a formula ensuring that all processes make infinite numbers of steps, namely, 
+    * 
+    * fairness = /\\_{i} GF alpha_i
+    *
+    * where alpha_i is the alphabet of processs i. 
+    * 
+    * @param processID id of the process for which the premise is to be checked
+    * @param fairness whether fairness constraint is to be added to the cex check
+    * @return
+    */
   def checkInductivePremise(
-      processID: Int
+      processID: Int,
+      fairness : Boolean = true
   ): Option[Lasso] = {
+    val fairnessConstraint =
+      if fairness then {
+        (0 until processes.size).map({
+          i =>
+            G(F(proofSkeleton.assumptionAlphabet(i).foldLeft(LTLFalse() : LTL)({ (f, sigma) => Or(f, Atomic(sigma))})))
+        })
+        .foldLeft(LTLTrue() : LTL)({(a,b) => And(a,b)})
+      } else {
+        LTLTrue()
+      }
+    // System.out.println(s"Fairness constraint: ${fairnessConstraint}")
     val guarantee = assumptions(processID)
     val dependencies = proofSkeleton.processDependencies(processID)
     if proofSkeleton.isCircular(processID) then {
@@ -401,9 +433,9 @@ class LTLAssumeGuaranteeVerifier(ltsFiles: Array[File], property: LTL) {
       // System.out.println(s"guarantee_matrix:\n${guarantee_matrix}")
       val f = noncircularLHS match {
         case _ : LTLTrue => 
-          U(circularLHS, rhs)
+          And(U(circularLHS, rhs), fairnessConstraint)
         case _ => 
-          And(noncircularLHS,U(circularLHS, rhs))
+          And(And(noncircularLHS,U(circularLHS, rhs)), fairnessConstraint)
       }
       // System.out.println(s"LHS:\n${circularLHS}")
       // System.out.println(s"RHS:\n${rhs}")
@@ -418,7 +450,7 @@ class LTLAssumeGuaranteeVerifier(ltsFiles: Array[File], property: LTL) {
           .map({i => LTL.asynchronousTransform(assumptions(i), proofSkeleton.assumptionAlphabet(i))})
         if formulas.size == 0 then LTLTrue()
         else formulas.tail.fold(formulas.head)({ (a,b) => And(a,b)})
-      val f = And(noncircularLHS,Not(guarantee))
+      val f = And(And(noncircularLHS,Not(guarantee)), fairnessConstraint)
       System.out.println(s"Checking non-circular inductive permise for process ${processID}: ${f} ")
       LTLAssumeGuaranteeVerifier.checkLTL(processes(processID), f)
     }

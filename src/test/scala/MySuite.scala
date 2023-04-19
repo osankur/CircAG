@@ -637,7 +637,7 @@ class LTLAGTests extends munit.FunSuite {
     assert(checker.checkInductivePremise(0) == None)
   }
 
-  test("ltl inductive check: ltl-toy1 c d"){
+  test("ltl inductive check w fairness: ltl-toy1 c d"){
     val ass = List("G F (a | b)", "G !d")
     val ltl = ass.map(LTL.fromString)
     System.out.println(s"LTL assumptions: ${ltl}")
@@ -647,16 +647,11 @@ class LTLAGTests extends munit.FunSuite {
 
     checker.proofSkeleton.setProcessInstantaneousDependencies(1, Set(0))
 
-    // The proof fails because the instantaneous assumption is F(a|b) and not GF(a|b)
-    assert(checker.checkInductivePremise(1) != None)
-    // System.out.println(s"Premise checked: ${checker.checkInductivePremise(1) == None}")
-    // Let us fix this. We write the LTL formula manually because Spot would simplify it
-    val f = G(G(F(Or(Atomic("a"), Atomic("b")))))
-    checker.setAssumption(0, f)
-    // The proof fails again because there is no fairness assumption.
-    // The counterexample is: b d a d^omega where {a,b}, the alphabet of process 0, is only seen finitely often
-    // System.out.println(s"Premise checked: ${checker.checkInductivePremise(1) == None}")
-    assert(checker.checkInductivePremise(1) != None)
+    // The proof fails without fairness assumption.
+    // One possible counterexample is: b d a d^omega where {a,b}, the alphabet of process 0, is only seen finitely often
+    assert(checker.checkInductivePremise(1,false) != None)
+    // The proof succeeds under fairness:
+    assert(checker.checkInductivePremise(1) == None)
   }
 
  
