@@ -1,0 +1,13 @@
+system:C
+
+event:a
+event:b
+
+process:C
+location:C:l1{initial:}
+location:C:l2
+
+edge:C:l1:l1:a
+edge:C:l1:l2:b
+edge:C:l2:l2:b
+

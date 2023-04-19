@@ -54,18 +54,18 @@ class BadProofSkeleton(msg : String) extends Exception(msg)
   * of each process, the alphabets of these assumptions and that of the
   * property, and whether each assumption's proof is circular.
   *
-  * The skeleton can either be used in default mode using the update function:
-  * in this case, a common assumption alphabet is specified and this will update
-  * the skeleton to add dependencies between all pairs of processes that share a
-  * common symbol or with a third process. Alternatively, one can set manually
-  * all these fields. In all cases, the circularity information is kept up to
-  * date automatically.
+  * The skeleton can be used with the default policy: in this case, given assumption and property
+  * alphabets, process i depends on all processes j whose alphabets share a symbol,
+  * and on all processes j depends on (recursively). This excludes i in the dependencies of i.
+  * Alternatively, one can define manually all the dependencies.
+  * In all cases, the circularity information is kept up to date automatically.
+  * The instantaneous assumptions must be added manually.
   *
   * @param nbProcesses
   *   Number of processes
   */
 class AGProofSkeleton(nbProcesses: Int) {
-  private val logger = LoggerFactory.getLogger("AGProofSkeleton")
+  private val logger = LoggerFactory.getLogger("CircAG")
 
   /** For each process, the set of process indices on which the proof inductively depends
     */
@@ -120,40 +120,76 @@ class AGProofSkeleton(nbProcesses: Int) {
   def setPropertyAlphabet(alphabet: Alphabet) =
     _propertyAlphabet = alphabet
 
+  /**
+    * Initialize all process dependencies according to the default policy (@see updateDefault)
+    *
+    * @param assumptionAlphabets
+    * @param propertyAlphabet
+    */
   def this(
       assumptionAlphabets: Buffer[Alphabet],
       propertyAlphabet: Set[String]
   ) = {
     this(assumptionAlphabets.size)
-    updateDefault(assumptionAlphabets, propertyAlphabet)
+    updateByCone(assumptionAlphabets, propertyAlphabet)
+  }
+  /**
+    * Compute interface alphabet which is the set of symbols that appear in the property or at least in two different processes;
+    * restrict each assumption to the interface alphabet intersected with the process' alphabet; and apply the defualt policy (@see updateDefault)
+    *
+    * @param processes
+    * @param property
+    */
+  def this( processes: Buffer[TA], property : LTL ) = {
+    this(processes.size)
+    val propertyAlphabet = property.alphabet
+    // // Set of symbols that appear in the property alphabet, or in at least two processes
+    // val interfaceAlphabet =
+    //   // Consider only symbols that appear at least in two processes (union of J_i's in CAV16)
+    //   val symbolCount = HashMap[String, Int]()
+    //   processes.foreach { p =>
+    //     p.alphabet.foreach { sigma =>
+    //       symbolCount.put(sigma, symbolCount.getOrElse(sigma, 0) + 1)
+    //     }
+    //   }
+    //   symbolCount.filterInPlace((sigma, count) => count >= 2)
+    //   propertyAlphabet | symbolCount.map({ (sigma, _) => sigma }).toSet
+
+    // val completeAssumptionAlphabets = processes
+    //   .map({ pr =>
+    //     interfaceAlphabet.intersect(pr.alphabet)
+    //   })
+    //   .toBuffer    
+    updateByCone(processes.map(_.alphabet), propertyAlphabet)
   }
 
+
   /** Update the proof skeleton from the given assumption and property alphabets.
-    * Process dependencies
-    * are updated so as to include exactly all processes with which the
+    * Process dependencies are updated so as to include exactly all processes with which the
     * assumptions share a common symbol, or recursively, there is a third
     * process whose assumption shares a common symbol with each etc. Circularity
-    * information is updated.
+    * information is updated. Empties instantaneous dependencies.
     *
     * @param assumptionAlphabets
     *   alphabets of the processes
     * @param propertyAlphabet
     *   alphabet of the property
     */
-  def updateDefault(
+  def updateByCone(
       assumptionAlphabets: Buffer[Alphabet],
       propertyAlphabet: Alphabet
   ) = {
     require(nbProcesses == assumptionAlphabets.size)
     _assumptionAlphabets = assumptionAlphabets
     _propertyAlphabet = propertyAlphabet
-    generateDefaultDependencies()
-    if configuration.get().verbose then {
-      logger.debug(s"Ass alphabets: $_assumptionAlphabets")
-      logger.debug(s"Prop dependencies: $_propertyDependencies")
-      logger.debug(s"Process deps: $_processDependencies")
-      logger.debug(s"Circularity: $_isCircular")
-    }
+    generateConeDependencies()
+    _processInstantaneousDependencies =
+      Buffer.tabulate(nbProcesses)(_ => Set[Int]())    
+    logger.debug(s"Ass alphabets: $_assumptionAlphabets")
+    logger.debug(s"Prop dependencies: $_propertyDependencies")
+    logger.debug(s"Process deps: $_processDependencies")
+    logger.debug(s"Process instantaneous deps: $_processInstantaneousDependencies")
+    logger.debug(s"Circularity: $_isCircular")
   }
 
   /** Update process and property dependencies so that any pair of processes
@@ -161,7 +197,7 @@ class AGProofSkeleton(nbProcesses: Int) {
     * other, and recursively, if they share a common symbol with a third process
     * etc.
     */
-  private def generateDefaultDependencies(): Unit = {
+  private def generateConeDependencies(): Unit = {
     val nbProcesses = _processDependencies.size
     _processDependencies = Buffer.tabulate(nbProcesses)({ _ => Set[Int]() })
     // Compute simplified sets of assumptions for the new alphabet
@@ -285,7 +321,7 @@ object LTLAssumeGuaranteeVerifier {
       certFile.delete()
     }
     statistics.Timers.incrementTimer("tchecker", System.nanoTime() - beginTime)
-    System.out.println(output)
+    // System.out.println(output)
     if (output.contains("CYCLE false")) then {
       None
     } else if (output.contains("CYCLE true")) then {
@@ -304,31 +340,8 @@ class LTLAssumeGuaranteeVerifier(ltsFiles: Array[File], property: LTL) {
   private val processes = ltsFiles.map(TA.fromFile(_)).toBuffer
   private val assumptions : Buffer[LTL] = Buffer.fill(nbProcesses)(LTLTrue())
 
-  // Set of symbols that appear in the property alphabet, or in at least two processes
-  val interfaceAlphabet =
-    // Consider only symbols that appear at least in two processes (union of J_i's in CAV16)
-    val symbolCount = HashMap[String, Int]()
-    processes.foreach { p =>
-      p.alphabet.foreach { sigma =>
-        symbolCount.put(sigma, symbolCount.getOrElse(sigma, 0) + 1)
-      }
-    }
-    symbolCount.filterInPlace((sigma, count) => count >= 2)
-    propertyAlphabet | symbolCount.map({ (sigma, _) => sigma }).toSet
-
-  val completeAssumptionAlphabets = processes
-    .map({ pr =>
-      interfaceAlphabet.intersect(pr.alphabet)
-    })
-    .toBuffer
-
-  val proofSkeleton =
-    AGProofSkeleton(completeAssumptionAlphabets, propertyAlphabet)
+  val proofSkeleton = AGProofSkeleton(processes, property)
   logger.debug(s"Circularity of the assumptions: ${(0 until nbProcesses).map(proofSkeleton.isCircular(_))}")
-
-  completeAssumptionAlphabets.zipWithIndex.foreach({ (alpha, i) =>
-    proofSkeleton.setAssumptionAlphabet(i, alpha)
-  })
 
   def setAssumption(processID : Int, formula: LTL) : Unit = {
     assumptions(processID) = formula
@@ -394,7 +407,7 @@ class LTLAssumeGuaranteeVerifier(ltsFiles: Array[File], property: LTL) {
       }
       // System.out.println(s"LHS:\n${circularLHS}")
       // System.out.println(s"RHS:\n${rhs}")
-      // System.out.println(s"Checking circular inductive premise for process ${processID}: ${f} ")
+      System.out.println(s"Checking circular inductive premise for process ${processID}: ${f} ")
       LTLAssumeGuaranteeVerifier.checkLTL(processes(processID), f)
     } else {
       // Check for CEX of the form: /\_i assumptions(i) /\ !guarantee

@@ -114,8 +114,7 @@ object DLTS {
           liftedDFA.setTransition(newStates(s.getId()), sigma, newStates(sprime.getId()))
         }
       }
-    }
-    
+    }    
     // System.out.println(s"Showing lifting to ${newAlphabet}")
     // Visualization.visualize(liftedDFA, Alphabets.fromList(newAlphabet.toList))
     return DLTS(name.getOrElse(dlts.name), liftedDFA, newAlphabet)

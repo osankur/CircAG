@@ -514,7 +514,7 @@ class DFAAAG extends munit.FunSuite {
     var processAlphabets = Buffer(Set[String]("a","b","c"), Set[String]("a","d"), Set[String]("d","e"))
     var propertyAlphabet = Set[String]("e")
     var commonAssumptionAlphabet = Set[String]("a","b","c","d","e")
-    skeleton.updateDefault(processAlphabets, propertyAlphabet)
+    skeleton.updateByCone(processAlphabets, propertyAlphabet)
     assert((0 until 3).forall(skeleton.isCircular(_)))
     assert((0 until 3).forall({i => (0 until 3).forall({j => i == j || skeleton.processDependencies(i).contains(j)})}))
 
@@ -623,7 +623,7 @@ class LTLAGTests extends munit.FunSuite {
     val expected3 = U(Implies(falph, f1), And(falph, f2))
     assert(f3 == expected3)
   }
-  test("ltl inductive check: ltl-toy1"){
+  test("ltl inductive check: ltl-toy1 a b"){
     val ass = List("G ((a -> X !a) & !c)", "G F b")
     val ltl = ass.map(LTL.fromString)
     System.out.println(s"LTL assumptions: ${ltl}")
@@ -635,6 +635,28 @@ class LTLAGTests extends munit.FunSuite {
     // By making an instantaneous assumption, the proof passes:
     checker.proofSkeleton.setProcessInstantaneousDependencies(0, Set(1))
     assert(checker.checkInductivePremise(0) == None)
+  }
+
+  test("ltl inductive check: ltl-toy1 c d"){
+    val ass = List("G F (a | b)", "G !d")
+    val ltl = ass.map(LTL.fromString)
+    System.out.println(s"LTL assumptions: ${ltl}")
+    val tas = Array(File("examples/ltl-toy1/c.ta"), File("examples/ltl-toy1/d.ta"))
+    val checker = LTLAssumeGuaranteeVerifier(tas, LTLTrue())
+    ltl.zipWithIndex.foreach( (ltl,i) => checker.setAssumption(i, ltl))
+
+    checker.proofSkeleton.setProcessInstantaneousDependencies(1, Set(0))
+
+    // The proof fails because the instantaneous assumption is F(a|b) and not GF(a|b)
+    assert(checker.checkInductivePremise(1) != None)
+    // System.out.println(s"Premise checked: ${checker.checkInductivePremise(1) == None}")
+    // Let us fix this. We write the LTL formula manually because Spot would simplify it
+    val f = G(G(F(Or(Atomic("a"), Atomic("b")))))
+    checker.setAssumption(0, f)
+    // The proof fails again because there is no fairness assumption.
+    // The counterexample is: b d a d^omega where {a,b}, the alphabet of process 0, is only seen finitely often
+    // System.out.println(s"Premise checked: ${checker.checkInductivePremise(1) == None}")
+    assert(checker.checkInductivePremise(1) != None)
   }
 
  
