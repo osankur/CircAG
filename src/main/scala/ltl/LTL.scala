@@ -11,19 +11,14 @@ class MalformedLTL(msg : String) extends Exception(msg)
 abstract class LTL {
     def isUniversal : Boolean = false
     def alphabet : Alphabet 
-    def tabbedString(depth : Int = 0) : String
 }
 class LTLTrue extends LTL {
     override def toString() = "1"
     override def alphabet = Set[String]()
-    override def tabbedString(depth : Int) = 
-        s"${(0 to depth).map({ _ => " "}).mkString("")}1"
 }
 class LTLFalse extends LTL {
     override def toString() = "0"
     override def alphabet = Set[String]()
-    override def tabbedString(depth : Int) = 
-        s"${(0 to depth).map({ _ => " "}).mkString("")}0"
 }
 case class G(subformula : LTL) extends LTL{
     override def isUniversal = true
@@ -31,40 +26,30 @@ case class G(subformula : LTL) extends LTL{
         s"(G ${subformula.toString()})"
     }
     override def alphabet = subformula.alphabet
-    override def tabbedString(depth : Int) = 
-        s"${(0 to depth).map({ _ => " "}).mkString("")}G\n${subformula.tabbedString(depth+1)}"
 }
 case class X(subformula : LTL) extends LTL{
     override def toString() = {
         s"(X ${subformula.toString()})"
     }
     override def alphabet = subformula.alphabet 
-    override def tabbedString(depth : Int) = 
-        s"${(0 to depth).map({ _ => " "}).mkString("")}X\n${subformula.tabbedString(depth+1)}"
 }
 case class F(subformula : LTL) extends LTL {
     override def toString() = {
         s"(F ${subformula.toString()})"
     }
     override def alphabet = subformula.alphabet
-    override def tabbedString(depth : Int) = 
-        s"${(0 to depth).map({ _ => " "}).mkString("")}F\n${subformula.tabbedString(depth+1)}"
 }
 case class U(left : LTL, right : LTL) extends LTL {
     override def toString() = {
         s"(${left.toString()} U ${right.toString()})"
     }
     override def alphabet = left.alphabet | right.alphabet
-    override def tabbedString(depth : Int) = 
-        s"${(0 to depth).map({ _ => " "}).mkString("")}U\n${left.tabbedString(depth+1)}\n${right.tabbedString(depth+1)}"
 }
 case class W(left : LTL, right : LTL) extends LTL {
     override def toString() = {
         s"(${left.toString()} W ${right.toString()})"
     }
     override def alphabet = left.alphabet | right.alphabet
-    override def tabbedString(depth : Int) = 
-        s"${(0 to depth).map({ _ => " "}).mkString("")}W\n${left.tabbedString(depth+1)}\n${right.tabbedString(depth+1)}"
 
 }
 case class R(left : LTL, right : LTL) extends LTL {
@@ -72,8 +57,6 @@ case class R(left : LTL, right : LTL) extends LTL {
         s"(${left.toString()} R ${right.toString()})"
     }
     override def alphabet = left.alphabet | right.alphabet
-    override def tabbedString(depth : Int) = 
-        s"${(0 to depth).map({ _ => " "}).mkString("")}R\n${left.tabbedString(depth+1)}\n${right.tabbedString(depth+1)}"
 
 }
 case class M(left : LTL, right : LTL) extends LTL {
@@ -81,33 +64,29 @@ case class M(left : LTL, right : LTL) extends LTL {
         s"(${left.toString()} M ${right.toString()})"
     }
     override def alphabet = left.alphabet | right.alphabet
-    override def tabbedString(depth : Int) = 
-        s"${(0 to depth).map({ _ => " "}).mkString("")}M\n${left.tabbedString(depth+1)}\n${right.tabbedString(depth+1)}"
 }
-case class And(left : LTL, right : LTL) extends LTL {
+case class And(subformulas : List[LTL]) extends LTL {
     override def toString() = {
-        s"(${left.toString()} & ${right.toString()})"
+        if subformulas.size == 0 then "1"
+        else s"(${subformulas.map(_.toString()).mkString(" & ")})"
     }
-    override def alphabet = left.alphabet | right.alphabet
-    override def tabbedString(depth : Int) = 
-        s"${(0 to depth).map({ _ => " "}).mkString("")}&\n${left.tabbedString(depth+1)}\n${right.tabbedString(depth+1)}"
+    override def alphabet = 
+        subformulas.map(_.alphabet).foldLeft(Set[String]())({ (a,b) => a|b})
 
 }
-case class Or(left : LTL, right : LTL) extends LTL {
+case class Or(subformulas : List[LTL]) extends LTL {
     override def toString() = {
-        s"(${left.toString()} | ${right.toString()})"
+        if subformulas.size == 0 then "0"
+        else s"(${subformulas.map(_.toString()).mkString(" | ")})"
     }
-    override def alphabet = left.alphabet | right.alphabet
-    override def tabbedString(depth : Int) = 
-        s"${(0 to depth).map({ _ => " "}).mkString("")}|\n${left.tabbedString(depth+1)}\n${right.tabbedString(depth+1)}"
+    override def alphabet = 
+        subformulas.map(_.alphabet).foldLeft(Set[String]())({ (a,b) => a|b})
 }
 case class Implies(left : LTL, right : LTL) extends LTL {
     override def toString() = {
         s"(${left.toString()} -> ${right.toString()})"
     }
     override def alphabet = left.alphabet | right.alphabet
-    override def tabbedString(depth : Int) = 
-        s"${(0 to depth).map({ _ => " "}).mkString("")}->\n${left.tabbedString(depth+1)}\n${right.tabbedString(depth+1)}"
 }
 
 case class Not(subformula : LTL) extends LTL {
@@ -115,14 +94,22 @@ case class Not(subformula : LTL) extends LTL {
         s"!${subformula.toString()}"
     }
     override def alphabet = subformula.alphabet
-    override def tabbedString(depth : Int) = 
-        s"${(0 to depth).map({ _ => " "}).mkString("")}!\n${subformula.tabbedString(depth+1)}"
 }
 case class Atomic(atom : String) extends LTL {
     override def toString() = atom
     override def alphabet = Set(atom)
-    override def tabbedString(depth : Int) = 
-        s"${(0 to depth).map({ _ => " "}).mkString("")}${atom}"
+}
+
+object And {
+    def apply(args : LTL*) : And = {
+        And(args.toList)
+    }
+}
+
+object Or {
+    def apply(args : LTL*) : Or = {
+        Or(args.toList)
+    }
 }
 
 object LTL {
@@ -184,11 +171,11 @@ object LTL {
                 case "&" => 
                     val (left, tail) = parse(tokens.tail)
                     val (right, tail_) = parse(tail)
-                    (And(left, right),tail_)
+                    (And(List(left, right)),tail_)
                 case "|" => 
                     val (left, tail) = parse(tokens.tail)
                     val (right, tail_) = parse(tail)
-                    (Or(left, right),tail_)
+                    (Or(List(left, right)),tail_)
                 case "i" => 
                     val (left, tail) = parse(tokens.tail)
                     val (right, tail_) = parse(tail)
@@ -205,9 +192,8 @@ object LTL {
 
     def asynchronousTransform(ltl : LTL, alphabet : Alphabet) : LTL = {
         val alphabetList = alphabet.toList
-        val alpha = alphabetList.tail.foldLeft(Atomic(alphabetList.head) : LTL)( (a,b) => Or(a, Atomic(b)))
-        val notAlpha = alphabetList.tail.foldLeft(Not(Atomic(alphabetList.head)) : LTL)( (a,b) => And(a, Not(Atomic(b))))
-        // val alphaNot = alphabetList.tail.foldLeft(Atomic(alphabetList.hd))( (a,b) => Or(a, Atomic(b)))
+        val alpha = Or(alphabetList.map(Atomic(_)))
+        val notAlpha = Not(alpha) 
         ltl match {
             case _ : LTLTrue => LTLTrue()
             case _ : LTLFalse => LTLFalse()
@@ -217,12 +203,12 @@ object LTL {
                 else
                     throw MalformedLTL(s"Cannot apply asynchronous transformation to formula: Atom ${atom} does not belong to given alphabet ${alphabet}")
             case Not(phi) => Not(asynchronousTransform(phi, alphabet))
-            case And(phi,psi) => And(asynchronousTransform(phi, alphabet), asynchronousTransform(psi, alphabet))
-            case Or(phi,psi) => Or(asynchronousTransform(phi, alphabet), asynchronousTransform(psi, alphabet))
+            case And(phis) => And(phis.map(asynchronousTransform(_, alphabet)))
+            case Or(phis) => Or(phis.map(asynchronousTransform(_, alphabet)))
             case Implies(phi,psi) => Implies(asynchronousTransform(phi, alphabet), asynchronousTransform(psi, alphabet))
-            case U(phi,psi) => U(Implies(alpha, asynchronousTransform(phi, alphabet)), And(alpha, asynchronousTransform(psi, alphabet)))
-            case X(phi) => U(notAlpha, And(alpha, X(U(notAlpha, And(alpha, asynchronousTransform(phi, alphabet))))))
-            case F(phi) => F(And(alpha, asynchronousTransform(phi, alphabet)))
+            case U(phi,psi) => U(Implies(alpha, asynchronousTransform(phi, alphabet)), And(List(alpha, asynchronousTransform(psi, alphabet))))
+            case X(phi) => U(notAlpha, And(List(alpha, X(U(notAlpha, And(List(alpha, asynchronousTransform(phi, alphabet))))))))
+            case F(phi) => F(And(List(alpha, asynchronousTransform(phi, alphabet))))
             case G(phi) => G(Implies(alpha, asynchronousTransform(phi, alphabet)))
             case op => throw Exception(s"asynchronousTransform: Operator ${op.getClass()} not supported")
         }

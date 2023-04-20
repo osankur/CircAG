@@ -612,15 +612,15 @@ class LTLAGTests extends munit.FunSuite {
   }
   test("ltl asynchronous transformation"){
     val alph = Set("a","b")
-    val falph = Or(Atomic("a"),Atomic("b"))
-    val fnalph = And(Not(Atomic("a")),Not(Atomic("b")))
+    val falph = Or(List(Atomic("a"),Atomic("b")))
+    val fnalph = Not(falph) // And(List(Not(Atomic("a")),Not(Atomic("b"))))
     val f1 = LTL.asynchronousTransform(Atomic("b"),alph)
-    assert(f1 == U(And(Not(Atomic("a")),Not(Atomic("b"))), Atomic("b")))
+    assert(f1 == U(Not(Or(Atomic("a"), Atomic("b"))), Atomic("b")))
     val f2 = LTL.asynchronousTransform(X(Atomic("b")),alph)
-    val expected2 = U(fnalph, And(falph, X(U(fnalph, And(falph, f1)))))
+    val expected2 = U(fnalph, And(List(falph, X(U(fnalph, And(List(falph, f1)))))))
     assert(f2 == expected2)
     val f3 = LTL.asynchronousTransform(U(Atomic("b"), X(Atomic("b"))), alph)
-    val expected3 = U(Implies(falph, f1), And(falph, f2))
+    val expected3 = U(Implies(falph, f1), And(List(falph, f2)))
     assert(f3 == expected3)
   }
   test("ltl inductive check: ltl-toy1 a b"){

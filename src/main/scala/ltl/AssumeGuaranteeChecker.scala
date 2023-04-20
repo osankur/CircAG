@@ -373,13 +373,16 @@ class LTLAssumeGuaranteeVerifier(ltsFiles: Array[File], property: LTL) {
       processID: Int,
       fairness : Boolean = true
   ): Option[Lasso] = {
+    // Fairness: /\\_{i} GF alpha_i for each process i, and its alphabet alpha_i
     val fairnessConstraint =
       if fairness then {
-        (0 until processes.size).map({
-          i =>
-            G(F(proofSkeleton.assumptionAlphabet(i).foldLeft(LTLFalse() : LTL)({ (f, sigma) => Or(f, Atomic(sigma))})))
-        })
-        .foldLeft(LTLTrue() : LTL)({(a,b) => And(a,b)})
+        And(
+            (0 until processes.size).map({
+            i =>
+              G(F(Or(proofSkeleton.assumptionAlphabet(i).toList.map(Atomic(_)))))
+            })
+            .toList
+          )
       } else {
         LTLTrue()
       }
@@ -413,31 +416,28 @@ class LTLAssumeGuaranteeVerifier(ltsFiles: Array[File], property: LTL) {
         .map(getAsynchronousMatrix)
       val circularLHS = 
         if assumptionMatrices.size == 0 then LTLTrue()
-        else assumptionMatrices.tail.fold(assumptionMatrices.head)({ (a,b) => And(a,b)})
+        else And(assumptionMatrices.toList)
+        // else assumptionMatrices.tail.fold(assumptionMatrices.head)({ (a,b) => And(a,b)})
       val noncircularLHS =
         val formulas = 
           noncircularDeps
           .map({i => LTL.asynchronousTransform(assumptions(i), proofSkeleton.assumptionAlphabet(i))})
-          .toSeq
+          .toList
         if formulas.size == 0 then LTLTrue()
-        else formulas.tail.fold(formulas.head)({ (a,b) => And(a,b)})
+        else And(formulas) //formulas.tail.fold(formulas.head)({ (a,b) => And(a,b)})
       val rhs = 
         if proofSkeleton.processInstantaneousDependencies(processID).isEmpty then 
           Not(guarantee_matrix)
         else {          
           val matrices = proofSkeleton.processInstantaneousDependencies(processID).map(getAsynchronousMatrix)
-          matrices.foldLeft(Not(guarantee_matrix) : LTL)({ 
-            (f, mat) => 
-              // System.out.println(s"RHS term: ${mat}")
-              And(mat, f)}
-          )
+          And(Not(guarantee_matrix) :: matrices.toList)
         }
       // System.out.println(s"guarantee_matrix:\n${guarantee_matrix}")
       val f = noncircularLHS match {
         case _ : LTLTrue => 
-          And(U(circularLHS, rhs), fairnessConstraint)
+          And(List(U(circularLHS, rhs), fairnessConstraint))
         case _ => 
-          And(And(noncircularLHS,U(circularLHS, rhs)), fairnessConstraint)
+          And(List(noncircularLHS,U(circularLHS, rhs), fairnessConstraint))
       }
       // System.out.println(s"LHS:\n${circularLHS}")
       // System.out.println(s"RHS:\n${rhs}")
@@ -451,8 +451,8 @@ class LTLAssumeGuaranteeVerifier(ltsFiles: Array[File], property: LTL) {
           .toSeq
           .map({i => LTL.asynchronousTransform(assumptions(i), proofSkeleton.assumptionAlphabet(i))})
         if formulas.size == 0 then LTLTrue()
-        else formulas.tail.fold(formulas.head)({ (a,b) => And(a,b)})
-      val f = And(And(noncircularLHS,Not(guarantee)), fairnessConstraint)
+        else And(formulas.toList)
+      val f = And(List(noncircularLHS,Not(guarantee), fairnessConstraint))
       System.out.println(s"Checking non-circular inductive permise for process ${processID}: ${f} ")
       LTLAssumeGuaranteeVerifier.checkLTL(processes(processID), f)
     }
@@ -462,20 +462,26 @@ class LTLAssumeGuaranteeVerifier(ltsFiles: Array[File], property: LTL) {
   ) : Option[Lasso] = {
     val fairnessConstraint =
       if fairness then {
-        (0 until processes.size).map({
+        And(
+          (0 until processes.size).map({
           i =>
-            G(F(proofSkeleton.assumptionAlphabet(i).foldLeft(LTLFalse() : LTL)({ (f, sigma) => Or(f, Atomic(sigma))})))
-        })
-        .foldLeft(LTLTrue() : LTL)({(a,b) => And(a,b)})
+            G(F(proofSkeleton.assumptionAlphabet(i).foldLeft(LTLFalse() : LTL)({ (f, sigma) => Or(List(f, Atomic(sigma)))})))
+          }).toList
+        )
+        //.foldLeft(LTLTrue() : LTL)({(a,b) => And(a,b)})
       } else {
         LTLTrue()
       }
     val assFormulas = 
-      assumptions
-      .zipWithIndex
-      .map({(f,i) => LTL.asynchronousTransform(f, proofSkeleton.assumptionAlphabet(i))})
-      .foldLeft(fairnessConstraint : LTL)({(a,b) => And(a,b)})
-    val cexFormula = And(assFormulas, LTL.asynchronousTransform(Not(property), property.alphabet))
+      And(
+        fairnessConstraint::
+          (assumptions
+          .zipWithIndex
+          .map({(f,i) => LTL.asynchronousTransform(f, proofSkeleton.assumptionAlphabet(i))})
+          ).toList
+      )
+      // .foldLeft(fairnessConstraint : LTL)({(a,b) => And(a,b)})
+    val cexFormula = And(List(assFormulas, LTL.asynchronousTransform(Not(property), property.alphabet)))
     val ta = TA.fromLTL(cexFormula.toString, None, Some("_ltl_acc_"))
     checkBuchi(ta, s"${ta.systemName}_ltl_acc_")
   }
