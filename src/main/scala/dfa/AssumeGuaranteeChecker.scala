@@ -251,13 +251,13 @@ case class AGFalse(cex : Trace) extends AGIntermediateResult
   * @param propertyDependencies the set of process indices on which the proof of the final premise must depend.
   * @param assumptionAlphabets alphabets of the assumption DFAs for each process
   */
-class AGProofSkeleton {
+class AGProofSkeleton(val nbProcesses : Int) {
   var processDependencies = Buffer[Set[Int]]()
   var propertyDependencies = Set[Int]()
   var assumptionAlphabets = Buffer[Set[String]]()
 
   def this(processAlphabets : Buffer[Set[String]], propertyAlphabet : Set[String], newAssumptionAlphabet : Set[String]) = {
-    this()
+    this(processAlphabets.size)
     update(processAlphabets, propertyAlphabet, newAssumptionAlphabet)
   }
   /**
@@ -377,7 +377,7 @@ class DFAAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useAlphab
 
 
   val proofSkeleton = AGProofSkeleton(processes.map(_.alphabet), propertyAlphabet, assumptionAlphabet)
-  private var constraintManager = ConstraintManager(proofSkeleton)
+  private var constraintManager = ConstraintManager.getAssumptionGenerator(proofSkeleton, AssumptionGeneratorType.RPNI)
 
   // Latest cex encountered in any premise check
   private var latestCex = List[String]()
@@ -391,7 +391,7 @@ class DFAAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useAlphab
     assumptionAlphabet |= newSymbols
     proofSkeleton.update(processes.map(_.alphabet), propertyAlphabet, assumptionAlphabet)
     // Create a new constraint manager initialized with the incremental traces from the previous instance
-    constraintManager = ConstraintManager(proofSkeleton, constraintManager.incrementalTraces)
+    constraintManager = ConstraintManager.getAssumptionGenerator(proofSkeleton, AssumptionGeneratorType.RPNI, Some(constraintManager.incrementalTraces))
     configuration.resetCEX()
   }
 
@@ -595,7 +595,7 @@ class DFAAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useAlphab
   def check() : Option[Trace] = {
     var currentState : AGIntermediateResult = AGContinue()
     while(currentState == AGContinue()) {
-      var newAss = constraintManager.generateAssumptions(this.assumptions)
+      var newAss = constraintManager.generateAssumptions()
       // If the constraints are unsat, then refine the alphabet and try again
       // They cannot be unsat if the alphabets are complete
       while(newAss == None) do {
@@ -609,7 +609,7 @@ class DFAAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useAlphab
         } else {
           refineWithArbitrarySymbol()
         }
-        newAss = constraintManager.generateAssumptions(this.assumptions)
+        newAss = constraintManager.generateAssumptions()
       }
       newAss match {
         case Some(newAss) => this.assumptions = newAss

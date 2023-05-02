@@ -662,6 +662,10 @@ class LTLAGTests extends munit.FunSuite {
     ltl.zipWithIndex.foreach( (ltl,i) => checker.setAssumption(i, ltl))
     System.out.println(checker.checkFinalPremise(true))
     assert(checker.checkFinalPremise(true) == None)
+    
+    val checker2 = LTLAssumeGuaranteeVerifier(tas, G(Not(Atomic("a"))))
+    ltl.zipWithIndex.foreach( (ltl,i) => checker2.setAssumption(i, ltl))
+    assert(checker2.checkFinalPremise() != None)
   }
 
  

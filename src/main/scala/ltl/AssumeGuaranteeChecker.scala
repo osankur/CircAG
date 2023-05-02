@@ -333,7 +333,7 @@ object LTLAssumeGuaranteeVerifier {
   }
 }
 
-class LTLAssumeGuaranteeVerifier(ltsFiles: Array[File], property: LTL) {
+class LTLAssumeGuaranteeVerifier(ltsFiles: Array[File], val property: LTL) {
   private val logger = LTLAssumeGuaranteeVerifier.logger
 
   val nbProcesses = ltsFiles.size
