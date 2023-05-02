@@ -512,8 +512,8 @@ class DFAAAG extends munit.FunSuite {
     }
     val alph = Alphabets.fromList(List("c","a","b", "err"))
     val learner = BlueFringeRPNIDFA(alph)
-    learner.setPositiveSamples(Buffer(List("a","b","c"), List("a","a","c")).map(Word.fromList(_)))
-    learner.setNegativeSamples(Buffer(List("a","b","err"), List("a","a","b")).map(Word.fromList(_)))     
+    learner.addPositiveSamples(Buffer(List("a","b","c"), List("a","a","c")).map(Word.fromList(_)))
+    learner.addNegativeSamples(Buffer(List("a","b","err"), List("a","a","b")).map(Word.fromList(_)))     
     val dfa = learner.computeModel()
     // Visualization.visualize(dfa, alph)
   }

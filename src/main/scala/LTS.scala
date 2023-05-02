@@ -425,7 +425,7 @@ extension(dfa : FastDFA[?]){
     *
     * @return non-complete DFA equivalent to given DFA with all states accepting
     */
-  def pruned = {    
+  def pruned = {
     val statesMap = HashMap((dfa.getInitialState(), FastDFAState(0,false)))
     val alphabet = dfa.getInputAlphabet()
     val newDFA =

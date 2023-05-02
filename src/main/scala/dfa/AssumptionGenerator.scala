@@ -2,6 +2,7 @@ package fr.irisa.circag.tchecker.dfa
 
 import java.util.HashMap
 import scala.collection.mutable.Buffer
+import scala.collection.mutable
 import scala.collection.immutable.Set
 import collection.JavaConverters._
 import collection.convert.ImplicitConversions._
@@ -37,7 +38,8 @@ import com.microsoft.z3
 import fr.irisa.circag.statistics
 import fr.irisa.circag.configuration
 import fr.irisa.circag.{Trace, DLTS, Alphabet}
-import scala.collection.mutable
+import fr.irisa.circag.pruned
+
 
 trait DFALearner(name : String, alphabet : Alphabet) {
   def setPositiveSamples(samples : Set[Trace]) = {
@@ -58,18 +60,23 @@ trait DFALearner(name : String, alphabet : Alphabet) {
   protected var negativeSamples : Set[Trace] = Set()
 }
 
+enum AssumptionGeneratorType:
+  case RPNI
+  case SAT
+  case JointSAT
+
 class RPNILearner(name : String, alphabet : Alphabet) extends DFALearner(name, alphabet) {
   override def getDLTS(): DLTS = {
     this.dlts match {
       case Some(d) => d
       case None =>
-        statistics.Counters.incrementCounter("RPNI")
+        statistics.Counters.incrementCounter("RPNI-Learner")
         val learner = BlueFringeRPNIDFA(Alphabets.fromList(alphabet.toList))
         learner.addPositiveSamples(positiveSamples.map(Word.fromList(_)))
         learner.addNegativeSamples(negativeSamples.map(Word.fromList(_)))
         var beginTime = System.nanoTime()
         val initialModel = learner.computeModel()
-        statistics.Timers.incrementTimer("rpni", System.nanoTime() - beginTime)
+        statistics.Timers.incrementTimer("rpni-learner", System.nanoTime() - beginTime)
         val dlts = DLTS(
               name,
               dfa = DLTS.makePrefixClosed(initialModel, alphabet, removeNonAcceptingStates = true),
@@ -90,6 +97,11 @@ class SATLearner(name : String, alphabet : Alphabet) extends DFALearner(name, al
   }
   val solver = ctx.mkSolver()
 
+  /**
+    * Learn a prefix-closed complete deterministic finite automaton
+    * satisfying the positive and negative samples
+    * @return the said DLTS
+    */
   def computeDLTS() : DLTS = {
     var dfaSize = 2
     var satisfiable = false
@@ -151,7 +163,7 @@ class SATLearner(name : String, alphabet : Alphabet) extends DFALearner(name, al
             }
           }
         }
-        dlts = Some(DLTS(name, newDFA, alphabet))
+        dlts = Some(DLTS(name, newDFA.pruned, alphabet))
       }
     }
     dlts.getOrElse(throw Exception("No DLTS"))
@@ -160,7 +172,10 @@ class SATLearner(name : String, alphabet : Alphabet) extends DFALearner(name, al
     this.dlts match {
       case Some(d) => d
       case None =>
+        statistics.Counters.incrementCounter("SAT-Learner")
+        var beginTime = System.nanoTime()
         this.dlts = Some(computeDLTS())
+        statistics.Timers.incrementTimer("sat-learner", System.nanoTime() - beginTime)
         getDLTS()
     }
   }
@@ -178,7 +193,7 @@ abstract class JointSATLearner(name : String, alphabet : Alphabet) extends DFALe
   * @param propertyDependencies
   * @param assumptionAlphabets
   */
-trait ConstraintManager(proofSkeleton : AGProofSkeleton, assumptionGeneratorType : AssumptionGeneratorType = AssumptionGeneratorType.RPNI) {
+class ConstraintManager(proofSkeleton : AGProofSkeleton, assumptionGeneratorType : AssumptionGeneratorType = AssumptionGeneratorType.RPNI) {
   val z3ctx = {
     val cfg = HashMap[String, String]()
     cfg.put("model", "true")
@@ -186,7 +201,16 @@ trait ConstraintManager(proofSkeleton : AGProofSkeleton, assumptionGeneratorType
   }
 
   private val nbProcesses = proofSkeleton.nbProcesses
-  
+
+  val learners : Buffer[DFALearner] = Buffer.tabulate(proofSkeleton.nbProcesses)
+    (i => 
+      assumptionGeneratorType match {
+        case AssumptionGeneratorType.RPNI => RPNILearner(s"assumption_${i}", proofSkeleton.assumptionAlphabets(i))
+        case AssumptionGeneratorType.SAT => SATLearner(s"assumption_${i}", proofSkeleton.assumptionAlphabets(i))
+        case _ => throw Exception("Not implemented yet")
+      }      
+    )
+
   // Set of all samples added so far
   val samples = Buffer.tabulate(nbProcesses)({_ => Buffer[(Trace,z3.BoolExpr)]()})
   // Boolean variable corresponding to each pair (pr,trace)
@@ -207,6 +231,11 @@ trait ConstraintManager(proofSkeleton : AGProofSkeleton, assumptionGeneratorType
   private var previousValuation = HashMap[z3.BoolExpr,Boolean]()
 
   this.reset()
+
+  def this(proofSkeleton : AGProofSkeleton, assumptionGeneratorType : AssumptionGeneratorType, incrementalTraces : Buffer[(Int, Trace, Int)]) = {
+    this(proofSkeleton, assumptionGeneratorType)
+    incrementalTraces.foreach({ tr => addConstraint(tr._1, tr._2, tr._3)})
+  }
 
   /**
     * Return the unique SAT variable to the given pair (process, trace)
@@ -432,19 +461,7 @@ trait ConstraintManager(proofSkeleton : AGProofSkeleton, assumptionGeneratorType
       }
     }
   }
-
  
-  def generateAssumptions() : Option[Buffer[DLTS]]
-}
-
-class RPNIGenerator(proofSkeleton : AGProofSkeleton, incrementalTraces : Option[Buffer[(Int, Trace, Int)]] = None) extends ConstraintManager(proofSkeleton) {
-  val learners = Buffer.tabulate(proofSkeleton.nbProcesses)(i => RPNILearner(s"assumption_${i}", proofSkeleton.assumptionAlphabets(i)))
-  incrementalTraces match {
-    case Some(traces) =>
-      traces.foreach({ tr => this.addConstraint(tr._1, tr._2, tr._3)})
-    case _ => ()
-  }
-  
   def generateAssumptions() : Option[Buffer[DLTS]] = {
     generateSamples() match {
       case None => None // Unsat
@@ -456,24 +473,6 @@ class RPNIGenerator(proofSkeleton : AGProofSkeleton, incrementalTraces : Option[
             learners(i).getDLTS()
           )
         )
-    }
-  }
-}
-
-enum AssumptionGeneratorType:
-  case RPNI
-  case SAT
-  case JointSAT
-
-object ConstraintManager {
-  def getAssumptionGenerator(proofSkeleton : AGProofSkeleton, t : AssumptionGeneratorType, incrementalTraces : Option[Buffer[(Int, Trace, Int)]] = None ) : ConstraintManager = {
-    t match {
-      case AssumptionGeneratorType.RPNI => 
-        incrementalTraces match {
-          case None => RPNIGenerator(proofSkeleton)
-          case Some(tr) => RPNIGenerator(proofSkeleton, incrementalTraces)
-        }
-      case _ => throw Exception("Unsupported assumption generator")
     }
   }
 }

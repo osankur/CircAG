@@ -5,6 +5,7 @@ import java.io.File
 import java.nio.file._
 import collection.mutable.Buffer
 import fr.irisa.circag.Trace
+import fr.irisa.circag.tchecker.dfa.AssumptionGeneratorType
 case class ParseError(msg: String) extends Exception(msg)
 
 var g1 = false
@@ -37,6 +38,7 @@ case class Configuration(
     tmpDirName: String = "/tmp/circag",
     visualizeDFA : Boolean = false,
     alphabetRefinement : Boolean = true,
+    learnerType : AssumptionGeneratorType = AssumptionGeneratorType.RPNI,
     randomSeed : Int = 0
 ) {
   private var tmpDirPath: Option[Path] = None

@@ -64,6 +64,12 @@ object Main {
           .action((_, c) => c.copy(visualizeDFA = true))
           .valueName("(true|false)")
           .text("Visualize the DFAs that were learned"),
+        opt[String]("learnerType")
+          .action({(x, c) => x match {
+            case "SAT" => c.copy(learnerType = AssumptionGeneratorType.SAT)
+            case _ => c.copy(learnerType = AssumptionGeneratorType.RPNI)
+          }})
+          .text("Learner algorithm (RPNI|SAT)"),
         cmd("product")
           .action((_, c) => c.copy(cmd = "product")),
         cmd("dfa-aag")
@@ -92,7 +98,7 @@ object Main {
               val product = tchecker.TA.synchronousProduct(tas.toList)
               System.out.println(product.toString())
             case "dfa-aag" =>
-              tchecker.dfa.DFAAssumeGuaranteeVerifier(configuration.get().ltsFiles, configuration.get().err, AssumptionGeneratorType.RPNI, config.alphabetRefinement).check()
+              tchecker.dfa.DFAAssumeGuaranteeVerifier(configuration.get().ltsFiles, configuration.get().err, configuration.get().learnerType, config.alphabetRefinement).check()
               match {
                 case None => System.out.println(s"${GREEN}${BOLD}Success${RESET}")
                 case Some(cex) => System.out.println(s"${RED}${BOLD}Counterexample${RESET} ${cex}")
