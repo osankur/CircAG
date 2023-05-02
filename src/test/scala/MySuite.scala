@@ -123,6 +123,37 @@ class DFAAAG extends munit.FunSuite {
     assert(solver2.check() == Status.UNSATISFIABLE)
     ctx.close();      
   }
+  test("z3 enum sort"){
+    val cfg = HashMap[String, String]()
+    cfg.put("model", "true");
+    // cfg.put("proof", "true");
+    cfg.put("unsat_core", "true")
+    val ctx = Context(cfg);      
+    val solver3 = ctx.mkSolver()
+    val enumSort = ctx.mkEnumSort("T", Array[String]("a","b","c") : _*);
+    val T = enumSort
+    val esa = enumSort.getConst(0)
+    val esb = enumSort.getConst(1)
+    val esc = enumSort.getConst(2)
+    val x = ctx.mkConst("x", T)
+    val y = ctx.mkConst("y", T)
+    val z = ctx.mkConst("z", T)
+
+    solver3.add( ctx.mkOr(ctx.mkEq(x,esa), ctx.mkEq(y,esb)))
+    solver3.add( ctx.mkOr(ctx.mkNot(ctx.mkEq(x,y))))
+    assert(solver3.check() == Status.SATISFIABLE)
+    // val m = solver3.getModel()
+    // System.out.println(m)
+
+    val satLearner = SATLearner("ass", Set("a","b","c"))
+    satLearner.setPositiveSamples(Set(List("a","b")))
+    satLearner.setNegativeSamples(Set(List("a","b","b"), List("c")))
+    val dlts = satLearner.getDLTS()
+    assert(dlts.dfa.accepts(List("a","b")))
+    assert(!dlts.dfa.accepts(List("c")))
+    assert(!dlts.dfa.accepts(List("a","b","b")))
+    // dlts.visualize()
+  }
 
   test("premiseChecker"){
     // {a,c,d}*
@@ -481,8 +512,8 @@ class DFAAAG extends munit.FunSuite {
     }
     val alph = Alphabets.fromList(List("c","a","b", "err"))
     val learner = BlueFringeRPNIDFA(alph)
-    learner.addPositiveSamples(Buffer(List("a","b","c"), List("a","a","c")).map(Word.fromList(_)))
-    learner.addNegativeSamples(Buffer(List("a","b","err"), List("a","a","b")).map(Word.fromList(_)))     
+    learner.setPositiveSamples(Buffer(List("a","b","c"), List("a","a","c")).map(Word.fromList(_)))
+    learner.setNegativeSamples(Buffer(List("a","b","err"), List("a","a","b")).map(Word.fromList(_)))     
     val dfa = learner.computeModel()
     // Visualization.visualize(dfa, alph)
   }

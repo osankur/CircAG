@@ -15,7 +15,7 @@ import net.automatalib.util.automata.builders.AutomatonBuilders;
 import fr.irisa.circag.configuration.Configuration
 import fr.irisa.circag.configuration.FSM
 import fr.irisa.circag.tchecker.TA
-
+import fr.irisa.circag.tchecker.dfa.AssumptionGeneratorType
 import scala.collection.mutable
 import scala.collection.immutable
 import collection.JavaConverters._
@@ -92,7 +92,7 @@ object Main {
               val product = tchecker.TA.synchronousProduct(tas.toList)
               System.out.println(product.toString())
             case "dfa-aag" =>
-              tchecker.dfa.DFAAssumeGuaranteeVerifier(configuration.get().ltsFiles, configuration.get().err, config.alphabetRefinement).check()
+              tchecker.dfa.DFAAssumeGuaranteeVerifier(configuration.get().ltsFiles, configuration.get().err, AssumptionGeneratorType.RPNI, config.alphabetRefinement).check()
               match {
                 case None => System.out.println(s"${GREEN}${BOLD}Success${RESET}")
                 case Some(cex) => System.out.println(s"${RED}${BOLD}Counterexample${RESET} ${cex}")

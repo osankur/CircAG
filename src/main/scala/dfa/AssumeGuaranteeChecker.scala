@@ -309,7 +309,7 @@ class AGProofSkeleton(val nbProcesses : Int) {
   
 }
 
-class DFAAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useAlphabetRefinement : Boolean = false) {
+class DFAAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, assumptionGeneratorType : AssumptionGeneratorType = AssumptionGeneratorType.RPNI, useAlphabetRefinement : Boolean = false) {
   val nbProcesses = ltsFiles.size
   val propertyAlphabet = Set[String](err)
   val processes = ltsFiles.map(TA.fromFile(_)).toBuffer
@@ -377,7 +377,7 @@ class DFAAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useAlphab
 
 
   val proofSkeleton = AGProofSkeleton(processes.map(_.alphabet), propertyAlphabet, assumptionAlphabet)
-  private var constraintManager = ConstraintManager.getAssumptionGenerator(proofSkeleton, AssumptionGeneratorType.RPNI)
+  private var constraintManager = ConstraintManager.getAssumptionGenerator(proofSkeleton, assumptionGeneratorType)
 
   // Latest cex encountered in any premise check
   private var latestCex = List[String]()
@@ -391,7 +391,7 @@ class DFAAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, useAlphab
     assumptionAlphabet |= newSymbols
     proofSkeleton.update(processes.map(_.alphabet), propertyAlphabet, assumptionAlphabet)
     // Create a new constraint manager initialized with the incremental traces from the previous instance
-    constraintManager = ConstraintManager.getAssumptionGenerator(proofSkeleton, AssumptionGeneratorType.RPNI, Some(constraintManager.incrementalTraces))
+    constraintManager = ConstraintManager.getAssumptionGenerator(proofSkeleton, assumptionGeneratorType, Some(constraintManager.incrementalTraces))
     configuration.resetCEX()
   }
 

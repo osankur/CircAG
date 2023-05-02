@@ -11,6 +11,7 @@ import io.AnsiColor._
 
 import net.automatalib.serialization.dot.GraphDOT
 
+import net.automatalib.automata.fsa.impl.{FastDFA, FastNFA, FastDFAState, FastNFAState}
 
 import de.learnlib.api.oracle.EquivalenceOracle
 import de.learnlib.api.query.DefaultQuery;
@@ -36,15 +37,16 @@ import com.microsoft.z3
 import fr.irisa.circag.statistics
 import fr.irisa.circag.configuration
 import fr.irisa.circag.{Trace, DLTS, Alphabet}
+import scala.collection.mutable
 
 trait DFALearner(name : String, alphabet : Alphabet) {
-  def addPositiveSamples(samples : Set[Trace]) = {
+  def setPositiveSamples(samples : Set[Trace]) = {
     if positiveSamples != samples then {
       positiveSamples = samples
       dlts = None
     }
   }
-  def addNegativeSamples(samples : Set[Trace]) = {
+  def setNegativeSamples(samples : Set[Trace]) = {
     if negativeSamples != samples then {
       negativeSamples = samples
       dlts = None
@@ -80,7 +82,88 @@ class RPNILearner(name : String, alphabet : Alphabet) extends DFALearner(name, a
   }
 }
 
-abstract class SATLearner(name : String, alphabet : Alphabet) extends DFALearner(name, alphabet) {
+class SATLearner(name : String, alphabet : Alphabet) extends DFALearner(name, alphabet) {
+  val ctx = {
+    val cfg = HashMap[String, String]()
+    cfg.put("model", "true");
+    z3.Context(cfg);
+  }
+  val solver = ctx.mkSolver()
+
+  def computeDLTS() : DLTS = {
+    var dfaSize = 2
+    var satisfiable = false
+    val listAlphabet = alphabet.toList
+    val alphabetMap = mutable.HashMap[String,Int]()
+    listAlphabet.zipWithIndex.foreach(alphabetMap.put)
+    var dlts : Option[DLTS] = None
+    while (!satisfiable) do {
+      solver.reset()
+      val qNames = Array.tabulate(dfaSize)({i => s"q${i}"})
+      val qSort = ctx.mkEnumSort("Q", qNames : _*);
+      val qConsts = (0 until dfaSize).map{i => qSort.getConst(i)}
+      val alphaSort = ctx.mkEnumSort("A", listAlphabet : _*)
+      val alphaConsts = (0 until alphabet.size).map{i => alphaSort.getConst(i)}
+      val transDomain = Array[z3.Sort](qSort, alphaSort)
+      val trans = ctx.mkFuncDecl("trans", transDomain, qSort)
+      // qConsts(0) is initial and accepting
+      // qConsts(-1) is rejecting, and all others are accepting
+      val rejState = qConsts.last
+      val initState = qConsts(0)
+      // Make rejState absorbing:      
+      for alpha <- alphaConsts do {
+        solver.add(ctx.mkEq(rejState, ctx.mkApp(trans, rejState, alpha)))
+      }
+      for (trace,itrace) <- positiveSamples.zipWithIndex do {
+        val q = (0 to trace.size).map{i => ctx.mkConst(s"p_trace_${itrace}_${i}", qSort)}
+        solver.add(ctx.mkEq(initState, q(0)))
+        for (alpha, i) <- trace.zipWithIndex do {
+          solver.add(ctx.mkEq(q(i+1), ctx.mkApp(trans, q(i), alphaConsts(alphabetMap(alpha)))))
+        }
+        solver.add(ctx.mkNot(ctx.mkEq(q.last, rejState)))
+      }
+
+      for (trace,itrace) <- negativeSamples.zipWithIndex do {
+        val q = (0 to trace.size).map{i => ctx.mkConst(s"n_trace_${itrace}_${i}", qSort)}
+        solver.add(ctx.mkEq(initState, q(0)))
+        for (alpha, i) <- trace.zipWithIndex do {
+          solver.add(ctx.mkEq(q(i+1), ctx.mkApp(trans, q(i), alphaConsts(alphabetMap(alpha)))))
+        }
+        solver.add(ctx.mkEq(q.last, rejState))
+      }
+      
+      satisfiable = solver.check() == z3.Status.SATISFIABLE
+      if (!satisfiable) then {
+        dfaSize += 2
+      } else {
+        val m = solver.getModel()
+        val newDFA =
+          new FastDFA(Alphabets.fromList(listAlphabet))
+        val states = (0 until dfaSize).map(i => newDFA.addState(i < dfaSize-1))
+        newDFA.setInitial(states(0), true)
+        for s <- 0 until dfaSize do {
+          for alpha <- listAlphabet do {
+            val snext = m.eval(ctx.mkApp(trans, qConsts(s), alphaConsts(alphabetMap(alpha))), true)
+            for t <- 0 until dfaSize do {
+              if (qConsts(t) == snext) then {
+                newDFA.setTransition(states(s), alpha, states(t))
+              }
+            }
+          }
+        }
+        dlts = Some(DLTS(name, newDFA, alphabet))
+      }
+    }
+    dlts.getOrElse(throw Exception("No DLTS"))
+  }
+  override def getDLTS(): DLTS = {
+    this.dlts match {
+      case Some(d) => d
+      case None =>
+        this.dlts = Some(computeDLTS())
+        getDLTS()
+    }
+  }
 }
 
 abstract class JointSATLearner(name : String, alphabet : Alphabet) extends DFALearner(name, alphabet) {
@@ -95,7 +178,7 @@ abstract class JointSATLearner(name : String, alphabet : Alphabet) extends DFALe
   * @param propertyDependencies
   * @param assumptionAlphabets
   */
-trait ConstraintManager(proofSkeleton : AGProofSkeleton) {
+trait ConstraintManager(proofSkeleton : AGProofSkeleton, assumptionGeneratorType : AssumptionGeneratorType = AssumptionGeneratorType.RPNI) {
   val z3ctx = {
     val cfg = HashMap[String, String]()
     cfg.put("model", "true")
@@ -314,88 +397,6 @@ trait ConstraintManager(proofSkeleton : AGProofSkeleton) {
       Some(positiveSamples, negativeSamples)
     }
   }
-  // def generateAssumptions(oldAssumptions : Buffer[DLTS]) : Option[Buffer[DLTS]] = {
-  //   var positiveSamples = Buffer.tabulate(nbProcesses)({_ => mutable.Set[Trace]()})
-  //   var negativeSamples = Buffer.tabulate(nbProcesses)({_ => mutable.Set[Trace]()})
-  //   var beginTime = System.nanoTime()
-  //   if(solver.check() == z3.Status.UNSATISFIABLE){
-  //     statistics.Timers.incrementTimer("z3", (System.nanoTime() - beginTime))
-  //     None
-  //   } else {
-  //     val m = solver.getModel()
-  //     // Compute sets of negative samples, and prefix-closed sets of pos samples from the valuation
-  //     samples.zipWithIndex.foreach({
-  //       (isamples, i) => 
-  //         isamples.foreach({
-  //           (trace, v) =>
-  //             m.evaluate(v, true).getBoolValue() match {
-  //               case z3.enumerations.Z3_lbool.Z3_L_TRUE =>
-  //                 val sample = trace.filter(proofSkeleton.assumptionAlphabets(i))
-  //                 // Add all prefixes
-  //                 for k <- 0 to sample.size do {
-  //                   positiveSamples(i).add(sample.dropRight(k))
-  //                 }
-  //               case z3.enumerations.Z3_lbool.Z3_L_FALSE => 
-  //                 negativeSamples(i).add(trace.filter(proofSkeleton.assumptionAlphabets(i)))
-  //               case _ =>
-  //                 val sample = trace.filter(proofSkeleton.assumptionAlphabets(i))
-  //                 // Add all prefixes
-  //                 for k <- 0 to sample.size do {
-  //                   positiveSamples(i).add(sample.dropRight(k))
-  //                 }
-  //             }
-  //         })
-  //     })
-  //     statistics.Timers.incrementTimer("z3", (System.nanoTime() - beginTime))
-  //     val newAssumptions = Buffer[DLTS]()
-  //     for i <- 0 until nbProcesses do {
-  //       if configuration.get().verbose then {
-  //         System.out.println(s"#POS(${i}) = ${positiveSamples(i).size}:")
-  //         for w <- positiveSamples(i) do {
-  //           System.out.println(s"\t${w}")
-  //         }
-  //         System.out.println(s"#NEG(${i}) = ${negativeSamples(i).size}:")
-  //         for w <- negativeSamples(i) do {
-  //           System.out.println(s"\t${w}")
-  //         }
-  //       }
-  //       // checkPrefixIndependance(positiveSamples(i), negativeSamples(i))
-  //       if( positiveSamples(i).toSet == this.positiveSamples(i).toSet
-  //           && negativeSamples(i).toSet == this.negativeSamples(i).toSet
-  //           && oldAssumptions(i).alphabet == proofSkeleton.assumptionAlphabets(i)
-  //       ){
-  //         newAssumptions.append(oldAssumptions(i))
-  //         if configuration.get().verbose then {
-  //           System.out.println(s"Keeping assumption ${i}...")
-  //         }
-  //       } else {
-  //         if configuration.get().verbose then {
-  //           System.out.println(s"${BLUE}Updating assumption ${i}...${RESET} with alphabet: ${proofSkeleton.assumptionAlphabets(i).toList}")
-  //         }
-  //         statistics.Counters.incrementCounter("RPNI")
-  //         val learner = BlueFringeRPNIDFA(Alphabets.fromList(proofSkeleton.assumptionAlphabets(i).toList))
-  //         learner.addPositiveSamples(positiveSamples(i).map(Word.fromList(_)))
-  //         learner.addNegativeSamples(negativeSamples(i).map(Word.fromList(_)))
-  //         var beginTime = System.nanoTime()
-  //         val initialModel = learner.computeModel()
-
-  //         statistics.Timers.incrementTimer("rpni", System.nanoTime() - beginTime)
-  //         newAssumptions.append(
-  //           DLTS(
-  //               oldAssumptions(i).name,
-  //               dfa = DLTS.makePrefixClosed(initialModel, proofSkeleton.assumptionAlphabets(i), removeNonAcceptingStates = true),
-  //               alphabet = proofSkeleton.assumptionAlphabets(i)
-  //           )
-  //         )
-  //         System.out.println(s"${BLUE}Size of DFA ${newAssumptions(i).dfa.size()}...${RESET}")
-  //         this.positiveSamples(i) = positiveSamples(i)
-  //         this.negativeSamples(i) = negativeSamples(i)
-  //       }
-  //     }
-  //     statistics.Timers.incrementTimer("generate-assumptions", System.nanoTime() - beginTime)
-  //     Some(newAssumptions)
-  //   }
-  // }
   /**
     * Compute boolean expression with the following property:
     * For each pair of traces w, w', if proj(w, alphabet) is a prefix of proj(w', alphabet),
@@ -432,6 +433,7 @@ trait ConstraintManager(proofSkeleton : AGProofSkeleton) {
     }
   }
 
+ 
   def generateAssumptions() : Option[Buffer[DLTS]]
 }
 
@@ -449,8 +451,8 @@ class RPNIGenerator(proofSkeleton : AGProofSkeleton, incrementalTraces : Option[
       case Some(posSamples, negSamples) =>
         Some(Buffer.tabulate(proofSkeleton.nbProcesses)
           (i => 
-            learners(i).addPositiveSamples(posSamples(i))
-            learners(i).addNegativeSamples(negSamples(i))
+            learners(i).setPositiveSamples(posSamples(i))
+            learners(i).setNegativeSamples(negSamples(i))
             learners(i).getDLTS()
           )
         )
