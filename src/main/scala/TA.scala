@@ -198,7 +198,7 @@ object TA{
     * @param dlts list of DLTSs with which sync product is to be computed
     * @param acceptingLabelSuffix if Some(suffix), then accepting states of each DLTS are labeled by name_suffix.
     * @pre ta.systemName and dlts.name's are pairwise distinct
-    * @return
+    * @return Product of ta and the given DLTS
     */
   def synchronousProduct(ta : TA, dlts : List[DLTS], acceptingLabelSuffix : Option[String] = None) : TA = {
     val allNames = dlts.map(_.name) ++ ta.eventsOfProcesses.keys().toList

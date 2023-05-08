@@ -57,13 +57,13 @@ trait LTS[FA <: FiniteStateAcceptor[?, String] with Automaton[?, String, ?]](
   }
 }
 
-class DLTS(
+case class DLTS(
     override val name: String,
     override val dfa: FastDFA[String],
     override val alphabet: Set[String]
 ) extends LTS[FastDFA[String]](name, dfa, alphabet)
 
-class NLTS(
+case class NLTS(
     override val name: String,
     override val dfa: FastNFA[String],
     override val alphabet: Set[String]
@@ -168,8 +168,8 @@ object DLTS {
     * @param projectionAlphabet
     * @return
     */
-  def fromTrace(trace: Trace): DLTS = {
-    val alph = trace.toSet
+  def fromTrace(trace: Trace, traceAlphabet : Option[Alphabet] = None): DLTS = {
+    val alph = traceAlphabet.getOrElse(trace.toSet) | trace.toSet
     val dfa = FastDFA(Alphabets.fromList(alph.toList))
     val newStates = Buffer[FastDFAState]()
     newStates.append(dfa.addState())

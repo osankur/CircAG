@@ -161,18 +161,21 @@ object DFAAssumeGuaranteeVerifier {
   }
 
   /**
-    * Check the intersection of ta with trace seen as a DFA on given alphabet (default is trace.toSet)
+    * Check whether trace|_alph is accepted by ta|_alph where alph is syncAlphabet (default is trace.toSet)
     *
-    * @param ta
-    * @param word
-    * @param projectionAlphabet
-    * @return None if no such execution exists, and Some(execution) otherwise.
+    * @param ta a process 
+    * @param trace a trace
+    * @param syncAlphabet alphabet on which synchronous product is to be defined
+    * @return None if no such execution exists, and Some(trace) otherwise.
     */
-  def checkTraceMembership(ta : TA, word : Trace, alphabet : Option[Set[String]] = None) : Option[Trace] = {  
+  def checkTraceMembership(ta : TA, trace : Trace, syncAlphabet : Option[Set[String]] = None) : Option[Trace] = {  
     statistics.Counters.incrementCounter("trace-membership")
-    val traceProcess = DLTS.fromTrace(word)
+    val traceAlphabet = syncAlphabet.getOrElse(trace.toSet)
+    val projTrace = trace.filter(traceAlphabet.contains(_))
+    val traceProcess = DLTS.fromTrace(projTrace, Some(traceAlphabet))
     val productTA = TA.synchronousProduct(ta, List(traceProcess), Some("_accept_"))
-    this.checkReachability(productTA, s"${traceProcess.name}_accept_")
+    val result = this.checkReachability(productTA, s"${traceProcess.name}_accept_")
+    result
   }
 
   /**
@@ -412,6 +415,28 @@ class DFAAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, assumptio
   }
 
   /**
+   * Check whether all processes accept the given trace
+   */
+  def checkCounterExample(trace : Trace) : Boolean = {
+    var returnValue = true
+    try {
+      for (ta,i) <- processes.zipWithIndex do {
+        DFAAssumeGuaranteeVerifier.checkTraceMembership(ta, trace, Some(assumptions(i).alphabet))
+        match {
+          case None => // ta rejects
+            throw AGContinue()
+          case _ => // ta accepts
+            ()
+        }
+      }
+    } catch {
+      case _ : AGContinue => 
+        returnValue = false
+    }
+    returnValue
+  }
+
+  /**
    * Check the AG rule once for the current assumption alphabet and DFAs
    */
   def applyAG() : AGIntermediateResult = {
@@ -458,6 +483,13 @@ class DFAAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, assumptio
             } else {
               configuration.cex(i) = configuration.cex(i) + cexTrace
             }
+            val prefixInP = propertyDLTS.dfa.accepts(cexTrace.dropRight(1).filter(propertyAlphabet.contains(_)))
+            val traceInP = propertyDLTS.dfa.accepts(cexTrace.filter(propertyAlphabet.contains(_)))
+            if (!prefixInP && checkCounterExample(cexTrace.dropRight(1))) then {
+              throw AGFalse(cexTrace.dropRight(1))
+            } else if (!traceInP && checkCounterExample(cexTrace)) then {
+              throw AGFalse(cexTrace)
+            }
             updateConstraints(i, cexTrace)
             throw AGContinue()
         }
@@ -471,27 +503,18 @@ class DFAAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, assumptio
           latestCex = cexTrace
           System.out.println(s"${RED}Final premise failed with cex: ${cexTrace}${RESET}")
           // If all processes contain proj(cexTrace), then return false, otherwise continue
-          for (ta,i) <- processes.zipWithIndex do {
-            DFAAssumeGuaranteeVerifier.checkTraceMembership(ta, cexTrace.filter(assumptions(i).alphabet))
-            match {
-              case None => 
-                if configuration.get().verbose then
-                  System.out.println(s"\tCex does not apply to process ${i}. Continuing...")
-                // for ass <- assumptions do {
-                //   System.out.println(ass.name)
-                //   ass.visualize()
-                // }
-                constraintManager.addFinalPremiseConstraint(cexTrace)
-                throw AGContinue()
-              case _ => ()
-            }
+          if checkCounterExample(cexTrace) then {
+            if configuration.get().verbose then
+              System.out.println(s"\tCex confirmed: ${cexTrace}")
+            throw AGFalse(cexTrace)
+          } else {
+            constraintManager.addFinalPremiseConstraint(cexTrace)
+            throw AGContinue()
           }
-          if configuration.get().verbose then
-            System.out.println(s"\tConfirming cex: ${cexTrace}")
-          throw AGFalse(cexTrace)
       }
     } catch {
-      case ex : AGContinue => ex
+      case ex : AGContinue => 
+        ex
       case ex : AGFalse => ex
     }
   }
@@ -593,11 +616,13 @@ class DFAAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, assumptio
    * Apply automatic AG; retrun None on succes, and a confirmed cex otherwise.
    */
   def check() : Option[Trace] = {
+    configuration.resetCEX()
     var currentState : AGIntermediateResult = AGContinue()
     while(currentState == AGContinue()) {
       var newAss = constraintManager.generateAssumptions()
       // If the constraints are unsat, then refine the alphabet and try again
       // They cannot be unsat if the alphabets are complete
+      assert(newAss != None || configuration.get().alphabetRefinement)
       while(newAss == None) do {
         if configuration.get().verbose then {
           System.out.println("Refining alphabet due to constraints being unsat")

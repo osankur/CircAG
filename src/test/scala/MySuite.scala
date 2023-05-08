@@ -65,6 +65,49 @@ import com.microsoft.z3.enumerations.Z3_lbool
 import fr.irisa.circag.tchecker.ltl._
 import fr.irisa.circag.tchecker.dfa._
 
+class Z3Tests extends munit.FunSuite {
+  test("z3 enum sort"){
+    val cfg = HashMap[String, String]()
+    cfg.put("model", "true");
+    // cfg.put("proof", "true");
+    // cfg.put("unsat_core", "true")
+    val ctx = Context(cfg);      
+    val solver3 = ctx.mkSolver()
+    val enumSort = ctx.mkEnumSort("T", Array[String]("a","b","c") : _*);
+    val T = enumSort
+    val esa = enumSort.getConst(0)
+    val esb = enumSort.getConst(1)
+    val esc = enumSort.getConst(2)
+    val x = ctx.mkConst("x", T)
+    val y = ctx.mkConst("y", T)
+    val z = ctx.mkConst("z", T)
+
+    solver3.add( ctx.mkOr(ctx.mkEq(x,esa), ctx.mkEq(y,esb)))
+    solver3.add( ctx.mkOr(ctx.mkNot(ctx.mkEq(x,y))))
+    assert(solver3.check() == Status.SATISFIABLE)
+    // val m = solver3.getModel()
+    // System.out.println(m)
+  }
+  test("z3 unsat core"){
+    val cfg = HashMap[String, String]()
+    cfg.put("proof", "true");
+    cfg.put("unsat_core", "true");
+    val ctx = Context(cfg);      
+    val x = ctx.mkSymbol("x")
+    val varx = ctx.mkBoolConst(x)
+    val y = ctx.mkSymbol("x")
+    val vary = ctx.mkBoolConst(x)
+    val e = ctx.mkEq(varx, ctx.mkNot(varx))
+    val solver = ctx.mkSolver()
+    solver.add(e)
+    assert(solver.check(vary) == Status.UNSATISFIABLE)
+    System.out.println(solver.getProof())
+    for ass <- solver.getUnsatCore() do {
+      System.out.println(ass)
+    }    
+  }
+}
+
 class TATests extends munit.FunSuite {
   test("CEX Parsing from TChecker"){
     // get cex from tchecker
@@ -99,7 +142,7 @@ class DFAAAG extends munit.FunSuite {
     val cfg = HashMap[String, String]()
     cfg.put("model", "true");
     // cfg.put("proof", "true");
-    cfg.put("unsat_core", "true")
+    // cfg.put("unsat_core", "true")
     val ctx = Context(cfg);      
     /* do something with the context */
 
@@ -123,35 +166,22 @@ class DFAAAG extends munit.FunSuite {
     assert(solver2.check() == Status.UNSATISFIABLE)
     ctx.close();      
   }
-  test("z3 enum sort"){
-    val cfg = HashMap[String, String]()
-    cfg.put("model", "true");
-    // cfg.put("proof", "true");
-    cfg.put("unsat_core", "true")
-    val ctx = Context(cfg);      
-    val solver3 = ctx.mkSolver()
-    val enumSort = ctx.mkEnumSort("T", Array[String]("a","b","c") : _*);
-    val T = enumSort
-    val esa = enumSort.getConst(0)
-    val esb = enumSort.getConst(1)
-    val esc = enumSort.getConst(2)
-    val x = ctx.mkConst("x", T)
-    val y = ctx.mkConst("y", T)
-    val z = ctx.mkConst("z", T)
-
-    solver3.add( ctx.mkOr(ctx.mkEq(x,esa), ctx.mkEq(y,esb)))
-    solver3.add( ctx.mkOr(ctx.mkNot(ctx.mkEq(x,y))))
-    assert(solver3.check() == Status.SATISFIABLE)
-    // val m = solver3.getModel()
-    // System.out.println(m)
-
+  test("sat learner"){
     val satLearner = SATLearner("ass", Set("a","b","c"))
-    satLearner.setPositiveSamples(Set(List("a","b")))
-    satLearner.setNegativeSamples(Set(List("a","b","b"), List("c")))
+    val positives = Set(List("a","b","c"),List("c","c"))
+    val negatives = Set(List("b","c"),List("a","b","b"))
+    satLearner.setPositiveSamples(positives)
+    satLearner.setNegativeSamples(negatives)
+    // satLearner.setPositiveSamples(Set(List("a","b")))
+    // satLearner.setNegativeSamples(Set(List("a","b","b"), List("c")))
+    // satLearner.setNegativeSamples(Set(List("b","b")))
     val dlts = satLearner.getDLTS()
-    assert(dlts.dfa.accepts(List("a","b")))
-    assert(!dlts.dfa.accepts(List("c")))
-    assert(!dlts.dfa.accepts(List("a","b","b")))
+    // dlts.visualize()
+    positives.foreach(x => assert(dlts.dfa.accepts(x)))
+    negatives.foreach(x => assert(!dlts.dfa.accepts(x)))
+    // assert(dlts.dfa.accepts(List("a","b")))
+    // assert(!dlts.dfa.accepts(List("c")))
+    // assert(!dlts.dfa.accepts(List("a","b","b")))
     // dlts.visualize()
   }
 
@@ -498,7 +528,33 @@ class DFAAAG extends munit.FunSuite {
       case e : tchecker.dfa.AGSuccess => ()
       case _ => throw Exception("AG Verification failed")
     }
+  }
+  test("lts from file"){
+    val files = Array(File("examples/toy/lts1.ta"),File("examples/toy/lts2.ta"),File("examples/toy/lts3.ta"))
+    val verSAT = tchecker.dfa.DFAAssumeGuaranteeVerifier(files, "err", AssumptionGeneratorType.SAT, false)
+    val verUFSAT = tchecker.dfa.DFAAssumeGuaranteeVerifier(files, "err", AssumptionGeneratorType.UFSAT, false)
+    val verRPNI = tchecker.dfa.DFAAssumeGuaranteeVerifier(files, "err", AssumptionGeneratorType.RPNI, false)
+    assert(verUFSAT.check() == None)
+    assert(verSAT.check() == None)
+    assert(verRPNI.check() == None)
+  }
 
+  test("seq-toy from file"){
+    val files = Array(File("examples/seq-toy/lts0.ta"),File("examples/seq-toy/lts1.ta"),File("examples/seq-toy/lts2.ta"))
+    val verUFSAT =  tchecker.dfa.DFAAssumeGuaranteeVerifier(files, "err", AssumptionGeneratorType.SAT, false)
+    val verSAT =  tchecker.dfa.DFAAssumeGuaranteeVerifier(files, "err", AssumptionGeneratorType.SAT, false)
+    val verRPNI = tchecker.dfa.DFAAssumeGuaranteeVerifier(files, "err", AssumptionGeneratorType.RPNI, false)
+    assert(verRPNI.check() != None)
+    assert(verSAT.check() != None)
+    assert(verUFSAT.check() != None)
+
+    val files2 = Array(File("examples/seq-toy/lts0.ta"),File("examples/seq-toy/lts1.ta"),File("examples/seq-toy/lts2.ta"),File("examples/seq-toy/lts3.ta"))
+    val ver2SAT = tchecker.dfa.DFAAssumeGuaranteeVerifier(files2, "err", AssumptionGeneratorType.SAT, false)
+    assert(ver2SAT.check() == None)
+    val ver2UFSAT = tchecker.dfa.DFAAssumeGuaranteeVerifier(files2, "err", AssumptionGeneratorType.SAT, false)
+    assert(ver2UFSAT.check() == None)
+    val ver2RPNI = tchecker.dfa.DFAAssumeGuaranteeVerifier(files2, "err", AssumptionGeneratorType.RPNI, false)
+    assert(ver2RPNI.check() == None)
   }
 
   test("rpni"){
@@ -697,7 +753,5 @@ class LTLAGTests extends munit.FunSuite {
     val checker2 = LTLAssumeGuaranteeVerifier(tas, G(Not(Atomic("a"))))
     ltl.zipWithIndex.foreach( (ltl,i) => checker2.setAssumption(i, ltl))
     assert(checker2.checkFinalPremise() != None)
-  }
-
- 
+  } 
 }

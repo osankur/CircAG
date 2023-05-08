@@ -25,6 +25,7 @@ import com.microsoft.z3
 object Main {
   val logger = LoggerFactory.getLogger("CircAG")
 
+
   def main(args: Array[String]): Unit = {
     val builder = OParser.builder[Configuration]
     val parser1 = {

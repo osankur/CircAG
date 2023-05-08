@@ -1,7 +1,6 @@
 package fr.irisa.circag.tchecker.dfa
 
-import java.util.HashMap
-import scala.collection.mutable.Buffer
+import scala.collection.mutable.{HashMap,Buffer}
 import scala.collection.mutable
 import scala.collection.immutable.Set
 import collection.JavaConverters._
@@ -63,6 +62,7 @@ trait DFALearner(name : String, alphabet : Alphabet) {
 enum AssumptionGeneratorType:
   case RPNI
   case SAT
+  case UFSAT
   case JointSAT
 
 class RPNILearner(name : String, alphabet : Alphabet) extends DFALearner(name, alphabet) {
@@ -83,15 +83,25 @@ class RPNILearner(name : String, alphabet : Alphabet) extends DFALearner(name, a
               alphabet = alphabet
           )
         this.dlts = Some(dlts)
+        // System.out.println(s"Alphabet: ${dlts.alphabet}")
+        // System.out.println(s"Pos:${positiveSamples}")
+        // System.out.println(s"Neg:${negativeSamples}")
+        // dlts.visualize()
         dlts
     }
 
   }
 }
 
-class SATLearner(name : String, alphabet : Alphabet) extends DFALearner(name, alphabet) {
+/**
+  * Passive learning of DFAs with a SAT encoding using an uninterpreted function to encode the transition relation.
+  *
+  * @param name name of the DLTS to be learned
+  * @param alphabet alphabet of the DLTS
+  */
+class UFSATLearner(name : String, alphabet : Alphabet) extends DFALearner(name, alphabet) {
   val ctx = {
-    val cfg = HashMap[String, String]()
+    val cfg = mutable.HashMap[String, String]()
     cfg.put("model", "true");
     z3.Context(cfg);
   }
@@ -181,6 +191,177 @@ class SATLearner(name : String, alphabet : Alphabet) extends DFALearner(name, al
   }
 }
 
+class SATLearner(name : String, alphabet : Alphabet) extends DFALearner(name, alphabet) {
+  val ctx = {
+    val cfg = HashMap[String, String]()
+    cfg.put("model", "true");
+    z3.Context(cfg);
+  }
+  val solver = ctx.mkSolver()
+
+  /**
+    * Learn a prefix-closed complete deterministic finite automaton
+    * satisfying the positive and negative samples
+    * @return the said DLTS
+    */
+  def computeDLTS() : DLTS = {
+    var dfaSize = 2
+    var satisfiable = false
+    val listAlphabet = alphabet.toList
+    val alphabetMap = mutable.HashMap[String,Int]()
+    listAlphabet.zipWithIndex.foreach(alphabetMap.put)
+    var dlts : Option[DLTS] = None
+    while (!satisfiable) do {
+      solver.reset()
+      val trans = 
+        Buffer.tabulate(dfaSize)({
+          s => Buffer.tabulate(alphabet.size)({
+            a => Buffer.tabulate(dfaSize)({
+              t => ctx.mkBoolConst(s"trans_${s}_${a}_${t}")
+            })
+          })
+        })
+      for s <- 0 until dfaSize do {
+        for a <- 0 until alphabet.size do {
+          // Each trans(s)(a) has a successor
+          solver.add(trans(s)(a).fold(ctx.mkFalse)({ (c,x) => ctx.mkOr(c, x)}))
+          // It has at most one successor
+          (0 until dfaSize).foreach({
+            t => 
+              solver.add(
+                ctx.mkImplies(
+                  trans(s)(a)(t), 
+                  ctx.mkAnd(
+                    (0 until dfaSize).toSet.diff(Set(t))
+                    .map(trans(s)(a))
+                    .map(ctx.mkNot)
+                    .toList : _*
+                  )
+                )
+              )
+          })
+        }
+      }
+      // 0 is initial
+      // dfaSize-1 is rejecting, and all others are accepting
+      val rejState = dfaSize -1 
+      // Make rejState absorbing:
+      for alpha <- 0 until alphabet.size do {
+        solver.add(trans(rejState)(alpha)(rejState))
+      }
+      // Encode executions on samples
+      val samples = positiveSamples.zipWithIndex.map(x => (true, x))
+                    ++ negativeSamples.zipWithIndex.map(x => (false, x))
+      for (isPositive, (trace,itrace)) <- samples do {
+        val q = (0 to trace.size).map{i => 
+          Buffer.tabulate(dfaSize)({
+            s => ctx.mkBoolConst(s"${isPositive}_trace_${itrace}_step${i}_state${s}")
+          })          
+        }
+        // Exactly one state is true at each step
+        for i <- 0 to trace.size do {
+          for s <- 0 until dfaSize do {
+            solver.add(
+              ctx.mkImplies(
+                q(i)(s), 
+                ctx.mkAnd(
+                  (0 until dfaSize).toSet.diff(Set(s))
+                  .map(q(i))
+                  .map(ctx.mkNot)
+                  .toList : _*
+                )
+            ))
+            solver.add(
+              ctx.mkOr(
+                q(i).toSeq : _*
+              )
+            )
+          }
+        }
+        // Init state is 0
+        solver.add(q(0)(0))
+        // Exec satisfies transition relation
+        for (alpha, i) <- trace.zipWithIndex do {
+          for s <- 0 until dfaSize do {
+            for t <- 0 until dfaSize do {
+              solver.add(
+                ctx.mkImplies(
+                  ctx.mkAnd(q(i)(s), q(i+1)(t)),
+                  trans(s)(alphabetMap(alpha))(t)
+                )
+              )
+            }
+          }
+        }
+        if isPositive then 
+          solver.add(ctx.mkNot(q(trace.size)(rejState)))
+        else 
+          solver.add(q(trace.size)(rejState))
+      }
+      
+      // solver.getAssertions().foreach(System.out.println)
+      satisfiable = solver.check() == z3.Status.SATISFIABLE
+      if (!satisfiable) then {
+        dfaSize += 2
+      } else {
+        val m = solver.getModel()
+        // System.out.println(m)
+        val newDFA =
+          new FastDFA(Alphabets.fromList(listAlphabet))
+        val states = (0 until dfaSize).map(i => newDFA.addState(i < dfaSize-1))
+        newDFA.setInitial(states(0), true)
+        for s <- 0 until dfaSize do {
+          for alpha <- listAlphabet do {
+            for t <- 0 until dfaSize do {
+              m.evaluate(trans(s)(alphabetMap(alpha))(t), true).getBoolValue() match {
+                case z3.enumerations.Z3_lbool.Z3_L_TRUE =>
+                  newDFA.setTransition(states(s), alpha, states(t))
+                case _ => ()              
+              }
+            }
+          }
+        }
+        dlts = Some(DLTS(name, newDFA.pruned, alphabet))
+      }
+    }
+    dlts.getOrElse(throw Exception("No DLTS"))
+  }
+  override def getDLTS(): DLTS = {
+    this.dlts match {
+      case Some(d) => d
+      case None =>
+        statistics.Counters.incrementCounter("SAT-Learner")
+        var beginTime = System.nanoTime()
+        this.dlts = Some(computeDLTS())
+        statistics.Timers.incrementTimer("sat-learner", System.nanoTime() - beginTime)
+        val dlts = getDLTS()
+        // System.out.println(s"Pos:${positiveSamples}")
+        // System.out.println(s"Neg:${negativeSamples}")
+        // dlts.visualize()
+        this.positiveSamples.foreach(
+          tr => if !(dlts.dfa.accepts(tr)) then {
+            System.out.println(s"Pos not accepted:${tr}")
+            System.out.println(s"Pos:${positiveSamples}")
+            System.out.println(s"Neg:${negativeSamples}")
+            dlts.visualize()
+            throw Exception("")
+          }
+        )
+        this.negativeSamples.foreach(tr => 
+          if dlts.dfa.accepts(tr) then {
+            System.out.println(s"Neg:${tr}")
+            System.out.println(s"Pos:${positiveSamples}")
+            System.out.println(s"Neg:${negativeSamples}")
+            dlts.visualize()
+            throw Exception("")
+          }
+        )
+        dlts
+    }
+  }
+}
+
+
 abstract class JointSATLearner(name : String, alphabet : Alphabet) extends DFALearner(name, alphabet) {
 }
 
@@ -196,6 +377,7 @@ abstract class JointSATLearner(name : String, alphabet : Alphabet) extends DFALe
 class ConstraintManager(proofSkeleton : AGProofSkeleton, assumptionGeneratorType : AssumptionGeneratorType = AssumptionGeneratorType.RPNI) {
   val z3ctx = {
     val cfg = HashMap[String, String]()
+    cfg.put("proof", "true")
     cfg.put("model", "true")
     z3.Context(cfg);
   }
@@ -207,6 +389,7 @@ class ConstraintManager(proofSkeleton : AGProofSkeleton, assumptionGeneratorType
       assumptionGeneratorType match {
         case AssumptionGeneratorType.RPNI => RPNILearner(s"assumption_${i}", proofSkeleton.assumptionAlphabets(i))
         case AssumptionGeneratorType.SAT => SATLearner(s"assumption_${i}", proofSkeleton.assumptionAlphabets(i))
+        case AssumptionGeneratorType.UFSAT => UFSATLearner(s"assumption_${i}", proofSkeleton.assumptionAlphabets(i))
         case _ => throw Exception("Not implemented yet")
       }      
     )
@@ -336,7 +519,6 @@ class ConstraintManager(proofSkeleton : AGProofSkeleton, assumptionGeneratorType
         if configuration.get().verbose then 
           System.out.println(s"Adding ${z3ctx.mkOr(term1, term2)}")
         val newConstraint = z3ctx.mkOr(term1, term2)
-        // constraint = z3ctx.mkAnd(constraint, newConstraint)
         solver.add(newConstraint)
         incrementalTraces.append((process, trace, constraintType))
     }
@@ -372,8 +554,8 @@ class ConstraintManager(proofSkeleton : AGProofSkeleton, assumptionGeneratorType
     constraint = z3ctx.mkAnd((0 until nbProcesses).map({i => varOfIndexedTrace(i, List[String]())}) : _*)
     solver.add(constraint)
 
-    // incrementalTraces.foreach({ tr => addConstraint(tr._1, tr._2, tr._3)})
-    // (0 until nbProcesses).foreach({i => updateTheoryConstraints(i)})
+    incrementalTraces.foreach({ tr => addConstraint(tr._1, tr._2, tr._3)})
+    
     this.positiveSamples = Buffer.tabulate(nbProcesses)({_ => Set[Trace]()})
     this.negativeSamples = Buffer.tabulate(nbProcesses)({_ => Set[Trace]()})
   }
@@ -395,7 +577,40 @@ class ConstraintManager(proofSkeleton : AGProofSkeleton, assumptionGeneratorType
     var negativeSamples = Buffer.tabulate(nbProcesses)({_ => Set[Trace]()})
     var beginTime = System.nanoTime()
     if(solver.check() == z3.Status.UNSATISFIABLE){
-      statistics.Timers.incrementTimer("z3", (System.nanoTime() - beginTime))
+      statistics.Timers.incrementTimer("z3", (System.nanoTime() - beginTime))      
+      // System.out.println(s"Core size: ${solver.getUnsatCore().size}")
+      val assertions = solver.getAssertions().toBuffer
+      val solver2 = z3ctx.mkSolver()
+
+      var valuation = z3ctx.mkTrue()
+      val automata = Buffer(List("a","err","a"), List("b","a","a","b"),List("b","b"))
+      val alphabets = Buffer(Set("a","err"), Set("a","b"), Set("b"))
+      for ((iprocess,trace),v) <- this.toVars do {
+        if automata(iprocess).startsWith(trace.filter(alphabets(iprocess).contains)) then {
+          valuation = z3ctx.mkAnd(valuation, v)
+        } else {
+          valuation = z3ctx.mkAnd(valuation, z3ctx.mkNot(v))
+        }
+      }
+      
+      solver2.reset()
+      solver2.push()
+      assertions.foreach(x => solver2.add(x))
+      solver2.add(valuation)
+      System.out.println(solver2.check())
+      solver2.pop()
+
+      solver2.add(valuation)
+      // System.out.println(valuation)
+      for ass <- assertions do{
+        solver2.push()
+        solver2.add(ass)
+        if(solver2.check() == z3.Status.UNSATISFIABLE){
+          System.out.println(s"UNSAT ASS: ${ass}")
+        } 
+        solver2.pop()
+      }      
+
       None
     } else {
       val m = solver.getModel()
