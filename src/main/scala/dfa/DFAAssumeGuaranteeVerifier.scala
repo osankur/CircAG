@@ -51,12 +51,6 @@ import fr.irisa.circag.statistics
 import com.microsoft.z3
 import fr.irisa.circag.isPrunedSafety
 
-trait AssumeGuaranteeOracles[LTS, Property] {
-  def checkInductivePremise(lts : LTS, assumptions : List[Property], guarantee : Property) : Option[Trace]
-  def checkFinalPremise(lhs : List[Property], p : Property) : Option[Trace]
-  def extendTrace(lts : LTS, word : Trace, extendedAlphabet : Set[String]) : Trace
-}
-
 object DFAAssumeGuaranteeVerifier {
   val logger = LoggerFactory.getLogger("CircAG")
   /**
@@ -380,7 +374,7 @@ class DFAAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, assumptio
 
 
   val proofSkeleton = AGProofSkeleton(processes.map(_.alphabet), propertyAlphabet, assumptionAlphabet)
-  private var constraintManager = ConstraintManager(proofSkeleton, assumptionGeneratorType)
+  private var constraintManager = DFAGenerator(proofSkeleton, assumptionGeneratorType)
 
   // Latest cex encountered in any premise check
   private var latestCex = List[String]()
@@ -394,7 +388,7 @@ class DFAAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, assumptio
     assumptionAlphabet |= newSymbols
     proofSkeleton.update(processes.map(_.alphabet), propertyAlphabet, assumptionAlphabet)
     // Create a new constraint manager initialized with the incremental traces from the previous instance
-    constraintManager = ConstraintManager(proofSkeleton, assumptionGeneratorType, constraintManager.incrementalTraces)
+    constraintManager = DFAGenerator(proofSkeleton, assumptionGeneratorType, constraintManager.incrementalTraces)
     configuration.resetCEX()
   }
 

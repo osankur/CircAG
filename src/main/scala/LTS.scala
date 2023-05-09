@@ -161,7 +161,7 @@ object DLTS {
     }
   }
 
-  /** Make straight-line DLTS reading a given trace, projecte to
+  /** Make straight-line DLTS reading a given trace, projected to
     * projectionAlphabet
     *
     * @param trace

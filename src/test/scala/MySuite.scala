@@ -42,7 +42,6 @@ import net.automatalib.visualization.Visualization;
 import net.automatalib.words.Alphabet;
 import net.automatalib.commons.util.nid.MutableNumericID;
 import net.automatalib.words.impl.FastAlphabet;
-
 import net.automatalib.words.impl.Alphabets;
 import net.automatalib.brics.AbstractBricsAutomaton
 import net.automatalib.brics.BricsNFA
@@ -56,9 +55,6 @@ import net.automatalib.words.impl.Alphabets;
 import de.learnlib.util.MQUtil;
 import de.learnlib.api.oracle.EquivalenceOracle
 import de.learnlib.api.query.DefaultQuery;
-// For more information on writing tests, see
-// https://scalameta.org/munit/docs/getting-started.html
-
 import fr.irisa.circag.{DLTS, Trace}
 import fr.irisa.circag.tchecker._
 import com.microsoft.z3.enumerations.Z3_lbool
@@ -167,7 +163,7 @@ class DFAAAG extends munit.FunSuite {
     ctx.close();      
   }
   test("sat learner"){
-    val satLearner = SATLearner("ass", Set("a","b","c"))
+    val satLearner = dfa.SATLearner("ass", Set("a","b","c"))
     val positives = Set(List("a","b","c"),List("c","c"))
     val negatives = Set(List("b","c"),List("a","b","b"))
     satLearner.setPositiveSamples(positives)
@@ -531,9 +527,9 @@ class DFAAAG extends munit.FunSuite {
   }
   test("lts from file"){
     val files = Array(File("examples/toy/lts1.ta"),File("examples/toy/lts2.ta"),File("examples/toy/lts3.ta"))
-    val verSAT = tchecker.dfa.DFAAssumeGuaranteeVerifier(files, "err", AssumptionGeneratorType.SAT, false)
-    val verUFSAT = tchecker.dfa.DFAAssumeGuaranteeVerifier(files, "err", AssumptionGeneratorType.UFSAT, false)
-    val verRPNI = tchecker.dfa.DFAAssumeGuaranteeVerifier(files, "err", AssumptionGeneratorType.RPNI, false)
+    val verSAT = tchecker.dfa.DFAAssumeGuaranteeVerifier(files, "err", dfa.AssumptionGeneratorType.SAT, false)
+    val verUFSAT = tchecker.dfa.DFAAssumeGuaranteeVerifier(files, "err", dfa.AssumptionGeneratorType.UFSAT, false)
+    val verRPNI = tchecker.dfa.DFAAssumeGuaranteeVerifier(files, "err", dfa.AssumptionGeneratorType.RPNI, false)
     assert(verUFSAT.check() == None)
     assert(verSAT.check() == None)
     assert(verRPNI.check() == None)
@@ -541,37 +537,20 @@ class DFAAAG extends munit.FunSuite {
 
   test("seq-toy from file"){
     val files = Array(File("examples/seq-toy/lts0.ta"),File("examples/seq-toy/lts1.ta"),File("examples/seq-toy/lts2.ta"))
-    val verUFSAT =  tchecker.dfa.DFAAssumeGuaranteeVerifier(files, "err", AssumptionGeneratorType.SAT, false)
-    val verSAT =  tchecker.dfa.DFAAssumeGuaranteeVerifier(files, "err", AssumptionGeneratorType.SAT, false)
-    val verRPNI = tchecker.dfa.DFAAssumeGuaranteeVerifier(files, "err", AssumptionGeneratorType.RPNI, false)
+    val verUFSAT =  tchecker.dfa.DFAAssumeGuaranteeVerifier(files, "err", dfa.AssumptionGeneratorType.SAT, false)
+    val verSAT =  tchecker.dfa.DFAAssumeGuaranteeVerifier(files, "err", dfa.AssumptionGeneratorType.SAT, false)
+    val verRPNI = tchecker.dfa.DFAAssumeGuaranteeVerifier(files, "err", dfa.AssumptionGeneratorType.RPNI, false)
     assert(verRPNI.check() != None)
     assert(verSAT.check() != None)
     assert(verUFSAT.check() != None)
 
     val files2 = Array(File("examples/seq-toy/lts0.ta"),File("examples/seq-toy/lts1.ta"),File("examples/seq-toy/lts2.ta"),File("examples/seq-toy/lts3.ta"))
-    val ver2SAT = tchecker.dfa.DFAAssumeGuaranteeVerifier(files2, "err", AssumptionGeneratorType.SAT, false)
+    val ver2SAT = tchecker.dfa.DFAAssumeGuaranteeVerifier(files2, "err", dfa.AssumptionGeneratorType.SAT, false)
     assert(ver2SAT.check() == None)
-    val ver2UFSAT = tchecker.dfa.DFAAssumeGuaranteeVerifier(files2, "err", AssumptionGeneratorType.SAT, false)
+    val ver2UFSAT = tchecker.dfa.DFAAssumeGuaranteeVerifier(files2, "err", dfa.AssumptionGeneratorType.SAT, false)
     assert(ver2UFSAT.check() == None)
-    val ver2RPNI = tchecker.dfa.DFAAssumeGuaranteeVerifier(files2, "err", AssumptionGeneratorType.RPNI, false)
+    val ver2RPNI = tchecker.dfa.DFAAssumeGuaranteeVerifier(files2, "err", dfa.AssumptionGeneratorType.RPNI, false)
     assert(ver2RPNI.check() == None)
-  }
-
-  test("rpni"){
-    class Event(label : String, var id : Int) extends MutableNumericID{
-      def getId() : Int = {
-        id
-      }
-      def setId(id : Int) : Unit = {
-        this.id = id
-      }
-    }
-    val alph = Alphabets.fromList(List("c","a","b", "err"))
-    val learner = BlueFringeRPNIDFA(alph)
-    learner.addPositiveSamples(Buffer(List("a","b","c"), List("a","a","c")).map(Word.fromList(_)))
-    learner.addNegativeSamples(Buffer(List("a","b","err"), List("a","a","b")).map(Word.fromList(_)))     
-    val dfa = learner.computeModel()
-    // Visualization.visualize(dfa, alph)
   }
 
   test("regexp"){
@@ -609,11 +588,6 @@ class DFAAAG extends munit.FunSuite {
     skeleton.setProcessDependencies(1,Set(0))
     assert((0 to 1).forall(skeleton.isCircular(_)))
     assert(!skeleton.isCircular(2))
-    // System.out.println("Process dependencies:")
-    // (0 until 3).foreach({i => System.out.println(skeleton.processDependencies(i))})
-    // System.out.println(s"Property deps: ${skeleton.propertyDependencies}")
-    // System.out.println("Circularity:")
-    // (0 until 3).foreach({i => System.out.println(skeleton.isCircular(i))})
   }
   test("dfa to string"){
    val inputs2: Alphabet[String] = Alphabets.fromList(List("start1", "start2", "end1", "end2"))

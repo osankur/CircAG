@@ -65,7 +65,7 @@ class BadProofSkeleton(msg : String) extends Exception(msg)
   * @param nbProcesses
   *   Number of processes
   */
-class AGProofSkeleton(nbProcesses: Int) {
+class AGProofSkeleton(val nbProcesses: Int) {
   private val logger = LoggerFactory.getLogger("CircAG")
 
   /** For each process, the set of process indices on which the proof inductively depends
@@ -122,7 +122,7 @@ class AGProofSkeleton(nbProcesses: Int) {
     _propertyAlphabet = alphabet
 
   /**
-    * Initialize all process dependencies according to the default policy (@see updateDefault)
+    * Initialize all process dependencies according to the default policy (@see updateByCone)
     *
     * @param assumptionAlphabets
     * @param propertyAlphabet
@@ -136,7 +136,7 @@ class AGProofSkeleton(nbProcesses: Int) {
   }
   /**
     * Compute interface alphabet which is the set of symbols that appear in the property or at least in two different processes;
-    * restrict each assumption to the interface alphabet intersected with the process' alphabet; and apply the defualt policy (@see updateDefault)
+    * restrict each assumption to the interface alphabet intersected with the process' alphabet; and apply the defualt policy (@see updateByCone)
     *
     * @param processes
     * @param property
@@ -144,23 +144,6 @@ class AGProofSkeleton(nbProcesses: Int) {
   def this( processes: Buffer[TA], property : LTL ) = {
     this(processes.size)
     val propertyAlphabet = property.alphabet
-    // // Set of symbols that appear in the property alphabet, or in at least two processes
-    // val interfaceAlphabet =
-    //   // Consider only symbols that appear at least in two processes (union of J_i's in CAV16)
-    //   val symbolCount = HashMap[String, Int]()
-    //   processes.foreach { p =>
-    //     p.alphabet.foreach { sigma =>
-    //       symbolCount.put(sigma, symbolCount.getOrElse(sigma, 0) + 1)
-    //     }
-    //   }
-    //   symbolCount.filterInPlace((sigma, count) => count >= 2)
-    //   propertyAlphabet | symbolCount.map({ (sigma, _) => sigma }).toSet
-
-    // val completeAssumptionAlphabets = processes
-    //   .map({ pr =>
-    //     interfaceAlphabet.intersect(pr.alphabet)
-    //   })
-    //   .toBuffer    
     updateByCone(processes.map(_.alphabet), propertyAlphabet)
   }
 
@@ -468,7 +451,6 @@ class LTLAssumeGuaranteeVerifier(ltsFiles: Array[File], val property: LTL) {
             G(F(proofSkeleton.assumptionAlphabet(i).foldLeft(LTLFalse() : LTL)({ (f, sigma) => Or(List(f, Atomic(sigma)))})))
           }).toList
         )
-        //.foldLeft(LTLTrue() : LTL)({(a,b) => And(a,b)})
       } else {
         LTLTrue()
       }
@@ -480,7 +462,6 @@ class LTLAssumeGuaranteeVerifier(ltsFiles: Array[File], val property: LTL) {
           .map({(f,i) => LTL.asynchronousTransform(f, proofSkeleton.assumptionAlphabet(i))})
           ).toList
       )
-      // .foldLeft(fairnessConstraint : LTL)({(a,b) => And(a,b)})
     val cexFormula = And(List(assFormulas, LTL.asynchronousTransform(Not(property), property.alphabet)))
     val ta = TA.fromLTL(cexFormula.toString, None, Some("_ltl_acc_"))
     checkBuchi(ta, s"${ta.systemName}_ltl_acc_")
