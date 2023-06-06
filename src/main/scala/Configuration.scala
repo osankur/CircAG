@@ -37,7 +37,7 @@ case class Configuration(
     verbose_MembershipQueries : Boolean = false,
     tmpDirName: String = "/tmp/circag",
     visualizeDFA : Boolean = false,
-    alphabetRefinement : Boolean = true,
+    alphabetRefinement : Boolean = false,
     learnerType : AssumptionGeneratorType = AssumptionGeneratorType.RPNI,
     randomSeed : Int = 0
 ) {

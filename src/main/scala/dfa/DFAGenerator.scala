@@ -5,6 +5,9 @@ import scala.collection.immutable.Set
 import collection.JavaConverters._
 import collection.convert.ImplicitConversions._
 
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
+
 import io.AnsiColor._
 
 import net.automatalib.serialization.dot.GraphDOT
@@ -372,6 +375,7 @@ abstract class JointSATLearner(name : String, alphabet : Alphabet) extends DFALe
   * @param assumptionAlphabets
   */
 class DFAGenerator(proofSkeleton : AGProofSkeleton, assumptionGeneratorType : AssumptionGeneratorType = AssumptionGeneratorType.RPNI) {
+  val logger = LoggerFactory.getLogger("CircAG")
   protected val z3ctx = {
     val cfg = HashMap[String, String]()
     cfg.put("model", "true")
@@ -542,9 +546,7 @@ class DFAGenerator(proofSkeleton : AGProofSkeleton, assumptionGeneratorType : As
         val newConstr = z3ctx.mkOr(
             z3ctx.mkOr(lhs : _*),
             varOfIndexedTrace(process, trace))
-        if configuration.get().verbose then {
-          System.out.println(s"New constraint ${newConstr}")
-        }
+        logger.debug(s"New constraint ${newConstr}")
         // constraint = z3ctx.mkAnd(constraint, newConstr)
         solver.add(newConstr)
         incrementalTraces.append((process, trace, constraintType))
@@ -570,8 +572,7 @@ class DFAGenerator(proofSkeleton : AGProofSkeleton, assumptionGeneratorType : As
         val newConstr = z3ctx.mkOr(term1, term2)
         // constraint = z3ctx.mkAnd(constraint, newConstr)
         solver.add(newConstr)
-        if configuration.get().verbose then 
-          System.out.println(s"Adding ${newConstr}")
+        logger.debug(s"Adding ${newConstr}")
         incrementalTraces.append((process, trace, constraintType))
       case 29 =>
         val prefix = trace.dropRight(1)

@@ -12,11 +12,11 @@ abstract class LTL {
     def isUniversal : Boolean = false
     def alphabet : Alphabet 
 }
-class LTLTrue extends LTL {
+case class LTLTrue() extends LTL {
     override def toString() = "1"
     override def alphabet = Set[String]()
 }
-class LTLFalse extends LTL {
+case class LTLFalse() extends LTL {
     override def toString() = "0"
     override def alphabet = Set[String]()
 }
@@ -195,8 +195,8 @@ object LTL {
         val alpha = Or(alphabetList.map(Atomic(_)))
         val notAlpha = Not(alpha) 
         ltl match {
-            case _ : LTLTrue => LTLTrue()
-            case _ : LTLFalse => LTLFalse()
+            case LTLTrue() => LTLTrue()
+            case LTLFalse() => LTLFalse()
             case Atomic(atom) => 
                 if alphabet.contains(atom) then 
                     U(notAlpha, Atomic(atom))

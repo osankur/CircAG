@@ -54,15 +54,15 @@ object Main {
             )
           .text("Use automatic alphabet refinement."),
         opt[Boolean]("verbose")
-          .action((_, c) => c.copy(verbose = true))
+          .action((x, c) => c.copy(verbose = x))
           .valueName("(true|false)"),
         opt[Int]("seed")
           .action((x, c) => c.copy(randomSeed = x)),
         opt[Boolean]("keepTmpFiles")
-          .action((_, c) => c.copy(keepTmpFiles = true))
+          .action((x, c) => c.copy(keepTmpFiles = x))
           .valueName("(true|false)"),
         opt[Boolean]("visualizeDFA")
-          .action((_, c) => c.copy(visualizeDFA = true))
+          .action((x, c) => c.copy(visualizeDFA = x))
           .valueName("(true|false)")
           .text("Visualize the DFAs that were learned"),
         opt[String]("learnerType")
@@ -75,8 +75,8 @@ object Main {
           .action((_, c) => c.copy(cmd = "product")),
         cmd("dfa-aag")
           .action((_, c) => c.copy(cmd = "dfa-aag")),
-        cmd("ag")
-          .action((_, c) => c.copy(cmd = "ag"))
+        cmd("ltl-aag")
+          .action((_, c) => c.copy(cmd = "ltl-aag"))
       )
     }
     val beginTime = System.nanoTime()

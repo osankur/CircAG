@@ -155,9 +155,7 @@ object DLTS {
         // Visualization.visualize(dlts.dfa, Alphabets.fromList(dlts.alphabet.toList))
         // System.out.println(s"${dlts.name} after lift-stripping")
         // Visualization.visualize(liftedDLTS.dfa, Alphabets.fromList(liftedDLTS.alphabet.toList))
-        statistics.liftingTime = statistics.liftingTime + (System.nanoTime() - beginTime)
         liftedDLTS
-      // case _ => throw Exception("Can only strip CompactDFA")
     }
   }
 

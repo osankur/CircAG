@@ -52,7 +52,7 @@ import com.microsoft.z3
 import fr.irisa.circag.isPrunedSafety
 
 object DFAAssumeGuaranteeVerifier {
-  val logger = LoggerFactory.getLogger("CircAG")
+  private val logger = LoggerFactory.getLogger("CircAG")
   /**
     * ta |= lhs |> guarantee
     *
@@ -192,8 +192,7 @@ object DFAAssumeGuaranteeVerifier {
     val cmd = "tck-reach -a reach %s -l %s -C symbolic -o %s"
             .format(modelFile.toString, label, certFile.toString)
 
-    if configuration.get().verbose then
-      System.out.println(cmd)
+    logger.debug(cmd)
 
     val output = cmd.!!
     val cex = scala.io.Source.fromFile(certFile).getLines().toList
@@ -212,14 +211,6 @@ object DFAAssumeGuaranteeVerifier {
     }
   }
 }
-
-
-
-class AssumeGuaranteeVerifier[LTS, Property](ltss : List[LTS], property : Property) {
-  var assumptions : Array[List[Int]] = Array()
-}
-
-
 
 abstract class AGIntermediateResult extends Exception
 class AGSuccess extends AGIntermediateResult {
@@ -307,6 +298,8 @@ class AGProofSkeleton(val nbProcesses : Int) {
 }
 
 class DFAAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, assumptionGeneratorType : AssumptionGeneratorType = AssumptionGeneratorType.RPNI, useAlphabetRefinement : Boolean = false) {
+  private val logger = LoggerFactory.getLogger("CircAG")
+
   val nbProcesses = ltsFiles.size
   val propertyAlphabet = Set[String](err)
   val processes = ltsFiles.map(TA.fromFile(_)).toBuffer
@@ -374,7 +367,7 @@ class DFAAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, assumptio
 
 
   val proofSkeleton = AGProofSkeleton(processes.map(_.alphabet), propertyAlphabet, assumptionAlphabet)
-  private var constraintManager = DFAGenerator(proofSkeleton, assumptionGeneratorType)
+  private var dfaGenerator = DFAGenerator(proofSkeleton, assumptionGeneratorType)
 
   // Latest cex encountered in any premise check
   private var latestCex = List[String]()
@@ -388,7 +381,7 @@ class DFAAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, assumptio
     assumptionAlphabet |= newSymbols
     proofSkeleton.update(processes.map(_.alphabet), propertyAlphabet, assumptionAlphabet)
     // Create a new constraint manager initialized with the incremental traces from the previous instance
-    constraintManager = DFAGenerator(proofSkeleton, assumptionGeneratorType, constraintManager.incrementalTraces)
+    dfaGenerator = DFAGenerator(proofSkeleton, assumptionGeneratorType, dfaGenerator.incrementalTraces)
     configuration.resetCEX()
   }
 
@@ -396,15 +389,15 @@ class DFAAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, assumptio
     val prefixInP = propertyDLTS.dfa.accepts(cexTrace.dropRight(1).filter(propertyAlphabet.contains(_)))
     val traceInP = propertyDLTS.dfa.accepts(cexTrace.filter(propertyAlphabet.contains(_)))
     if (prefixInP && !traceInP) then {
-      System.out.println("Case 22")
-      constraintManager.addConstraint(process, cexTrace, 22)
+      // System.out.println("Case 22")
+      dfaGenerator.addConstraint(process, cexTrace, 22)
     } else 
     if (cexTrace.size > 0 && !prefixInP && !traceInP) then {
-      System.out.println("Case 29")
-      constraintManager.addConstraint(process, cexTrace, 29)
+      // System.out.println("Case 29")
+      dfaGenerator.addConstraint(process, cexTrace, 29)
     } else {
-      System.out.println("Case 34")
-      constraintManager.addConstraint(process, cexTrace, 34)
+      // System.out.println("Case 34")
+      dfaGenerator.addConstraint(process, cexTrace, 34)
     }
   }
 
@@ -437,26 +430,24 @@ class DFAAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, assumptio
     // val concreteVal = processes.zipWithIndex.map({
     //   (p,i) => 
     //       val valFori = 
-    //         this.constraintManager.samples(i).map({
+    //         this.dfaGenerator.samples(i).map({
     //         (trace,v) => 
     //           TCheckerAssumeGuaranteeOracles.checkTraceMembership(p,trace, Some(p.alphabet)) match {
-    //             case None => constraintManager.z3ctx.mkNot(v)
+    //             case None => dfaGenerator.z3ctx.mkNot(v)
     //           case Some(_) => v
     //           }
     //         })
-    //       constraintManager.z3ctx.mkAnd(valFori.toSeq : _*)        
+    //       dfaGenerator.z3ctx.mkAnd(valFori.toSeq : _*)        
     // })
     // System.out.println("Displaying concrete val:")
     // for (p,exp) <- processes.zip(concreteVal) do {
     //   System.out.println(s"${p.systemName}: ${exp}")
     // }
-    // constraintManager.checkValuation(constraintManager.z3ctx.mkAnd(concreteVal.toSeq : _*))
+    // dfaGenerator.checkValuation(dfaGenerator.z3ctx.mkAnd(concreteVal.toSeq : _*))
 
     // A proof for a process must not depend on itself    
     require(proofSkeleton.assumptionAlphabets.zipWithIndex.forall({(ass,i) => !ass.contains(i)}))
-    if (configuration.get().verbose) then {
-      System.out.println(s"applyAG with alphabets: ${assumptions.map(_.alphabet)}")
-    }
+    logger.debug(s"applyAG with alphabets: ${assumptions.map(_.alphabet)}")
     try{
       for (ta,i) <- processes.zipWithIndex do {
         DFAAssumeGuaranteeVerifier.checkInductivePremise(ta, proofSkeleton.processDependencies(i).map(assumptions(_)).toList, assumptions(i))
@@ -502,7 +493,7 @@ class DFAAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, assumptio
               System.out.println(s"\tCex confirmed: ${cexTrace}")
             throw AGFalse(cexTrace)
           } else {
-            constraintManager.addFinalPremiseConstraint(cexTrace)
+            dfaGenerator.addFinalPremiseConstraint(cexTrace)
             throw AGContinue()
           }
       }
@@ -613,7 +604,7 @@ class DFAAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, assumptio
     configuration.resetCEX()
     var currentState : AGIntermediateResult = AGContinue()
     while(currentState == AGContinue()) {
-      var newAss = constraintManager.generateAssumptions()
+      var newAss = dfaGenerator.generateAssumptions()
       // If the constraints are unsat, then refine the alphabet and try again
       // They cannot be unsat if the alphabets are complete
       assert(newAss != None || configuration.get().alphabetRefinement)
@@ -628,7 +619,7 @@ class DFAAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, assumptio
         } else {
           refineWithArbitrarySymbol()
         }
-        newAss = constraintManager.generateAssumptions()
+        newAss = dfaGenerator.generateAssumptions()
       }
       newAss match {
         case Some(newAss) => this.assumptions = newAss

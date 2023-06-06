@@ -1,20 +1,30 @@
-## Automatic Circular Assume Guarantee Model Checker
-You need 
+# Automatic Circular Assume Guarantee Model Checker
+
+## Installation
+You need
 - Scala 3.1
 - Java 1.7
 - sbt 1.8
 - maven
+  
+And the following must be on your path:
+- [tchecker](https://github.com/ticktac-project/tchecker)
+- [spot](https://spot.lre.epita.fr/)
+ 
+Once you have all this, execute the following in `lib` directory
 
-Execute the following in `lib` directory
-mvn install:install-file -Dfile=jhoafparser-1.1.1.jar -DgroupId=jhoafparser -DartifactId=jhoafparser -Dversion=1.1.1 -Dpackaging=jar -DgeneratePom=true
+    mvn install:install-file -Dfile=jhoafparser-1.1.1.jar -DgroupId=jhoafparser -DartifactId=jhoafparser -Dversion=1.1.1 -Dpackaging=jar -DgeneratePom=true
 
+and type
 
-You can use sbt to compile and run as shown below. To create a jar, run `sbt assembly`.
+    sbt assembly
+
+This should create the fat executable jar target/scala-3*/CircAG.jar.
 
 ## DFA-based N-way Assume-Guarantee Reasoning with Learning
-The algorithm of the CAV16 paper is currently implemented. This can be tried as follows.
+The algorithm of the CAV16 paper is currently implemented with and without alphabet refinement. This can be tried as follows.
 
-    sbt run dfa-aag --lts "examples/ums/machine.ta,examples/ums/scheduler.ta,examples/ums/user.ta" --err "err" --ar false
+    java -jar target/scala-3.2.2/CircAG.jar dfa-aag --lts "examples/toy/lts1.ta,examples/toy/lts2.ta,examples/toy/lts3.ta" --err "err" --verbose false
 
 Here, the list of automata are given wuth the option --lts: each file must contain a single process TChecker file (with or without clocks).
 All variables and clocks must have distinct names. These processes synchronize on all declared events but those that start with _.
@@ -22,14 +32,21 @@ The --err option is used to pass the label that defines the safety property: AG!
 
 The difference with CAV16 is that a SAT solver is used to compute a satisfying valuation to the constraints but then a separate passive learning algorithm (RPNI) is used to learn each assumption DFA separately.
 
+You can specify the passive DFA learning algorithm using the option `--learnerType RPNI` or `--learnerType SAT`.
+
 You can add the option `--visualizeDFA true` to see the assumption DFAs that were learned.
+
 ### Other examples
 Two toy examples easy to understand:
 
-    run dfa-aag --lts "examples/toy/lts1.ta,examples/toy/lts2.ta,examples/toy/lts3.ta" --err "err" --verbose true --ar false
-    run dfa-aag --lts "examples/seq-toy/lts0.ta,examples/seq-toy/lts1.ta,examples/seq-toy/lts2.ta,examples/seq-toy/lts3.ta" --err "err" --ar false
+    java -jar target/scala-3.2.2/CircAG.jar dfa-aag --lts "examples/toy/lts1.ta,examples/toy/lts2.ta,examples/toy/lts3.ta" --err "err" --verbose false --ar false
+    java -jar target/scala-3.2.2/CircAG.jar dfa-aag --lts "examples/seq-toy/lts0.ta,examples/seq-toy/lts1.ta,examples/seq-toy/lts2.ta,examples/seq-toy/lts3.ta" --err "err" --ar false
 
 To enable automatic alphabet refinement, use `--ar true`.
+
+A small but less trivial example that does not currently terminate :(
+
+    java -jar target/scala-3.2.2/CircAG.jar dfa-aag --lts "examples/ums/machine.ta,examples/ums/scheduler.ta,examples/ums/user.ta" --err "err" --ar false
 
 ## Utilities
 The synchronized product of the processes can be output to stdout as a single TChecker file using
@@ -37,12 +54,12 @@ The synchronized product of the processes can be output to stdout as a single TC
     run product --lts "examples/ums/machine.ta,examples/ums/scheduler.ta,examples/ums/user.ta"
 
 ## Tasks
-- Write and test assumption generators: 
-  - DFA: SAT solver, other passive algs from learnlib, minimal separating automata etc.
-  - LTL: SAT-based, perhaps other passive ones
-- Write manual AG algorithm for LTL
-
-- Write simplified API for Scala notebook interface
-  
-- Write TChecker script to decompose a given model into components as separate files. Here processes accessing the same shared variables must be kept together. The minimal alphabet must be inferred as well for all components.
-
+- Any other good passive learning algorithms for DFA?
+- Implement one or several passive learning algorithms for LTL. The simplest one is based on SAT (see Neider et al.)
+- Implement one or several passive learning algorithms for MITL.
+- Understand why the above example does not terminate: do we really need to keep the alphabet very small?
+- DFA case studies: reproduce CAV16 examples, and find a good one where our algorithm scales better.
+- LTL case study: write a SDN case study with very simple assumption formulas but very large combined state space
+- TChecker currently does not generate counterexamples for Buchi. Ask Frederic or do it yourself.
+- Write simplified API for Scala notebook interface  
+- Write MITL AAG algorithm
