@@ -374,7 +374,7 @@ abstract class JointSATLearner(name : String, alphabet : Alphabet) extends DFALe
   * @param propertyDependencies
   * @param assumptionAlphabets
   */
-class DFAGenerator(proofSkeleton : AGProofSkeleton, assumptionGeneratorType : AssumptionGeneratorType = AssumptionGeneratorType.RPNI) {
+class DFAGenerator(proofSkeleton : DFAProofSkeleton, assumptionGeneratorType : AssumptionGeneratorType = AssumptionGeneratorType.RPNI) {
   val logger = LoggerFactory.getLogger("CircAG")
   protected val z3ctx = {
     val cfg = HashMap[String, String]()
@@ -411,7 +411,7 @@ class DFAGenerator(proofSkeleton : AGProofSkeleton, assumptionGeneratorType : As
 
   this.reset()
 
-  def this(proofSkeleton : AGProofSkeleton, assumptionGeneratorType : AssumptionGeneratorType, incrementalTraces : Buffer[(Int, Trace, Int)]) = {
+  def this(proofSkeleton : DFAProofSkeleton, assumptionGeneratorType : AssumptionGeneratorType, incrementalTraces : Buffer[(Int, Trace, Int)]) = {
     this(proofSkeleton, assumptionGeneratorType)
     incrementalTraces.foreach({ tr => addConstraint(tr._1, tr._2, tr._3)})
   }

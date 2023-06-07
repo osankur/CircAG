@@ -53,73 +53,7 @@ import fr.irisa.circag.isPrunedSafety
 
 object DFAAssumeGuaranteeVerifier {
   private val logger = LoggerFactory.getLogger("CircAG")
-  /**
-    * ta |= lhs |> guarantee
-    *
-    * @param lts
-    * @param assumptions List of complete DFAs
-    * @param guarantee
-    * @pre guarantee.alphabet <= lts.alphabet (checked by assertion)
-    * @pre All reachable states of the assumptions and ta are accepting (checked by assertion)
-    * @pre assumptions do not contain the assumption for the process itself (not checked)
-    * @return A counterexample to the premise: None if the premise holds; and Some(cexTrace) otherwise
-    */
-  def checkInductivePremise(ta : TA, assumptions : List[DLTS], guarantee : DLTS) : Option[Trace] =
-    { 
-      require(guarantee.alphabet.toSet.subsetOf(ta.alphabet))
-      require(assumptions.forall({dlts => dlts.dfa.isPrunedSafety}))
-      statistics.Counters.incrementCounter("inductive-premise")
-      logger.debug(s"Checking inductive premise for ${ta.systemName} whose assumption is over alphabet: ${guarantee.alphabet}")
-      var beginTime = System.nanoTime()
-      // require(assumptions.forall({dlts => !dlts.dfa.getStates().forall(_.isAccepting())}))
-      val guaranteeAlphabet = Alphabets.fromList(guarantee.alphabet.toList)
-      val compG = DLTS(
-        s"_comp_${guarantee.name}", 
-        DFAs.complement(guarantee.dfa, guaranteeAlphabet, FastDFA(guaranteeAlphabet)),
-        guarantee.alphabet)
-      val liftedAssumptions = 
-        assumptions.map({ass => DLTS.liftAndStripNonAccepting(ass, ta.alphabet, Some(s"lifted_${ass.name}"))})
-      // for (ass, liftedAss) <- assumptions.zip(liftedAssumptions) do {
-      //   System.out.println(s"Displaying assumption ${ass.name} ")
-      //   AUTWriter.writeAutomaton(ass.dfa, Alphabets.fromList(ass.alphabet.toList), System.out)
-      //   System.out.println(s"Displaying lifted assumption ${ass.name} ")
-      //   AUTWriter.writeAutomaton(liftedAss.dfa, Alphabets.fromList(liftedAss.alphabet.toList), System.out)
-      // }
-      
-      val premiseProduct = TA.synchronousProduct(ta, compG::liftedAssumptions, Some("_accept_"))
-      statistics.Timers.incrementTimer("inductive-premise", System.nanoTime() - beginTime)
-      checkReachability(premiseProduct, s"${compG.name}_accept_")
-    }
 
-  /**
-    * Check the final premise, that is, whether /\_{dtls in lhs} dtls implies property.
-    *
-    * @param lhs
-    * @param property
-    * @pre All states of the automata in lhs are accepting
-    * @return None if the premise holds; and Some(cexTrace) otherwise
-    */
-  def checkFinalPremise(lhs : List[DLTS], property : DLTS) : Option[Trace] = {
-      statistics.Counters.incrementCounter("final-premise")
-
-      // Check precondition
-      for dlts <- lhs do {
-        val dfa = dlts.dfa
-        dfa.getStates().foreach({s =>
-          for a <- dlts.alphabet do {
-            dfa.getSuccessors(s,a).foreach({
-              sn =>
-                assert(dfa.isAccepting(sn))
-              })
-          }
-        })
-      }
-      val alph = Alphabets.fromList(property.alphabet.toList)
-      val compG = DLTS(s"_comp_${property.name}", DFAs.complement(property.dfa, alph, FastDFA(alph)), property.alphabet)
-      val premiseProduct = TA.synchronousProduct(TA.fromLTS(compG, acceptingLabelSuffix=Some("_accept_")), lhs)
-      // System.out.println(premiseProduct)
-      checkReachability(premiseProduct, s"${compG.name}_accept_")
-  }
   /**
     * Attempt to find a trace in ta that synchronizes with word; the returned trace has alphabet word's alphabet | ta's alphabet.
     * 
@@ -131,7 +65,7 @@ object DFAAssumeGuaranteeVerifier {
   def extendTrace(ta : TA, word : Trace, projectionAlphabet : Option[Set[String]]) : Option[Trace] ={
     val wordDLTS = DLTS.fromTrace(word)
     val productTA = TA.synchronousProduct(ta, List(wordDLTS), acceptingLabelSuffix = Some("_accept_"))
-    checkReachability(productTA, s"${wordDLTS.name}_accept_") 
+    productTA.checkReachability(s"${wordDLTS.name}_accept_") 
   }
 
   /**
@@ -146,7 +80,7 @@ object DFAAssumeGuaranteeVerifier {
     for ta <- tas do {
       val wordDLTS = DLTS.fromTrace(currentTrace)
       val productTA = TA.synchronousProduct(ta, List(wordDLTS), acceptingLabelSuffix = Some("_accept_"))
-      checkReachability(productTA, s"${wordDLTS.name}_accept_") match {
+      productTA.checkReachability(s"${wordDLTS.name}_accept_") match {
         case None => ()
         case Some(newTrace) => currentTrace = newTrace
       }
@@ -154,62 +88,6 @@ object DFAAssumeGuaranteeVerifier {
     currentTrace
   }
 
-  /**
-    * Check whether trace|_alph is accepted by ta|_alph where alph is syncAlphabet (default is trace.toSet)
-    *
-    * @param ta a process 
-    * @param trace a trace
-    * @param syncAlphabet alphabet on which synchronous product is to be defined
-    * @return None if no such execution exists, and Some(trace) otherwise.
-    */
-  def checkTraceMembership(ta : TA, trace : Trace, syncAlphabet : Option[Set[String]] = None) : Option[Trace] = {  
-    statistics.Counters.incrementCounter("trace-membership")
-    val traceAlphabet = syncAlphabet.getOrElse(trace.toSet)
-    val projTrace = trace.filter(traceAlphabet.contains(_))
-    val traceProcess = DLTS.fromTrace(projTrace, Some(traceAlphabet))
-    val productTA = TA.synchronousProduct(ta, List(traceProcess), Some("_accept_"))
-    val result = this.checkReachability(productTA, s"${traceProcess.name}_accept_")
-    result
-  }
-
-  /**
-   * Check the reachability of a state labeled by label. Return such a trace if any.
-   * 
-   * @param ta
-   * @param label
-   */
-  def checkReachability(ta : TA, label : String) : Option[Trace] = {
-    val beginTime = System.nanoTime()    
-    statistics.Counters.incrementCounter("model-checking")
-    val modelFile =
-      Files.createTempFile(configuration.get().getTmpDirPath(), "circag-query", ".ta").toFile()
-    val pw = PrintWriter(modelFile)
-    pw.write(ta.toString())
-    pw.close()
-
-    val certFile =
-      Files.createTempFile(configuration.get().getTmpDirPath(), "circag-cert", ".cert").toFile()
-    val cmd = "tck-reach -a reach %s -l %s -C symbolic -o %s"
-            .format(modelFile.toString, label, certFile.toString)
-
-    logger.debug(cmd)
-
-    val output = cmd.!!
-    val cex = scala.io.Source.fromFile(certFile).getLines().toList
-
-    if (!configuration.globalConfiguration.keepTmpFiles){
-      modelFile.delete()
-      certFile.delete()
-    }    
-    statistics.Timers.incrementTimer("tchecker", System.nanoTime() - beginTime)
-    if (output.contains("REACHABLE false")) then {
-      None
-    } else if (output.contains("REACHABLE true")) then {
-      Some(TA.getTraceFromCounterExampleOutput(cex, ta.alphabet))
-    } else {
-      throw FailedTAModelChecking(output)
-    }
-  }
 }
 
 abstract class AGIntermediateResult extends Exception
@@ -231,73 +109,8 @@ class AGContinue extends AGIntermediateResult {
 }
 case class AGFalse(cex : Trace) extends AGIntermediateResult
 
-/**
-  * AG Proof skeleton specifies the dependencies for each premise of the N-way AG rule,
-  * and the alphabets to be used for the assumption DFA of each TA.
-  * 
-  * @param processDependencies the set of process indices on which the proof of process(i) must depend.
-  * @param propertyDependencies the set of process indices on which the proof of the final premise must depend.
-  * @param assumptionAlphabets alphabets of the assumption DFAs for each process
-  */
-class AGProofSkeleton(val nbProcesses : Int) {
-  var processDependencies = Buffer[Set[Int]]()
-  var propertyDependencies = Set[Int]()
-  var assumptionAlphabets = Buffer[Set[String]]()
 
-  def this(processAlphabets : Buffer[Set[String]], propertyAlphabet : Set[String], newAssumptionAlphabet : Set[String]) = {
-    this(processAlphabets.size)
-    update(processAlphabets, propertyAlphabet, newAssumptionAlphabet)
-  }
-  /**
-    * Update the fields from the given assumption alphabet
-    *
-    * @param processAlphabets alphabets of the TAs
-    * @param propertyAlphabet alphabet of the property
-    * @param newAssumptionAlphabet the common assumption alphabet
-    */
-  def update(processAlphabets : Buffer[Set[String]], propertyAlphabet : Set[String], newAssumptionAlphabet : Set[String]) = {
-    val nbProcesses = processAlphabets.size
-    processDependencies = Buffer.tabulate(nbProcesses)({_ => Set[Int]()})
-    // Compute simplified sets of assumptions for the new alphabet
-    // adj(i)(j) iff (i = j) or (i and j have a common symbol) or (i has a common symbol with k such that adj(k)(j))
-    // Index nbProcesses represents the property.
-    var adj = Buffer.tabulate(nbProcesses+1)({_ => Buffer.fill(nbProcesses+1)(false)})
-    for i <- 0 until nbProcesses do {
-      adj(i)(i) = true
-      for j <- 0 until i do {
-        adj(i)(j) = !processAlphabets(i).intersect(processAlphabets(j)).isEmpty
-        adj(j)(i) = adj(i)(j)
-      }
-    }
-    adj(nbProcesses)(nbProcesses) = true
-    for j <- 0 until nbProcesses do {
-        adj(nbProcesses)(j) = !propertyAlphabet.intersect(processAlphabets(j)).isEmpty
-        adj(j)(nbProcesses) = adj(nbProcesses)(j)
-    }
-    for k <- 0 until nbProcesses+1 do {
-      for i <- 0 until nbProcesses+1 do {
-        for j <- 0 until nbProcesses+1 do {
-          if(adj(i)(k) && adj(k)(j)) then {
-            adj(i)(j) = true
-          }
-        }
-      }
-    }
-    for i <- 0 until nbProcesses do {
-      processDependencies(i) = adj(i).zipWithIndex.filter({(b,i) => b}).map(_._2).toSet.diff(Set[Int](i, nbProcesses))
-    }
-    propertyDependencies = adj(nbProcesses).zipWithIndex.filter({(b,i) => b}).map(_._2).toSet - nbProcesses
-    assumptionAlphabets = processAlphabets.map(_.intersect(newAssumptionAlphabet))
-    if configuration.get().verbose then {
-      System.out.println(s"Ass alphabets: $assumptionAlphabets")
-      System.out.println(s"Prop dependencies: $propertyDependencies")
-      System.out.println(s"Process deps: $processDependencies")
-    }
-  }
-  
-}
-
-class DFAAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, assumptionGeneratorType : AssumptionGeneratorType = AssumptionGeneratorType.RPNI, useAlphabetRefinement : Boolean = false) {
+class DFAAssumeGuaranteeVerifier(val ltsFiles : Array[File], val err : String) {
   private val logger = LoggerFactory.getLogger("CircAG")
 
   val nbProcesses = ltsFiles.size
@@ -336,6 +149,118 @@ class DFAAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, assumptio
     pr => interfaceAlphabet.intersect(pr.alphabet)
   }).toBuffer
 
+
+  /**
+    * The assumption DLTS g_i for each process i.
+    */
+  var assumptions : Buffer[DLTS] = {
+    (0 until ltsFiles.size)
+    .map(
+      { i =>
+        val alph = interfaceAlphabet.intersect(processes(i).alphabet)
+        val dfa = FastDFA(Alphabets.fromList(alph.toList))
+        val state = dfa.addState(true)
+        for sigma <- alph do {
+          dfa.addTransition(state, sigma, state)
+        }
+        // Visualization.visualize(dfa, Alphabets.fromList(processes(i).alphabet.toList))
+
+        DLTS(s"g_${i}", dfa, alph)
+      }).toBuffer
+  }
+
+  val proofSkeleton = DFAProofSkeleton(processes.map(_.alphabet), propertyAlphabet, interfaceAlphabet)
+
+  def getAssumption(processID : Int) : DLTS = {
+    assumptions(processID)
+  }
+  def setAssumption(processID : Int, dlts : DLTS) : Unit = {
+    assumptions(processID) = dlts
+    proofSkeleton.updateByCone(processes.map(_.alphabet), propertyAlphabet, interfaceAlphabet)
+  }
+  def getAssumptions() : Buffer[DLTS] = {
+    assumptions.clone()
+  }
+
+
+  /**
+    * Checks ta(processID) |= assumptions |> guarantee
+    * 
+    * @param processID id of the process
+    * @pre guarantee.alphabet <= lts.alphabet (checked by assertion)
+    * @pre All reachable states of the assumptions and ta are accepting (checked by assertion)
+    * @pre assumptions do not contain the assumption for the process itself (not checked)
+    * @return A counterexample to the premise: None if the premise holds; and Some(cexTrace) otherwise
+    */
+  def checkInductivePremise(processID : Int) : Option[Trace] =
+    { 
+      val guarantee = this.assumptions(processID)
+      val localAssumptions = proofSkeleton.processDependencies(processID).map(this.assumptions(_))
+      val ta = processes(processID)
+      require(guarantee.alphabet.toSet.subsetOf(ta.alphabet))
+      require(assumptions.forall({dlts => dlts.dfa.isPrunedSafety}))
+      statistics.Counters.incrementCounter("inductive-premise")
+      logger.debug(s"Checking inductive premise for ${ta.systemName} whose assumption is over alphabet: ${guarantee.alphabet}")
+      var beginTime = System.nanoTime()
+      // require(assumptions.forall({dlts => !dlts.dfa.getStates().forall(_.isAccepting())}))
+      val guaranteeAlphabet = Alphabets.fromList(guarantee.alphabet.toList)
+      val compG = DLTS(
+        s"_comp_${guarantee.name}", 
+        DFAs.complement(guarantee.dfa, guaranteeAlphabet, FastDFA(guaranteeAlphabet)),
+        guarantee.alphabet)
+      val liftedAssumptions = 
+        assumptions.map({ass => DLTS.liftAndStripNonAccepting(ass, ta.alphabet, Some(s"lifted_${ass.name}"))})
+      // for (ass, liftedAss) <- assumptions.zip(liftedAssumptions) do {
+      //   System.out.println(s"Displaying assumption ${ass.name} ")
+      //   AUTWriter.writeAutomaton(ass.dfa, Alphabets.fromList(ass.alphabet.toList), System.out)
+      //   System.out.println(s"Displaying lifted assumption ${ass.name} ")
+      //   AUTWriter.writeAutomaton(liftedAss.dfa, Alphabets.fromList(liftedAss.alphabet.toList), System.out)
+      // }
+      
+      val premiseProduct = TA.synchronousProduct(ta, compG::liftedAssumptions.toList, Some("_accept_"))
+      statistics.Timers.incrementTimer("inductive-premise", System.nanoTime() - beginTime)
+      premiseProduct.checkReachability(s"${compG.name}_accept_")
+    }
+
+  /**
+    * Check the final premise, that is, whether /\_{dtls in lhs} dtls implies property.
+    *
+    * @pre All states of the automata in lhs are accepting
+    * @return None if the premise holds; and Some(cexTrace) otherwise
+    */
+  def checkFinalPremise() : Option[Trace] = {
+      statistics.Counters.incrementCounter("final-premise")
+      val lhs = proofSkeleton.propertyDependencies.map(assumptions(_)).toList
+      // Check precondition
+      for dlts <- lhs do {
+        val dfa = dlts.dfa
+        dfa.getStates().foreach({s =>
+          for a <- dlts.alphabet do {
+            dfa.getSuccessors(s,a).foreach({
+              sn =>
+                assert(dfa.isAccepting(sn))
+              })
+          }
+        })
+      }
+      val alph = Alphabets.fromList(propertyDLTS.alphabet.toList)
+      val compG = DLTS(s"_comp_${propertyDLTS.name}", DFAs.complement(propertyDLTS.dfa, alph, FastDFA(alph)), propertyDLTS.alphabet)
+      val premiseProduct = TA.synchronousProduct(TA.fromLTS(compG, acceptingLabelSuffix=Some("_accept_")), lhs)
+      // System.out.println(premiseProduct)
+      premiseProduct.checkReachability(s"${compG.name}_accept_")
+  }    
+
+
+  // Latest cex encountered in any premise check. This is for debugging.
+  protected var latestCex = List[String]()
+}
+
+class DFAAutomaticAssumeGuaranteeVerifier(_ltsFiles : Array[File], _err : String, assumptionGeneratorType : AssumptionGeneratorType = AssumptionGeneratorType.RPNI, useAlphabetRefinement : Boolean = false) 
+    extends DFAAssumeGuaranteeVerifier(_ltsFiles, _err)
+{
+  private val logger = LoggerFactory.getLogger("CircAG")
+  private var dfaGenerator = DFAGenerator(proofSkeleton, assumptionGeneratorType)
+
   /**
     * Current alphabet for assumptions: the alphabet of each assumption for ta is ta.alphabet & assumptionAlphabet.
     */
@@ -349,8 +274,8 @@ class DFAAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, assumptio
   /**
     * The assumption DLTS g_i for each process i.
     */
-  var assumptions : Buffer[DLTS] = {
-    (0 until ltsFiles.size)
+  assumptions = {
+    (0 until this.ltsFiles.size)
     .map(
       { i =>
         val alph = assumptionAlphabet.intersect(processes(i).alphabet)
@@ -366,26 +291,20 @@ class DFAAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, assumptio
   }
 
 
-  val proofSkeleton = AGProofSkeleton(processes.map(_.alphabet), propertyAlphabet, assumptionAlphabet)
-  private var dfaGenerator = DFAGenerator(proofSkeleton, assumptionGeneratorType)
-
-  // Latest cex encountered in any premise check
-  private var latestCex = List[String]()
-
   /**
-    * Updates assumptionAlphabet, and consequently processDependencies, propertyDependencies, and resets constraint manager.
+    * Updates assumptionAlphabet, and consequently processDependencies, propertyDependencies, and resets dfa generator.
     *
     * @param newAlphabet
     */
   private def addSymbolToAssumptionAlphabet(newSymbols : Set[String]) : Unit = {
     assumptionAlphabet |= newSymbols
-    proofSkeleton.update(processes.map(_.alphabet), propertyAlphabet, assumptionAlphabet)
+    proofSkeleton.updateByCone(processes.map(_.alphabet), propertyAlphabet, assumptionAlphabet)
     // Create a new constraint manager initialized with the incremental traces from the previous instance
     dfaGenerator = DFAGenerator(proofSkeleton, assumptionGeneratorType, dfaGenerator.incrementalTraces)
     configuration.resetCEX()
   }
 
-  def updateConstraints(process : Int, cexTrace : Trace) : Unit = {
+  private def updateConstraints(process : Int, cexTrace : Trace) : Unit = {
     val prefixInP = propertyDLTS.dfa.accepts(cexTrace.dropRight(1).filter(propertyAlphabet.contains(_)))
     val traceInP = propertyDLTS.dfa.accepts(cexTrace.filter(propertyAlphabet.contains(_)))
     if (prefixInP && !traceInP) then {
@@ -404,11 +323,11 @@ class DFAAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, assumptio
   /**
    * Check whether all processes accept the given trace
    */
-  def checkCounterExample(trace : Trace) : Boolean = {
+  private def checkCounterExample(trace : Trace) : Boolean = {
     var returnValue = true
     try {
       for (ta,i) <- processes.zipWithIndex do {
-        DFAAssumeGuaranteeVerifier.checkTraceMembership(ta, trace, Some(assumptions(i).alphabet))
+        ta.checkTraceMembership(trace, Some(assumptions(i).alphabet))
         match {
           case None => // ta rejects
             throw AGContinue()
@@ -450,7 +369,8 @@ class DFAAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, assumptio
     logger.debug(s"applyAG with alphabets: ${assumptions.map(_.alphabet)}")
     try{
       for (ta,i) <- processes.zipWithIndex do {
-        DFAAssumeGuaranteeVerifier.checkInductivePremise(ta, proofSkeleton.processDependencies(i).map(assumptions(_)).toList, assumptions(i))
+        // DFAAssumeGuaranteeVerifier.checkInductivePremise(ta, proofSkeleton.processDependencies(i).map(assumptions(_)).toList, assumptions(i))
+        this.checkInductivePremise(i)
         match {
           case None =>
             System.out.println(s"${GREEN}Premise ${i} passed${RESET}")
@@ -479,7 +399,8 @@ class DFAAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, assumptio
             throw AGContinue()
         }
       }
-      DFAAssumeGuaranteeVerifier.checkFinalPremise(proofSkeleton.propertyDependencies.map(assumptions(_)).toList, propertyDLTS)
+      // DFAAssumeGuaranteeVerifier.checkFinalPremise(proofSkeleton.propertyDependencies.map(assumptions(_)).toList, propertyDLTS)
+      this.checkFinalPremise()
       match {
         case None => 
           System.out.println(s"${GREEN}Final premise succeeded${RESET}")
@@ -537,7 +458,7 @@ class DFAAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, assumptio
         // This cannot fail when cex == cexTrace, but can afterwards
         try {
           val processTraces = processes.zipWithIndex.map{
-            (p,i) => DFAAssumeGuaranteeVerifier.checkTraceMembership(p, cex) match {
+            (p,i) => p.checkTraceMembership(cex) match {
               case Some(processTrace) => 
                 val interfaceTrace = processTrace.filter(interfaceAlphabet.contains(_))
                 if configuration.get().verbose then {
@@ -652,6 +573,5 @@ class DFAAssumeGuaranteeVerifier(ltsFiles : Array[File], err : String, assumptio
         None
       case _ => throw Exception("Inconclusive")
     }
-  }
+  }  
 }
-

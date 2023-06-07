@@ -1,4 +1,6 @@
 package fr.irisa.circag.tchecker
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 
 import collection.JavaConverters._
 import collection.convert.ImplicitConversions._
@@ -58,9 +60,66 @@ class TA (
     sb.toString()
   }
 
+  /**
+   * Check the reachability of a state labeled by label. Return such a trace if any.
+   * 
+   * @param label
+   */
+  def checkReachability(label : String) : Option[Trace] = {
+    val beginTime = System.nanoTime()    
+    statistics.Counters.incrementCounter("model-checking")
+    val modelFile =
+      Files.createTempFile(configuration.get().getTmpDirPath(), "circag-query", ".ta").toFile()
+    val pw = PrintWriter(modelFile)
+    pw.write(this.toString())
+    pw.close()
+
+    val certFile =
+      Files.createTempFile(configuration.get().getTmpDirPath(), "circag-cert", ".cert").toFile()
+    val cmd = "tck-reach -a reach %s -l %s -C symbolic -o %s"
+            .format(modelFile.toString, label, certFile.toString)
+
+    TA.logger.debug(cmd)
+
+    val output = cmd.!!
+    val cex = scala.io.Source.fromFile(certFile).getLines().toList
+
+    if (!configuration.globalConfiguration.keepTmpFiles){
+      modelFile.delete()
+      certFile.delete()
+    }    
+    statistics.Timers.incrementTimer("tchecker", System.nanoTime() - beginTime)
+    if (output.contains("REACHABLE false")) then {
+      None
+    } else if (output.contains("REACHABLE true")) then {
+      Some(TA.getTraceFromCounterExampleOutput(cex, this.alphabet))
+    } else {
+      throw FailedTAModelChecking(output)
+    }
+  }
+
+  /**
+    * Check whether trace|_alph is accepted by ta|_alph where alph is syncAlphabet (default is trace.toSet)
+    *
+    * @param trace a trace
+    * @param syncAlphabet alphabet on which synchronous product is to be defined
+    * @return None if no such execution exists, and Some(trace) otherwise.
+    */
+  def checkTraceMembership(trace : Trace, syncAlphabet : Option[Set[String]] = None) : Option[Trace] = {  
+    statistics.Counters.incrementCounter("trace-membership")
+    val traceAlphabet = syncAlphabet.getOrElse(trace.toSet)
+    val projTrace = trace.filter(traceAlphabet.contains(_))
+    val traceProcess = DLTS.fromTrace(projTrace, Some(traceAlphabet))
+    val productTA = TA.synchronousProduct(this, List(traceProcess), Some("_accept_"))
+    val result = productTA.checkReachability(s"${traceProcess.name}_accept_")
+    result
+  }
+
 }
 
 object TA{
+  private val logger = LoggerFactory.getLogger("CircAG")
+
   def fromFile(inputFile: java.io.File) : TA = {
     val ta = TA()
     val lines = scala.io.Source.fromFile(inputFile).getLines().toList
@@ -287,6 +346,8 @@ object TA{
       }
       word.toList
   }
+
+
 
   /** 
    *  Given the counterexample description output by TChecker, given as a list of lines,

@@ -99,7 +99,7 @@ object Main {
               val product = tchecker.TA.synchronousProduct(tas.toList)
               System.out.println(product.toString())
             case "dfa-aag" =>
-              tchecker.dfa.DFAAssumeGuaranteeVerifier(configuration.get().ltsFiles, configuration.get().err, configuration.get().learnerType, config.alphabetRefinement).check()
+              tchecker.dfa.DFAAutomaticAssumeGuaranteeVerifier(configuration.get().ltsFiles, configuration.get().err, configuration.get().learnerType, config.alphabetRefinement).check()
               match {
                 case None => System.out.println(s"${GREEN}${BOLD}Success${RESET}")
                 case Some(cex) => System.out.println(s"${RED}${BOLD}Counterexample${RESET} ${cex}")
