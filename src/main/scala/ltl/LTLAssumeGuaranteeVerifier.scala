@@ -1,4 +1,4 @@
-package fr.irisa.circag.tchecker.ltl
+package fr.irisa.circag.ltl
 
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -28,8 +28,6 @@ import com.microsoft.z3
 import fr.irisa.circag.statistics
 import fr.irisa.circag.configuration
 import fr.irisa.circag._
-import fr.irisa.circag.tchecker.{TA, FailedTAModelChecking}
-import fr.irisa.circag.tchecker.ltl.LTLAssumeGuaranteeVerifier.checkBuchi
 
 /** LTL syntax: each event is an atomic predicate. Produce LTL formula from the
   * premise checker Use Spot to get HOA Buchi automaton, and read it back with
@@ -252,72 +250,8 @@ class AGProofSkeleton(val nbProcesses: Int) {
   }
 }
 
-object LTLAssumeGuaranteeVerifier {
-  private val logger = LoggerFactory.getLogger("CircAG")
-
-  def checkLTL(ta: TA, ltlFormula: LTL): Option[Lasso] = {
-    val accLabel = "_ltl_accept_"
-    val fullAlphabet = ta.alphabet | ltlFormula.alphabet
-    val ta_ltl = TA.fromLTL(ltlFormula.toString, Some(fullAlphabet), Some(accLabel))
-    val productTA = TA.synchronousProduct(List(ta, ta_ltl))
-    checkBuchi(productTA, s"${ta_ltl.systemName}${accLabel}")
-  }
-
-  /** Check the reachability of a state labeled by label. Return such a trace if
-    * any.
-    *
-    * @param ta
-    * @param label
-    */
-  def checkBuchi(ta: TA, label: String): Option[Lasso] = {
-    val beginTime = System.nanoTime()
-    statistics.Counters.incrementCounter("model-checking")
-    val modelFile =
-      Files
-        .createTempFile(
-          configuration.get().getTmpDirPath(),
-          "circag-query",
-          ".ta"
-        )
-        .toFile()
-    val pw = PrintWriter(modelFile)
-    pw.write(ta.toString())
-    pw.close()
-
-    val certFile =
-      Files
-        .createTempFile(
-          configuration.get().getTmpDirPath(),
-          "circag-cert",
-          ".cert"
-        )
-        .toFile()
-    val cmd = "tck-liveness -a ndfs %s -l %s -o %s"
-      .format(modelFile.toString, label, certFile.toString)
-    System.out.println(cmd)
-    logger.debug(cmd)
-
-    val output = cmd.!!
-    val cex = scala.io.Source.fromFile(certFile).getLines().toList
-
-    if (!configuration.globalConfiguration.keepTmpFiles) {
-      modelFile.delete()
-      certFile.delete()
-    }
-    statistics.Timers.incrementTimer("tchecker", System.nanoTime() - beginTime)
-    // System.out.println(output)
-    if (output.contains("CYCLE false")) then {
-      None
-    } else if (output.contains("CYCLE true")) then {
-      Some(TA.getLassoFromCounterExampleOutput(cex, ta.alphabet))
-    } else {
-      throw FailedTAModelChecking(output)
-    }
-  }
-}
-
 class LTLAssumeGuaranteeVerifier(ltsFiles: Array[File], val property: LTL) {
-  private val logger = LTLAssumeGuaranteeVerifier.logger
+  private val logger = LoggerFactory.getLogger("CircAG")
 
   val nbProcesses = ltsFiles.size
   val propertyAlphabet = property.alphabet
@@ -425,7 +359,7 @@ class LTLAssumeGuaranteeVerifier(ltsFiles: Array[File], val property: LTL) {
       // System.out.println(s"LHS:\n${circularLHS}")
       // System.out.println(s"RHS:\n${rhs}")
       System.out.println(s"Checking circular inductive premise for process ${processID}: ${f} ")
-      LTLAssumeGuaranteeVerifier.checkLTL(processes(processID), f)
+      processes(processID).checkLTL(f)
     } else {
       // Check for CEX of the form: /\_i assumptions(i) /\ !guarantee
       val noncircularLHS =
@@ -437,7 +371,7 @@ class LTLAssumeGuaranteeVerifier(ltsFiles: Array[File], val property: LTL) {
         else And(formulas.toList)
       val f = And(List(noncircularLHS,Not(guarantee), fairnessConstraint))
       System.out.println(s"Checking non-circular inductive permise for process ${processID}: ${f} ")
-      LTLAssumeGuaranteeVerifier.checkLTL(processes(processID), f)
+      processes(processID).checkLTL(f)
     }
   }
   def checkFinalPremise(
@@ -464,6 +398,6 @@ class LTLAssumeGuaranteeVerifier(ltsFiles: Array[File], val property: LTL) {
       )
     val cexFormula = And(List(assFormulas, LTL.asynchronousTransform(Not(property), property.alphabet)))
     val ta = TA.fromLTL(cexFormula.toString, None, Some("_ltl_acc_"))
-    checkBuchi(ta, s"${ta.systemName}_ltl_acc_")
+    ta.checkBuchi(s"${ta.systemName}_ltl_acc_")
   }
 }

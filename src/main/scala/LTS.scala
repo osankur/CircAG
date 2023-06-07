@@ -33,7 +33,7 @@ import com.microsoft.z3
 import fr.irisa.circag.statistics
 import fr.irisa.circag.configuration
 import fr.irisa.circag.Trace
-import fr.irisa.circag.tchecker.ltl.{LTL, MalformedLTL}
+import fr.irisa.circag.ltl.{LTL, MalformedLTL}
 
 type Symbol = String
 type Alphabet = Set[Symbol]

@@ -5,7 +5,7 @@ import java.io.File
 import java.nio.file._
 import collection.mutable.Buffer
 import fr.irisa.circag.Trace
-import fr.irisa.circag.tchecker.dfa.AssumptionGeneratorType
+import fr.irisa.circag.dfa.AssumptionGeneratorType
 case class ParseError(msg: String) extends Exception(msg)
 
 var g1 = false

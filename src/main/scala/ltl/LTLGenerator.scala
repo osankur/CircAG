@@ -1,4 +1,4 @@
-package fr.irisa.circag.tchecker.ltl
+package fr.irisa.circag.ltl
 
 import scala.collection.mutable.{HashMap,Buffer}
 import scala.collection.mutable

@@ -1,4 +1,4 @@
-package fr.irisa.circag.tchecker
+package fr.irisa.circag
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
@@ -22,6 +22,7 @@ import net.automatalib.automata.Automaton
 import net.automatalib.automata.fsa.FiniteStateAcceptor
 
 import fr.irisa.circag._
+import fr.irisa.circag.ltl.LTL
 
 case class BadTimedAutomaton(msg: String) extends Exception(msg)
 case class FailedTAModelChecking(msg: String) extends Exception(msg)
@@ -115,10 +116,69 @@ class TA (
     result
   }
 
+  def checkLTL(ltlFormula: LTL): Option[Lasso] = {
+    val accLabel = "_ltl_accept_"
+    val fullAlphabet = this.alphabet | ltlFormula.alphabet
+    val ta_ltl = TA.fromLTL(ltlFormula.toString, Some(fullAlphabet), Some(accLabel))
+    val productTA = TA.synchronousProduct(List(this, ta_ltl))
+    productTA.checkBuchi(s"${ta_ltl.systemName}${accLabel}")
+  }
+  /** Check the reachability of a state labeled by label. Return such a trace if
+    * any.
+    *
+    * @param ta
+    * @param label
+    */
+  def checkBuchi(label: String): Option[Lasso] = {
+    val beginTime = System.nanoTime()
+    statistics.Counters.incrementCounter("model-checking")
+    val modelFile =
+      Files
+        .createTempFile(
+          configuration.get().getTmpDirPath(),
+          "circag-query",
+          ".ta"
+        )
+        .toFile()
+    val pw = PrintWriter(modelFile)
+    pw.write(this.toString())
+    pw.close()
+
+    val certFile =
+      Files
+        .createTempFile(
+          configuration.get().getTmpDirPath(),
+          "circag-cert",
+          ".cert"
+        )
+        .toFile()
+    val cmd = "tck-liveness -a ndfs %s -l %s -o %s"
+      .format(modelFile.toString, label, certFile.toString)
+    System.out.println(cmd)
+    TA.logger.debug(cmd)
+
+    val output = cmd.!!
+    val cex = scala.io.Source.fromFile(certFile).getLines().toList
+
+    if (!configuration.globalConfiguration.keepTmpFiles) {
+      modelFile.delete()
+      certFile.delete()
+    }
+    statistics.Timers.incrementTimer("tchecker", System.nanoTime() - beginTime)
+    // System.out.println(output)
+    if (output.contains("CYCLE false")) then {
+      None
+    } else if (output.contains("CYCLE true")) then {
+      Some(TA.getLassoFromCounterExampleOutput(cex, this.alphabet))
+    } else {
+      throw FailedTAModelChecking(output)
+    }
+  }
+
 }
 
 object TA{
-  private val logger = LoggerFactory.getLogger("CircAG")
+  protected val logger = LoggerFactory.getLogger("CircAG")
 
   def fromFile(inputFile: java.io.File) : TA = {
     val ta = TA()

@@ -56,10 +56,10 @@ import de.learnlib.util.MQUtil;
 import de.learnlib.api.oracle.EquivalenceOracle
 import de.learnlib.api.query.DefaultQuery;
 import fr.irisa.circag.{DLTS, Trace}
-import fr.irisa.circag.tchecker._
+import fr.irisa.circag._
 import com.microsoft.z3.enumerations.Z3_lbool
-import fr.irisa.circag.tchecker.ltl._
-import fr.irisa.circag.tchecker.dfa._
+import fr.irisa.circag.ltl._
+import fr.irisa.circag.dfa._
 
 class Z3Tests extends munit.FunSuite {
   test("z3 enum sort"){
@@ -230,7 +230,7 @@ class DFAAAG extends munit.FunSuite {
         .create();
 
     val dltss = List(DLTS("ass1p", dfa1, dfa1.getInputAlphabet().toSet), DLTS("ass2", dfa2, dfa2.getInputAlphabet().toSet))
-    val agv = tchecker.dfa.DFAAutomaticAssumeGuaranteeVerifier(Array(File("examples/lts1.ta")), err)    
+    val agv = dfa.DFAAutomaticAssumeGuaranteeVerifier(Array(File("examples/lts1.ta")), err)    
     agv.assumptions = dltss.toBuffer
     // val cex = agv.checkInductivePremise(0)
     // assert(cex != None)
@@ -307,7 +307,7 @@ class DFAAAG extends munit.FunSuite {
     assert(None != agv.processes(0).checkTraceMembership(List[String]("c", "c", "err"), Some(Set[String]("c", "err"))))
     assert(None != agv.processes(0).checkTraceMembership(List[String]("c", "b", "err"), Some(Set[String]("c", "err"))))
     // (checker_p.processes(0), dltss_p, DLTS("guarantee", errDFA, errDFA.getInputAlphabet()))
-    val cex4 = tchecker.dfa.DFAAssumeGuaranteeVerifier.extendTrace(agv.processes(0), List[String]("c", "c", "err"), None)
+    val cex4 = dfa.DFAAssumeGuaranteeVerifier.extendTrace(agv.processes(0), List[String]("c", "c", "err"), None)
     // System.out.println(s"CEX4: ${cex4}")
     assert(cex4
       == Some(List("c","a","c", "err")))
@@ -382,13 +382,13 @@ class DFAAAG extends munit.FunSuite {
         .withAccepting("q0")
         .create();
 
-    val ver = tchecker.dfa.DFAAutomaticAssumeGuaranteeVerifier(Array(File("examples/ums/user.ta"), File("examples/ums/scheduler.ta"), File("examples/ums/machine.ta")), "err")
+    val ver = dfa.DFAAutomaticAssumeGuaranteeVerifier(Array(File("examples/ums/user.ta"), File("examples/ums/scheduler.ta"), File("examples/ums/machine.ta")), "err")
     ver.assumptions(0) = DLTS("user", gUser, gUser.getInputAlphabet().toSet)
     ver.assumptions(1) = DLTS("sched", gSched, gSched.getInputAlphabet().toSet)
     ver.assumptions(2) = DLTS("machine", gMachine, gMachine.getInputAlphabet().toSet)
     assert( None == ver.checkFinalPremise())
     ver.applyAG() match {
-      case e : tchecker.dfa.AGSuccess => ()
+      case e : dfa.AGSuccess => ()
       case _ => throw Exception("AG Verification failed")
     }
   
@@ -518,21 +518,21 @@ class DFAAAG extends munit.FunSuite {
     assert(errDFA.pruned.isPrunedSafety)
     assert(gUser.isPrunedSafety)
     assert(gUser.isSafety)
-    val ver = tchecker.dfa.DFAAutomaticAssumeGuaranteeVerifier(Array(File("examples/ums/user.ta"), File("examples/ums/scheduler.ta"), File("examples/ums/machine.ta")), "err")
+    val ver = dfa.DFAAutomaticAssumeGuaranteeVerifier(Array(File("examples/ums/user.ta"), File("examples/ums/scheduler.ta"), File("examples/ums/machine.ta")), "err")
     ver.assumptions(0) = DLTS("user", gUser, gUser.getInputAlphabet().toSet)
     ver.assumptions(1) = DLTS("sched", gSched, gSched.getInputAlphabet().toSet)
     ver.assumptions(2) = DLTS("machine", gMachine, gMachine.getInputAlphabet().toSet)
     assert( None == ver.checkFinalPremise())
     ver.applyAG() match {
-      case e : tchecker.dfa.AGSuccess => ()
+      case e : dfa.AGSuccess => ()
       case _ => throw Exception("AG Verification failed")
     }
   }
   test("lts from file"){
     val files = Array(File("examples/toy/lts1.ta"),File("examples/toy/lts2.ta"),File("examples/toy/lts3.ta"))
-    val verSAT = tchecker.dfa.DFAAutomaticAssumeGuaranteeVerifier(files, "err", dfa.AssumptionGeneratorType.SAT, false)
-    val verUFSAT = tchecker.dfa.DFAAutomaticAssumeGuaranteeVerifier(files, "err", dfa.AssumptionGeneratorType.UFSAT, false)
-    val verRPNI = tchecker.dfa.DFAAutomaticAssumeGuaranteeVerifier(files, "err", dfa.AssumptionGeneratorType.RPNI, false)
+    val verSAT = dfa.DFAAutomaticAssumeGuaranteeVerifier(files, "err", dfa.AssumptionGeneratorType.SAT, false)
+    val verUFSAT = dfa.DFAAutomaticAssumeGuaranteeVerifier(files, "err", dfa.AssumptionGeneratorType.UFSAT, false)
+    val verRPNI = dfa.DFAAutomaticAssumeGuaranteeVerifier(files, "err", dfa.AssumptionGeneratorType.RPNI, false)
     assert(verUFSAT.check() == None)
     assert(verSAT.check() == None)
     assert(verRPNI.check() == None)
@@ -540,19 +540,19 @@ class DFAAAG extends munit.FunSuite {
 
   test("seq-toy from file"){
     val files = Array(File("examples/seq-toy/lts0.ta"),File("examples/seq-toy/lts1.ta"),File("examples/seq-toy/lts2.ta"))
-    val verUFSAT =  tchecker.dfa.DFAAutomaticAssumeGuaranteeVerifier(files, "err", dfa.AssumptionGeneratorType.SAT, false)
-    val verSAT =  tchecker.dfa.DFAAutomaticAssumeGuaranteeVerifier(files, "err", dfa.AssumptionGeneratorType.SAT, false)
-    val verRPNI = tchecker.dfa.DFAAutomaticAssumeGuaranteeVerifier(files, "err", dfa.AssumptionGeneratorType.RPNI, false)
+    val verUFSAT =  dfa.DFAAutomaticAssumeGuaranteeVerifier(files, "err", dfa.AssumptionGeneratorType.SAT, false)
+    val verSAT =  dfa.DFAAutomaticAssumeGuaranteeVerifier(files, "err", dfa.AssumptionGeneratorType.SAT, false)
+    val verRPNI = dfa.DFAAutomaticAssumeGuaranteeVerifier(files, "err", dfa.AssumptionGeneratorType.RPNI, false)
     assert(verRPNI.check() != None)
     assert(verSAT.check() != None)
     assert(verUFSAT.check() != None)
 
     val files2 = Array(File("examples/seq-toy/lts0.ta"),File("examples/seq-toy/lts1.ta"),File("examples/seq-toy/lts2.ta"),File("examples/seq-toy/lts3.ta"))
-    val ver2SAT = tchecker.dfa.DFAAutomaticAssumeGuaranteeVerifier(files2, "err", dfa.AssumptionGeneratorType.SAT, false)
+    val ver2SAT = dfa.DFAAutomaticAssumeGuaranteeVerifier(files2, "err", dfa.AssumptionGeneratorType.SAT, false)
     assert(ver2SAT.check() == None)
-    val ver2UFSAT = tchecker.dfa.DFAAutomaticAssumeGuaranteeVerifier(files2, "err", dfa.AssumptionGeneratorType.SAT, false)
+    val ver2UFSAT = dfa.DFAAutomaticAssumeGuaranteeVerifier(files2, "err", dfa.AssumptionGeneratorType.SAT, false)
     assert(ver2UFSAT.check() == None)
-    val ver2RPNI = tchecker.dfa.DFAAutomaticAssumeGuaranteeVerifier(files2, "err", dfa.AssumptionGeneratorType.RPNI, false)
+    val ver2RPNI = dfa.DFAAutomaticAssumeGuaranteeVerifier(files2, "err", dfa.AssumptionGeneratorType.RPNI, false)
     assert(ver2RPNI.check() == None)
   }
 

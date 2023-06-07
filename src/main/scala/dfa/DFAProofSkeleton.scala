@@ -1,4 +1,4 @@
-package fr.irisa.circag.tchecker.dfa
+package fr.irisa.circag.dfa
 
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory

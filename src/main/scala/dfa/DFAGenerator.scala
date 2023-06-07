@@ -1,4 +1,4 @@
-package fr.irisa.circag.tchecker.dfa
+package fr.irisa.circag.dfa
 import scala.collection.mutable.{HashMap,Buffer}
 import scala.collection.mutable
 import scala.collection.immutable.Set
