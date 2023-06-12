@@ -3,7 +3,7 @@ system:A
 event:a
 event:b
 event:c
-event:d 
+
 process:A
 location:A:l1{initial:}
 location:A:l2

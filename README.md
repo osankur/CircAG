@@ -53,6 +53,7 @@ The synchronized product of the processes can be output to stdout as a single TC
 
     run product --lts "examples/ums/machine.ta,examples/ums/scheduler.ta,examples/ums/user.ta"
 
+
 ## Tasks
 - Any other good passive learning algorithms for DFA?
 - Implement one or several passive learning algorithms for LTL. The simplest one is based on SAT (see Neider et al.)

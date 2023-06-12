@@ -280,7 +280,7 @@ class LTLAssumeGuaranteeVerifier(ltsFiles: Array[File], val property: LTL) {
     * 
     * fairness = /\\_{i} GF alpha_i
     *
-    * where alpha_i is the alphabet of processs i. 
+    * where alpha_i is the alphabet of assumption i. 
     * 
     * @param processID id of the process for which the premise is to be checked
     * @param fairness whether fairness constraint is to be added to the cex check
@@ -396,7 +396,9 @@ class LTLAssumeGuaranteeVerifier(ltsFiles: Array[File], val property: LTL) {
           .map({(f,i) => LTL.asynchronousTransform(f, proofSkeleton.assumptionAlphabet(i))})
           ).toList
       )
-    val cexFormula = And(List(assFormulas, LTL.asynchronousTransform(Not(property), property.alphabet)))
+    // val cexFormula = And(List(assFormulas, LTL.asynchronousTransform(Not(property), property.alphabet)))
+    val cexFormula = And(List(assFormulas, Not(property)))
+    System.out.println(cexFormula)
     val ta = TA.fromLTL(cexFormula.toString, None, Some("_ltl_acc_"))
     ta.checkBuchi(s"${ta.systemName}_ltl_acc_")
   }
