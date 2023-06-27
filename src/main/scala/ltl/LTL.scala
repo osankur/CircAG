@@ -130,7 +130,7 @@ object LTL {
       LTL.fromLBT(output.toString())
     }
    }
-
+   
    def fromLBT(lbtString : String) : LTL = {
         val atomPattern = "\"(.*)\"".r
         def parse(tokens : Seq[String]) : (LTL, Seq[String]) = {

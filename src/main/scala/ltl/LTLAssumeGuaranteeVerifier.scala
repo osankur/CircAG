@@ -312,6 +312,7 @@ class LTLAssumeGuaranteeVerifier(ltsFiles: Array[File], val property: LTL) {
           LTL.asynchronousTransform(matrix, proofSkeleton.assumptionAlphabet(processID))
         case _ => throw Exception(s"Guarantee formula for circular process ${processID} must be universal: ${guarantee}")
       }
+      System.out.println(s"Guarantee matrix: ${guarantee_matrix}")
       val circularDeps = dependencies.filter(proofSkeleton.isCircular)
       val noncircularDeps = dependencies.filterNot(proofSkeleton.isCircular)
       // Check for CEX with an LTL formula of the form: /\_i noncircular-assumptions(i) /\ (/\_i circular-assumptions(i) U !guarantee)
@@ -331,6 +332,8 @@ class LTLAssumeGuaranteeVerifier(ltsFiles: Array[File], val property: LTL) {
         circularDeps
         .toSeq
         .map(getAsynchronousMatrix)
+      System.out.println(s"Assumption matrices: ${assumptionMatrices}")
+
       val circularLHS = 
         if assumptionMatrices.size == 0 then LTLTrue()
         else And(assumptionMatrices.toList)
@@ -346,12 +349,16 @@ class LTLAssumeGuaranteeVerifier(ltsFiles: Array[File], val property: LTL) {
         if proofSkeleton.processInstantaneousDependencies(processID).isEmpty then 
           Not(guarantee_matrix)
         else {          
-          val matrices = proofSkeleton.processInstantaneousDependencies(processID).map(getAsynchronousMatrix)
+          val matrices = 
+            proofSkeleton
+            .processInstantaneousDependencies(processID)
+            .map(getAsynchronousMatrix)
+          System.out.println(s"RHS w/out guarantee: ${matrices}")
           And(Not(guarantee_matrix) :: matrices.toList)
         }
       // System.out.println(s"guarantee_matrix:\n${guarantee_matrix}")
       val f = noncircularLHS match {
-        case _ : LTLTrue => 
+        case LTLTrue() => 
           And(List(U(circularLHS, rhs), fairnessConstraint))
         case _ => 
           And(List(noncircularLHS,U(circularLHS, rhs), fairnessConstraint))
@@ -359,7 +366,7 @@ class LTLAssumeGuaranteeVerifier(ltsFiles: Array[File], val property: LTL) {
       // System.out.println(s"LHS:\n${circularLHS}")
       // System.out.println(s"RHS:\n${rhs}")
       System.out.println(s"Checking circular inductive premise for process ${processID}: ${f} ")
-      processes(processID).checkLTL(f)
+      processes(processID).checkLTL(Not(f))
     } else {
       // Check for CEX of the form: /\_i assumptions(i) /\ !guarantee
       val noncircularLHS =
@@ -371,7 +378,7 @@ class LTLAssumeGuaranteeVerifier(ltsFiles: Array[File], val property: LTL) {
         else And(formulas.toList)
       val f = And(List(noncircularLHS,Not(guarantee), fairnessConstraint))
       System.out.println(s"Checking non-circular inductive permise for process ${processID}: ${f} ")
-      processes(processID).checkLTL(f)
+      processes(processID).checkLTL(Not(f))
     }
   }
   def checkFinalPremise(

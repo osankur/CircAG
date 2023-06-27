@@ -119,7 +119,7 @@ class TA (
   def checkLTL(ltlFormula: LTL): Option[Lasso] = {
     val accLabel = "_ltl_accept_"
     val fullAlphabet = this.alphabet | ltlFormula.alphabet
-    val ta_ltl = TA.fromLTL(ltlFormula.toString, Some(fullAlphabet), Some(accLabel))
+    val ta_ltl = TA.fromLTL(ltl.Not(ltlFormula).toString, Some(fullAlphabet), Some(accLabel))
     val productTA = TA.synchronousProduct(List(this, ta_ltl))
     productTA.checkBuchi(s"${ta_ltl.systemName}${accLabel}")
   }

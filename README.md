@@ -53,6 +53,13 @@ The synchronized product of the processes can be output to stdout as a single TC
 
     run product --lts "examples/ums/machine.ta,examples/ums/scheduler.ta,examples/ums/user.ta"
 
+## Jupyter Notebook
+Install:
+
+    pip3 install spylon-kernel
+    python3 -m spylon_kernel install --user
+    pip3 install pyspark
+    jupyter notebook
 
 ## Tasks
 - Any other good passive learning algorithms for DFA?

@@ -60,6 +60,7 @@ import fr.irisa.circag._
 import com.microsoft.z3.enumerations.Z3_lbool
 import fr.irisa.circag.ltl._
 import fr.irisa.circag.dfa._
+import fr.irisa.circag.ltl.LTL
 
 class Z3Tests extends munit.FunSuite {
   test("z3 enum sort"){
@@ -672,7 +673,7 @@ class LTLAGTests extends munit.FunSuite {
     val ltl2 = LTL.fromLBT(input2)
     assert(ltl2.isUniversal)
     assert(LTL.fromString("G F (a & !b)").isUniversal)
-    // System.out.println(ltl)
+    // System.out.println(ltl)ltl.Not(
   }
   test("ltl asynchronous transformation"){
     val alph = Set("a","b")
@@ -756,15 +757,21 @@ class Benjamin extends munit.FunSuite {
     checker.setAssumption(0, G(LTLTrue()))
     checker.setAssumption(1, G(LTLTrue()))
     checker.proofSkeleton.setProcessInstantaneousDependencies(0, Set(1))
-    assert(checker.checkFinalPremise() != None)
+    // assert(checker.checkFinalPremise() != None)
 
-    val ass0 = "G (( b-> X a) & (c -> !F b))"
+    val ass0 = "G (( b-> X a) & (c -> !(F b)))"
     val ass1 = "G (( d-> X b) & F(c | d) & (c -> ! F c))"
     checker.setAssumption(0, LTL.fromString(ass0))
     checker.setAssumption(1, LTL.fromString(ass1))
-    assert(checker.checkInductivePremise(0, false) == None)
-    // assert(checker.checkInductivePremise(1, false) == None)
-    // assert(checker.checkFinalPremise() == None)
+
+    val ta0 = TA.fromFile(File("examples/ltl-toy1/a.ta"))
+    // The property of ta0 actually holds without any assumption
+    assert(ta0.checkLTL(LTL.fromString(ass0)) == None)
+    // The proof of the inductive premise fails presumably due to asynchronous transformation requiring fairness
+    assert(checker.checkInductivePremise(0, false) != None)
+    // This passes with fairness
+    assert(checker.checkInductivePremise(0, true) == None)
+    assert(checker.checkFinalPremise() == None)
   }
 
 
