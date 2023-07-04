@@ -62,6 +62,7 @@ import fr.irisa.circag.ltl._
 import fr.irisa.circag.dfa._
 import fr.irisa.circag.ltl.LTL
 
+
 class Z3Tests extends munit.FunSuite {
   test("z3 enum sort"){
     val cfg = HashMap[String, String]()
@@ -529,14 +530,16 @@ class DFAAAG extends munit.FunSuite {
       case _ => throw Exception("AG Verification failed")
     }
   }
+
+
   test("lts from file"){
     val files = Array(File("examples/toy/lts1.ta"),File("examples/toy/lts2.ta"),File("examples/toy/lts3.ta"))
     val verSAT = dfa.DFAAutomaticAssumeGuaranteeVerifier(files, "err", dfa.AssumptionGeneratorType.SAT, false)
     val verUFSAT = dfa.DFAAutomaticAssumeGuaranteeVerifier(files, "err", dfa.AssumptionGeneratorType.UFSAT, false)
     val verRPNI = dfa.DFAAutomaticAssumeGuaranteeVerifier(files, "err", dfa.AssumptionGeneratorType.RPNI, false)
-    assert(verUFSAT.check() == None)
-    assert(verSAT.check() == None)
-    assert(verRPNI.check() == None)
+    assert(verUFSAT.proveGlobalPropertyByLearning() == None)
+    assert(verSAT.proveGlobalPropertyByLearning() == None)
+    assert(verRPNI.proveGlobalPropertyByLearning() == None)
   }
 
   test("seq-toy from file"){
@@ -544,17 +547,17 @@ class DFAAAG extends munit.FunSuite {
     val verUFSAT =  dfa.DFAAutomaticAssumeGuaranteeVerifier(files, "err", dfa.AssumptionGeneratorType.SAT, false)
     val verSAT =  dfa.DFAAutomaticAssumeGuaranteeVerifier(files, "err", dfa.AssumptionGeneratorType.SAT, false)
     val verRPNI = dfa.DFAAutomaticAssumeGuaranteeVerifier(files, "err", dfa.AssumptionGeneratorType.RPNI, false)
-    assert(verRPNI.check() != None)
-    assert(verSAT.check() != None)
-    assert(verUFSAT.check() != None)
+    assert(verRPNI.proveGlobalPropertyByLearning() != None)
+    assert(verSAT.proveGlobalPropertyByLearning() != None)
+    assert(verUFSAT.proveGlobalPropertyByLearning() != None)
 
     val files2 = Array(File("examples/seq-toy/lts0.ta"),File("examples/seq-toy/lts1.ta"),File("examples/seq-toy/lts2.ta"),File("examples/seq-toy/lts3.ta"))
     val ver2SAT = dfa.DFAAutomaticAssumeGuaranteeVerifier(files2, "err", dfa.AssumptionGeneratorType.SAT, false)
-    assert(ver2SAT.check() == None)
+    assert(ver2SAT.proveGlobalPropertyByLearning() == None)
     val ver2UFSAT = dfa.DFAAutomaticAssumeGuaranteeVerifier(files2, "err", dfa.AssumptionGeneratorType.SAT, false)
-    assert(ver2UFSAT.check() == None)
+    assert(ver2UFSAT.proveGlobalPropertyByLearning() == None)
     val ver2RPNI = dfa.DFAAutomaticAssumeGuaranteeVerifier(files2, "err", dfa.AssumptionGeneratorType.RPNI, false)
-    assert(ver2RPNI.check() == None)
+    assert(ver2RPNI.proveGlobalPropertyByLearning() == None)
   }
 
   test("regexp"){
@@ -765,6 +768,7 @@ class Benjamin extends munit.FunSuite {
     checker.setAssumption(1, LTL.fromString(ass1))
 
     val ta0 = TA.fromFile(File("examples/ltl-toy1/a.ta"))
+    System.out.println(LTL.fromString(ass0))
     // The property of ta0 actually holds without any assumption
     assert(ta0.checkLTL(LTL.fromString(ass0)) == None)
     // The proof of the inductive premise fails presumably due to asynchronous transformation requiring fairness
@@ -773,7 +777,140 @@ class Benjamin extends munit.FunSuite {
     assert(checker.checkInductivePremise(0, true) == None)
     assert(checker.checkFinalPremise() == None)
   }
+}
 
+class PartialLearning extends munit.FunSuite {
 
+  test("mus-inline-self-partial-learning"){
+    val inputs1: Alphabet[String] = Alphabets.fromList(List("req1","req2", "rel1", "rel2", "grant1", "grant2"))
+    val gUser =
+    AutomatonBuilders
+      .forDFA(FastDFA(inputs1))
+      .withInitial("i")
+      .from("i")
+      .on("req1")
+      .to("r1")
+      .from("i")
+      .on("req2")
+      .to("r2")
+      .from("r1")
+      .on("grant1")
+      .to("g1")
+      .from("r2")
+      .on("grant2")
+      .to("g2")
+      .from("g1")
+      .on("rel1")
+      .to("i")
+      .from("g2")
+      .on("rel2")
+      .to("i")
+      .withAccepting("i")
+      .withAccepting("r2")
+      .withAccepting("r1")
+      .withAccepting("g1")
+      .withAccepting("g2")
+     .create();
+  
+    val inputs2: Alphabet[String] = Alphabets.fromList(List("start1", "start2", "end1", "end2","req1","req2", "rel1", "rel2", "grant1", "grant2"))
+    val gSched =
+    AutomatonBuilders
+      .forDFA(FastDFA(inputs2))
+      .withInitial("q0")
+      .from("q0").on("req1").to("r1")
+      .from("r1").on("grant1").to("g1")
+      .from("g1").on("start1").to("s1")
+      .from("s1").on("end1").to("e1")
+      .from("e1").on("rel1").to("q0")
 
+      .from("g1").on("req2").to("r2")
+      .from("r1").on("req2").to("r2")
+      .from("s1").on("req2").to("r2")
+
+      .from("q0").on("req2").to("r2")
+      .from("r2").on("grant2").to("g2")
+      .from("g2").on("start2").to("s2")
+      .from("s2").on("end2").to("e2")
+      .from("e2").on("rel2").to("q0")
+
+      .from("g2").on("req1").to("r1")
+      .from("r2").on("req1").to("r1")
+      .from("s2").on("req1").to("r1")
+
+      .withAccepting("q0")
+      .withAccepting("r1")
+      .withAccepting("r2")
+      .withAccepting("g1")
+      .withAccepting("g2")
+      .withAccepting("s1")
+      .withAccepting("s2")
+      .withAccepting("e1")
+      .withAccepting("e2")
+
+      .create();
+
+    val err = "err"
+    val gMachine : FastDFA[String] =
+      AutomatonBuilders
+        .forDFA(FastDFA(Alphabets.fromList(List(err,"start1","start2","end1", "end2"))))
+        .withInitial("q0")
+        .from("q0")
+        .on("start1")
+        .to("q1")
+        .from("q0")
+        .on("start2")
+        .to("q2")
+        .from("q1")
+        .on("end1")
+        .to("q0")
+        .from("q2")
+        .on("end2")
+        .to("q0")
+        // error
+        .from("q1")
+        .on("start1")
+        .to("qerr")
+        .from("q1")
+        .on("start2")
+        .to("qerr")
+        .from("q2")
+        .on("start1")
+        .to("qerr")
+        .from("q2")
+        .on("start2")
+        .to("qerr")
+        .from("qerr")
+        .on("err")
+        .to("qerr")
+        .withAccepting("q0")
+        .withAccepting("q1")
+        .withAccepting("q2")
+        .withAccepting("qerr")
+        .create();
+    // Visualization.visualize(gMachine, gMachine.getInputAlphabet())
+    // Visualization.visualize(gUser, gUser.getInputAlphabet())
+    // Visualization.visualize(gSched, gSched.getInputAlphabet())
+    val errDFA : FastDFA[String] =
+      AutomatonBuilders
+        .forDFA(FastDFA(Alphabets.fromList(List(err))))
+        .withInitial("q0")
+        .from("q0")
+        .on(err)
+        .to("q1")
+        .withAccepting("q0")
+        .create();
+    // Visualization.visualize(errDFA, true)
+    assert(!errDFA.isPrunedSafety)
+    assert(errDFA.isSafety)
+    assert(errDFA.pruned.isPrunedSafety)
+    assert(gUser.isPrunedSafety)
+    assert(gUser.isSafety)
+    val ver = dfa.DFAAutomaticAssumeGuaranteeVerifier(Array(File("examples/ums/user.ta"), File("examples/ums/scheduler.ta"), File("examples/ums/machine.ta")), "err")
+    ver.assumptions(0) = DLTS("user", gUser, gUser.getInputAlphabet().toSet)
+    ver.assumptions(1) = DLTS("sched", gSched, gSched.getInputAlphabet().toSet)
+    ver.assumptions(2) = DLTS("machine", gMachine, gMachine.getInputAlphabet().toSet)
+    configuration.set(configuration.get().copy(verbose_MembershipQueries = true))
+    assert(ver.proveGlobalPropertyByLearning(Some(List(0,1))) == None)
+    assert(ver.proveGlobalPropertyByLearning(Some(List(1,2))) == None)
+  }
 }

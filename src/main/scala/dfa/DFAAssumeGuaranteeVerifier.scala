@@ -670,11 +670,16 @@ class DFAAutomaticAssumeGuaranteeVerifier(
 
   /** Apply automatic AG; retrun None on succes, and a confirmed cex otherwise.
     */
-  def check(): Option[Trace] = {
+  def proveGlobalPropertyByLearning(fixedAssumptions : Option[List[Int]] = None): Option[Trace] = {
     configuration.resetCEX()
+    val fixedAssumptionsMap = HashMap[Int, DLTS]()
+    fixedAssumptions.getOrElse(List()).foreach(i => 
+      fixedAssumptionsMap.put(i, assumptions(i))      
+    )
+
     var currentState: AGIntermediateResult = AGContinue()
     while (currentState == AGContinue()) {
-      var newAss = dfaGenerator.generateAssumptions()
+      var newAss = dfaGenerator.generateAssumptions(fixedAssumptionsMap)
       // If the constraints are unsat, then refine the alphabet and try again
       // They cannot be unsat if the alphabets are complete
       assert(newAss != None || configuration.get().alphabetRefinement)
@@ -694,7 +699,7 @@ class DFAAutomaticAssumeGuaranteeVerifier(
         } else {
           refineWithArbitrarySymbol()
         }
-        newAss = dfaGenerator.generateAssumptions()
+        newAss = dfaGenerator.generateAssumptions(fixedAssumptionsMap)
       }
       newAss match {
         case Some(newAss) => this.assumptions = newAss

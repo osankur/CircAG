@@ -56,7 +56,7 @@ trait DFALearner(name : String, alphabet : Alphabet) {
   }
   def getDLTS() : DLTS 
   protected var dlts : Option[DLTS] = None
-  protected var positiveSamples : Set[Trace] = Set()
+  protected var positiveSamples : Set[Trace] = Set(List())
   protected var negativeSamples : Set[Trace] = Set()
 }
 
@@ -436,16 +436,38 @@ class DFAGenerator(proofSkeleton : DFAProofSkeleton, assumptionGeneratorType : A
     }
   } 
 
-  private def generateSamples() : Option[(Buffer[Set[Trace]], Buffer[Set[Trace]])] = {
+  /**
+   * Solve the constraints and generate samples that each assumption must satisfy.
+   * All process index - DLTS pairs given as arguments are assumed to be fixed, 
+   * so we update the constraints (temporarily) so that the solution respects these existing assumptions.
+   */
+  private def generateSamples(fixedAssumptions : mutable.Map[Int,DLTS] = mutable.Map()) : Option[(Buffer[Set[Trace]], Buffer[Set[Trace]])] = {
     var positiveSamples = Buffer.tabulate(nbProcesses)({_ => collection.immutable.Set[Trace]()})
     var negativeSamples = Buffer.tabulate(nbProcesses)({_ => Set[Trace]()})
+
+    solver.push()
+    // For all processes whose assumptions are fixed, and for all samples for process i,
+    // if the current assumption accepts the sample, then add this as a constraint; otherwise, add the negation.
+    for (i, dlts) <- fixedAssumptions do {
+      for (trace, v) <- samples(i) do {
+        if dlts.dfa.accepts(trace.filter(proofSkeleton.assumptionAlphabets(i))) then {
+          solver.add(v)
+        } else {
+          // System.out.println(s"Ass ${i} accepts word: ${(trace.filter(proofSkeleton.assumptionAlphabets(i)))}: ${dlts.dfa.accepts(trace.filter(proofSkeleton.assumptionAlphabets(i)))}")
+          // dlts.visualize()
+          solver.add(z3ctx.mkNot(v))
+        }
+      }
+    }
     var beginTime = System.nanoTime()
     if(solver.check() == z3.Status.UNSATISFIABLE){
       statistics.Timers.incrementTimer("z3", (System.nanoTime() - beginTime))
+      solver.pop()
       None
     } else {
       val m = solver.getModel()
       // Compute sets of negative samples, and prefix-closed sets of pos samples from the valuation
+      // We only make this update for 
       samples.zipWithIndex.foreach({
         (isamples, i) => 
           isamples.foreach({
@@ -469,6 +491,7 @@ class DFAGenerator(proofSkeleton : DFAProofSkeleton, assumptionGeneratorType : A
           })
       })
       statistics.Timers.incrementTimer("z3", (System.nanoTime() - beginTime))
+      solver.pop()
       Some(positiveSamples, negativeSamples)
     }
   }
@@ -593,10 +616,9 @@ class DFAGenerator(proofSkeleton : DFAProofSkeleton, assumptionGeneratorType : A
               }).toSeq : _*
             )
           )
-        if configuration.get().verbose then 
-          System.out.println(s"Adding ${z3ctx.mkOr(term1, term2)}")
         val newConstraint = z3ctx.mkOr(term1, term2)
         solver.add(newConstraint)
+        logger.debug(s"New constraint default ${newConstraint}")
         incrementalTraces.append((process, trace, constraintType))
     }
   }
@@ -611,15 +633,27 @@ class DFAGenerator(proofSkeleton : DFAProofSkeleton, assumptionGeneratorType : A
     solver.add(newConstraint)
   }
 
-  def generateAssumptions() : Option[Buffer[DLTS]] = {
-    generateSamples() match {
+  /**
+    * Generate assumptions satisfying the constraints, except that those processes 
+    * whose DLTSs are given as argument. Note that fixing 
+    * some of the assumptions can make the constraints unsatisfiable.
+    *
+    * @param fixedAssumptions process indices and their fixed assumptions
+    * @return None if the constraints are unsat, and an assumption for each process otherwise.
+    */
+  def generateAssumptions(fixedAssumptions : mutable.Map[Int,DLTS] = mutable.Map()) : Option[Buffer[DLTS]] = {
+    generateSamples(fixedAssumptions) match {
       case None => None // Unsat
       case Some(posSamples, negSamples) =>
         Some(Buffer.tabulate(proofSkeleton.nbProcesses)
           (i => 
-            learners(i).setPositiveSamples(posSamples(i))
-            learners(i).setNegativeSamples(negSamples(i))
-            learners(i).getDLTS()
+            if fixedAssumptions.contains(i) then 
+              fixedAssumptions(i)
+            else {
+              learners(i).setPositiveSamples(posSamples(i))
+              learners(i).setNegativeSamples(negSamples(i))
+              learners(i).getDLTS()
+            }
           )
         )
     }

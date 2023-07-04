@@ -28,8 +28,9 @@ case class BadTimedAutomaton(msg: String) extends Exception(msg)
 case class FailedTAModelChecking(msg: String) extends Exception(msg)
 
 /** 
- *  Light parser that reads TChecker TA from given file, and stores the tuple (events,
-  * eventsOfProcesses, core, syncs) where 
+  * Timed automaton representing a process.
+  * Light weight representation storing the tuple 
+  * (events, eventsOfProcesses, core, syncs) where 
   * - events is the list of all events,
   * - eventsOfProcesses maps process names to events that they include, 
   * - core is the list of lines of the input file except for the system name, events, and sync instructions,
@@ -81,6 +82,7 @@ class TA (
             .format(modelFile.toString, label, certFile.toString)
 
     TA.logger.debug(cmd)
+    System.out.println(cmd)
 
     val output = cmd.!!
     val cex = scala.io.Source.fromFile(certFile).getLines().toList
@@ -180,6 +182,9 @@ class TA (
 object TA{
   protected val logger = LoggerFactory.getLogger("CircAG")
 
+  /** 
+   * Parser that reads TChecker TA format. 
+   */
   def fromFile(inputFile: java.io.File) : TA = {
     val ta = TA()
     val lines = scala.io.Source.fromFile(inputFile).getLines().toList
@@ -235,6 +240,9 @@ object TA{
     return ta
   }
 
+  /**
+   * Build a TA object that represents the given LTS.
+   */
   def fromLTS(dlts : LTS[? <: FiniteStateAcceptor[?, String] with Automaton[?, String, ?]], acceptingLabelSuffix : Option[String] = None) : TA = {
     val ta = TA(dlts.name, dlts.alphabet.toSet)
     ta.eventsOfProcesses += (dlts.name -> ta.alphabet )
@@ -307,6 +315,10 @@ object TA{
   def fromHOA(automatonString : String, fullAlphabet : Option[Alphabet], acceptingLabel : Option[String]) : TA = {
     TA.fromLTS(NLTS.fromHOA(automatonString, fullAlphabet), acceptingLabel)
   }
+
+  /**
+   * Build a TA representing an NBA that recognizes the given LTL formula.
+   */
   def fromLTL(ltlString : String, fullAlphabet : Option[Alphabet], acceptingLabel : Option[String] = None) : TA = {
     val nlts = NLTS.fromLTL(ltlString, fullAlphabet)
     this.fromLTS(nlts, acceptingLabel)
@@ -343,6 +355,13 @@ object TA{
     TA(systemName, jointAlphabet, ta.internalAlphabet, sb.toString(), eventsOfProcesses, syncs)
   }
 
+  /**
+    * Synchronous product of the given TAs.
+    * The TAs must have distinct process and variable names.
+    * 
+    * @param tas
+    * @return
+    */
   def synchronousProduct(tas : List[TA]) : TA = {
     require(tas.size > 0)
     val allProcesses = (tas.map(_.eventsOfProcesses.keys().toSet)).foldLeft(Set[String]())({(a,b) => a | b}).toList
