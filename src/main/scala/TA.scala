@@ -82,7 +82,6 @@ class TA (
             .format(modelFile.toString, label, certFile.toString)
 
     TA.logger.debug(cmd)
-    System.out.println(cmd)
 
     val output = cmd.!!
     val cex = scala.io.Source.fromFile(certFile).getLines().toList

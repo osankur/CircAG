@@ -19,6 +19,7 @@ import net.automatalib.visualization.Visualization;
 import net.automatalib.words.impl.Alphabets;
 import net.automatalib.automata.Automaton
 import net.automatalib.automata.fsa.FiniteStateAcceptor
+import net.automatalib.serialization.aut.AUTParser
 
 import jhoafparser.consumer.HOAConsumerPrint;
 import jhoafparser.parser.HOAFParser;
@@ -34,6 +35,7 @@ import fr.irisa.circag.statistics
 import fr.irisa.circag.configuration
 import fr.irisa.circag.Trace
 import fr.irisa.circag.ltl.{LTL, MalformedLTL}
+import scala.io.Source
 
 type Symbol = String
 type Alphabet = Set[Symbol]
@@ -194,9 +196,62 @@ object DLTS {
     * @param acceptingLabel
     * @return
     */
-  def fromHOA(automatonString : String, fullAlphabet : Option[Alphabet]) : DLTS = {
+  def fromHOAString(automatonString : String, fullAlphabet : Option[Alphabet] = None) : DLTS = {
       val nlts = NLTS.fromHOA(automatonString, fullAlphabet : Option[Alphabet])
       DLTS(nlts.name, NFAs.determinize(nlts.dfa, nlts.dfa.getInputAlphabet()).toFastDFA, nlts.alphabet)
+  }
+
+  /**
+    * Build deterministic LTS from possbly non-deterministic HOA Buchi automaton description:
+      this will be interpreted
+    *
+    * @param automatonString
+    * @param acceptingLabel
+    * @return
+    */
+  def fromHOAFile(file : java.io.File, fullAlphabet : Option[Alphabet] = None) : DLTS = {
+    this.fromHOAString(scala.io.Source.fromFile(file).getLines().mkString("\n"), fullAlphabet)
+  }
+
+  def fromTChecker(file : java.io.File) : DLTS = {
+    val ta = TA.fromFile(file)
+    if ta.syncs.length > 0 || ta.eventsOfProcesses.keys.size > 1 then {
+      throw Exception("The DLTS parser only accepts single-process TA without synchronization labels")
+    }    
+    require(ta.alphabet.size > 0)
+    val alphabet = ta.alphabet
+    val statesMap = HashMap[String,FastDFAState]()
+    val dfa = new FastDFA(Alphabets.fromList(alphabet.toList))
+
+    val regProcess = "\\s*process:(.*)\\s*".r
+    val regEdge = "\\s*edge:([^:]*):([^:]*):([^:]*):([^{:]*).*\\s*".r
+    val regLocation = "\\s*location:([^:]*):([^{:]*).*\\s*".r
+    val content = ta.core.split("\n")
+    content.foreach( line =>
+      line match {
+        case regProcess(_) => ()
+        case regEdge(pr, src, tgt, event) => ()
+          // System.out.println(s"Edge ${pr} ${src} ${tgt} ${event}")
+        case regLocation(pr, loc) => 
+          // System.out.println(s" ${pr} ${loc} ")
+          statesMap.put(loc, dfa.addState(true))
+          if line.contains("initial:") then {
+            dfa.setInitial(statesMap(loc), true)
+          }
+        case _ => ()
+          // System.out.println(s"Cannot parse line: ${line}")
+      }
+    )
+    content.foreach( line =>
+      line match {
+        case regProcess(_) => ()
+        case regEdge(pr, src, tgt, event) => ()
+          dfa.addTransition(statesMap(src),event, statesMap(tgt))
+        case regLocation(pr, loc) =>  ()
+        case _ => ()
+      }
+    )
+    DLTS(ta.systemName, dfa, alphabet)
   }
 
   def fromRegExp(name : String, regexp : String ) : DLTS = {

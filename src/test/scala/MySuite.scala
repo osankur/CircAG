@@ -63,6 +63,8 @@ import fr.irisa.circag.dfa._
 import fr.irisa.circag.ltl.LTL
 
 
+
+
 class Z3Tests extends munit.FunSuite {
   test("z3 enum sort"){
     val cfg = HashMap[String, String]()
@@ -106,7 +108,7 @@ class Z3Tests extends munit.FunSuite {
   }
 }
 
-class TATests extends munit.FunSuite {
+class ParserTests extends munit.FunSuite {
   test("CEX Parsing from TChecker"){
     // get cex from tchecker
   }
@@ -125,6 +127,21 @@ class TATests extends munit.FunSuite {
     val trace = TA.getTraceFromCounterExampleOutput(tck_output.split("\n").toList, Set("a","b","c"))
     assert(trace == List("a","b","c","a"))
   }
+  test("fromTrace"){
+    val dlts = DLTS.fromTrace(List("a","b","c","a"))
+    assert(dlts.dfa.accepts(List("a","b","c", "a")))
+    assert(!dlts.dfa.accepts(List("a","a","a")))
+    assert(!dlts.dfa.accepts(List("a","b","b")))
+  }
+  test("fromTchecker"){
+    val dlts = DLTS.fromTChecker(java.io.File("examples/lts1.ta"))
+    // dlts.visualize()
+    assert(dlts.dfa.accepts(List("a", "b", "c")))
+    assert(dlts.dfa.accepts(List("c", "b", "a", "err")))
+    assert(!dlts.dfa.accepts(List("c", "b", "err")))
+
+  }
+
 }
 class DFAAAG extends munit.FunSuite {
   test("SAT Solver") {
@@ -313,12 +330,6 @@ class DFAAAG extends munit.FunSuite {
     // System.out.println(s"CEX4: ${cex4}")
     assert(cex4
       == Some(List("c","a","c", "err")))
-  }
-  test("fromTrace"){
-    val dlts = DLTS.fromTrace(List("a","b","c","a"))
-    assert(dlts.dfa.accepts(List("a","b","c", "a")))
-    assert(!dlts.dfa.accepts(List("a","a","a")))
-    assert(!dlts.dfa.accepts(List("a","b","b")))
   }
   test("mus-inline"){
     val inputs1: Alphabet[String] = Alphabets.fromList(List("req1","req2", "rel1", "rel2"))
