@@ -249,7 +249,7 @@ class DFAAAG extends munit.FunSuite {
         .create();
 
     val dltss = List(DLTS("ass1p", dfa1, dfa1.getInputAlphabet().toSet), DLTS("ass2", dfa2, dfa2.getInputAlphabet().toSet))
-    val agv = dfa.DFAAutomaticVerifier(Array(File("examples/lts1.ta")), err)    
+    val agv = dfa.DFAAutomaticVerifier(Array(File("examples/lts1.ta")), Some(DLTS.fromErrorSymbol(err)))
     agv.assumptions = dltss.toBuffer
     // val cex = agv.checkInductivePremise(0)
     // assert(cex != None)
@@ -394,7 +394,7 @@ class DFAAAG extends munit.FunSuite {
         .withAccepting("q0")
         .create();
 
-    val ver = dfa.DFAAutomaticVerifier(Array(File("examples/ums/user.ta"), File("examples/ums/scheduler.ta"), File("examples/ums/machine.ta")), "err")
+    val ver = dfa.DFAAutomaticVerifier(Array(File("examples/ums/user.ta"), File("examples/ums/scheduler.ta"), File("examples/ums/machine.ta")), Some(DLTS.fromErrorSymbol("err")))
     ver.assumptions(0) = DLTS("user", gUser, gUser.getInputAlphabet().toSet)
     ver.assumptions(1) = DLTS("sched", gSched, gSched.getInputAlphabet().toSet)
     ver.assumptions(2) = DLTS("machine", gMachine, gMachine.getInputAlphabet().toSet)
@@ -530,7 +530,7 @@ class DFAAAG extends munit.FunSuite {
     assert(errDFA.pruned.isPrunedSafety)
     assert(gUser.isPrunedSafety)
     assert(gUser.isSafety)
-    val ver = dfa.DFAAutomaticVerifier(Array(File("examples/ums/user.ta"), File("examples/ums/scheduler.ta"), File("examples/ums/machine.ta")), "err")
+    val ver = dfa.DFAAutomaticVerifier(Array(File("examples/ums/user.ta"), File("examples/ums/scheduler.ta"), File("examples/ums/machine.ta")), Some(DLTS.fromErrorSymbol("err")))
     ver.assumptions(0) = DLTS("user", gUser, gUser.getInputAlphabet().toSet)
     ver.assumptions(1) = DLTS("sched", gSched, gSched.getInputAlphabet().toSet)
     ver.assumptions(2) = DLTS("machine", gMachine, gMachine.getInputAlphabet().toSet)
@@ -544,9 +544,9 @@ class DFAAAG extends munit.FunSuite {
 
   test("lts from file"){
     val files = Array(File("examples/toy/lts1.ta"),File("examples/toy/lts2.ta"),File("examples/toy/lts3.ta"))
-    val verSAT = dfa.DFAAutomaticVerifier(files, "err", dfa.AssumptionGeneratorType.SAT)
-    val verUFSAT = dfa.DFAAutomaticVerifier(files, "err", dfa.AssumptionGeneratorType.UFSAT)
-    val verRPNI = dfa.DFAAutomaticVerifier(files, "err", dfa.AssumptionGeneratorType.RPNI)
+    val verSAT = dfa.DFAAutomaticVerifier(files, Some(DLTS.fromErrorSymbol("err")), dfa.AssumptionGeneratorType.SAT)
+    val verUFSAT = dfa.DFAAutomaticVerifier(files, Some(DLTS.fromErrorSymbol("err")), dfa.AssumptionGeneratorType.UFSAT)
+    val verRPNI = dfa.DFAAutomaticVerifier(files, Some(DLTS.fromErrorSymbol("err")), dfa.AssumptionGeneratorType.RPNI)
     assert(verUFSAT.proveGlobalPropertyByLearning() == None)
     assert(verSAT.proveGlobalPropertyByLearning() == None)
     assert(verRPNI.proveGlobalPropertyByLearning() == None)
@@ -554,19 +554,19 @@ class DFAAAG extends munit.FunSuite {
 
   test("seq-toy from file"){
     val files = Array(File("examples/seq-toy/lts0.ta"),File("examples/seq-toy/lts1.ta"),File("examples/seq-toy/lts2.ta"))
-    val verUFSAT =  dfa.DFAAutomaticVerifier(files, "err", dfa.AssumptionGeneratorType.SAT)
-    val verSAT =  dfa.DFAAutomaticVerifier(files, "err", dfa.AssumptionGeneratorType.SAT)
-    val verRPNI = dfa.DFAAutomaticVerifier(files, "err", dfa.AssumptionGeneratorType.RPNI)
+    val verUFSAT =  dfa.DFAAutomaticVerifier(files, Some(DLTS.fromErrorSymbol("err")), dfa.AssumptionGeneratorType.SAT)
+    val verSAT =  dfa.DFAAutomaticVerifier(files, Some(DLTS.fromErrorSymbol("err")), dfa.AssumptionGeneratorType.SAT)
+    val verRPNI = dfa.DFAAutomaticVerifier(files, Some(DLTS.fromErrorSymbol("err")), dfa.AssumptionGeneratorType.RPNI)
     assert(verRPNI.proveGlobalPropertyByLearning() != None)
     assert(verSAT.proveGlobalPropertyByLearning() != None)
     assert(verUFSAT.proveGlobalPropertyByLearning() != None)
 
     val files2 = Array(File("examples/seq-toy/lts0.ta"),File("examples/seq-toy/lts1.ta"),File("examples/seq-toy/lts2.ta"),File("examples/seq-toy/lts3.ta"))
-    val ver2SAT = dfa.DFAAutomaticVerifier(files2, "err", dfa.AssumptionGeneratorType.SAT)
+    val ver2SAT = dfa.DFAAutomaticVerifier(files2, Some(DLTS.fromErrorSymbol("err")), dfa.AssumptionGeneratorType.SAT)
     assert(ver2SAT.proveGlobalPropertyByLearning() == None)
-    val ver2UFSAT = dfa.DFAAutomaticVerifier(files2, "err", dfa.AssumptionGeneratorType.SAT)
+    val ver2UFSAT = dfa.DFAAutomaticVerifier(files2, Some(DLTS.fromErrorSymbol("err")), dfa.AssumptionGeneratorType.SAT)
     assert(ver2UFSAT.proveGlobalPropertyByLearning() == None)
-    val ver2RPNI = dfa.DFAAutomaticVerifier(files2, "err", dfa.AssumptionGeneratorType.RPNI)
+    val ver2RPNI = dfa.DFAAutomaticVerifier(files2, Some(DLTS.fromErrorSymbol("err")), dfa.AssumptionGeneratorType.RPNI)
     assert(ver2RPNI.proveGlobalPropertyByLearning() == None)
   }
 
@@ -915,7 +915,7 @@ class PartialLearning extends munit.FunSuite {
     assert(errDFA.pruned.isPrunedSafety)
     assert(gUser.isPrunedSafety)
     assert(gUser.isSafety)
-    val ver = dfa.DFAAutomaticVerifier(Array(File("examples/ums/user.ta"), File("examples/ums/scheduler.ta"), File("examples/ums/machine.ta")), "err")
+    val ver = dfa.DFAAutomaticVerifier(Array(File("examples/ums/user.ta"), File("examples/ums/scheduler.ta"), File("examples/ums/machine.ta")), Some(DLTS.fromErrorSymbol("err")))
     ver.assumptions(0) = DLTS("user", gUser, gUser.getInputAlphabet().toSet)
     ver.assumptions(1) = DLTS("sched", gSched, gSched.getInputAlphabet().toSet)
     ver.assumptions(2) = DLTS("machine", gMachine, gMachine.getInputAlphabet().toSet)

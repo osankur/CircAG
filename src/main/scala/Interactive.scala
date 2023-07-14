@@ -2,10 +2,14 @@ package fr.irisa.circag
 import java.io.File
 
 import fr.irisa.circag.dfa._
+import fr.irisa.circag.ltl._
 
 object Interactive {
     var files : Array[java.io.File] = Array()
-    var dfaVerifier = DFAAutomaticVerifier(Array(), "")
+    var dfaVerifier = DFAAutomaticVerifier(Array(), None)
+    var dfaProperty = DLTS.fromErrorSymbol("_")
+    var ltlProperty : LTL = LTLTrue()
+
     def reset() : Unit = {
 
     }
@@ -13,6 +17,16 @@ object Interactive {
         reset()
         files = filenames.map(s => java.io.File(s))
         files.foreach(f=> if !f.exists() then throw Exception(s"File ${f} could not be read"))
+        dfaVerifier = DFAAutomaticVerifier(files, None)
+    }
+
+    def setDFAProperty(dfaProperty : DLTS) : Unit = {
+        this.dfaProperty = dfaProperty
+        dfaVerifier = DFAAutomaticVerifier(files, Some(dfaProperty))
+    }
+
+    def setLTLProperty(ltlProperty : LTL) : Unit = {
+        this.ltlProperty = ltlProperty
     }
 
     /**

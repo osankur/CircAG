@@ -241,7 +241,7 @@ object Main {
               val product = TA.synchronousProduct(tas.toList)
               System.out.println(product.toString())
             case "dfa-aag" =>
-              dfa.DFAAutomaticVerifier(configuration.get().ltsFiles, configuration.get().err, configuration.get().learnerType)
+              dfa.DFAAutomaticVerifier(configuration.get().ltsFiles, Some(DLTS.fromErrorSymbol(configuration.get().err)), configuration.get().learnerType)
               .proveGlobalPropertyByLearning()
               match {
                 case None => System.out.println(s"${GREEN}${BOLD}Success${RESET}")

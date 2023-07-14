@@ -109,27 +109,15 @@ case class AGSuccess() extends AGIntermediateResult
 case class AGContinue() extends AGIntermediateResult
 case class AGFalse(cex: Trace) extends AGIntermediateResult
 
-class DFAVerifier(val ltsFiles: Array[File], val err: String) {
+class DFAVerifier(val ltsFiles: Array[File], val property : Option[DLTS]) {
   private val logger = LoggerFactory.getLogger("CircAG")
 
   val nbProcesses = ltsFiles.size
-  val propertyAlphabet = Set[String](err)
-  val processes = ltsFiles.map(TA.fromFile(_)).toBuffer
-
-  val propertyDLTS = {
-    val errDFA = {
-      val alph = Alphabets.fromList(propertyAlphabet.toList)
-      AutomatonBuilders
-        .forDFA(FastDFA(alph))
-        .withInitial("q0")
-        .from("q0")
-        .on(err)
-        .to("q1")
-        .withAccepting("q0")
-        .create();
-    }
-    DLTS("property", errDFA, propertyAlphabet)
+  val propertyAlphabet = property match {
+    case None => Set()
+    case Some(dlts) => dlts.alphabet
   }
+  val processes = ltsFiles.map(TA.fromFile(_)).toBuffer
 
   // Set of symbols that appear in the property alphabet, or in at least two processes
   val interfaceAlphabet =
@@ -264,36 +252,40 @@ class DFAVerifier(val ltsFiles: Array[File], val err: String) {
     * @return
     *   None if the premise holds; and Some(cexTrace) otherwise
     */
-  def checkFinalPremise(): Option[Trace] = {
+  def checkFinalPremise(): Option[Trace] = {    
     statistics.Counters.incrementCounter("final-premise")
-    val lhs = proofSkeleton.propertyDependencies.map(assumptions(_)).toList
-    // Check precondition
-    for dlts <- lhs do {
-      val dfa = dlts.dfa
-      dfa
-        .getStates()
-        .foreach({ s =>
-          for a <- dlts.alphabet do {
-            dfa
-              .getSuccessors(s, a)
-              .foreach({ sn =>
-                assert(dfa.isAccepting(sn))
-              })
-          }
-        })
+    property match {
+      case None => None
+      case Some(propertyDLTS) => 
+      val lhs = proofSkeleton.propertyDependencies.map(assumptions(_)).toList
+      // Check precondition
+      for dlts <- lhs do {
+        val dfa = dlts.dfa
+        dfa
+          .getStates()
+          .foreach({ s =>
+            for a <- dlts.alphabet do {
+              dfa
+                .getSuccessors(s, a)
+                .foreach({ sn =>
+                  assert(dfa.isAccepting(sn))
+                })
+            }
+          })
+      }
+      val alph = Alphabets.fromList(propertyDLTS.alphabet.toList)
+      val compG = DLTS(
+        s"_comp_${propertyDLTS.name}",
+        DFAs.complement(propertyDLTS.dfa, alph, FastDFA(alph)),
+        propertyDLTS.alphabet
+      )
+      val premiseProduct = TA.synchronousProduct(
+        TA.fromLTS(compG, acceptingLabelSuffix = Some("_accept_")),
+        lhs
+      )
+      // System.out.println(premiseProduct)
+      premiseProduct.checkReachability(s"${compG.name}_accept_")
     }
-    val alph = Alphabets.fromList(propertyDLTS.alphabet.toList)
-    val compG = DLTS(
-      s"_comp_${propertyDLTS.name}",
-      DFAs.complement(propertyDLTS.dfa, alph, FastDFA(alph)),
-      propertyDLTS.alphabet
-    )
-    val premiseProduct = TA.synchronousProduct(
-      TA.fromLTS(compG, acceptingLabelSuffix = Some("_accept_")),
-      lhs
-    )
-    // System.out.println(premiseProduct)
-    premiseProduct.checkReachability(s"${compG.name}_accept_")
   }
 
   /** Check whether all processes accept the given trace
@@ -373,10 +365,10 @@ class DFAVerifier(val ltsFiles: Array[File], val err: String) {
 
 class DFAAutomaticVerifier(
     _ltsFiles: Array[File],
-    _err: String,
+    _property : Option[DLTS],
     assumptionGeneratorType: AssumptionGeneratorType =
       AssumptionGeneratorType.RPNI
-) extends DFAVerifier(_ltsFiles, _err) {
+) extends DFAVerifier(_ltsFiles, _property) {
 
   /** Current alphabet for assumptions: the alphabet of each assumption for ta
     * is ta.alphabet & assumptionAlphabet.
@@ -393,11 +385,18 @@ class DFAAutomaticVerifier(
   }
 
   protected def updateConstraints(process: Int, cexTrace: Trace): Unit = {
-    val prefixInP = propertyDLTS.dfa.accepts(
-      cexTrace.dropRight(1).filter(propertyAlphabet.contains(_))
-    )
-    val traceInP =
-      propertyDLTS.dfa.accepts(cexTrace.filter(propertyAlphabet.contains(_)))
+    val prefixInP = property match{
+      case None => false
+      case Some(propertyDLTS) => 
+        propertyDLTS.dfa.accepts(
+          cexTrace.dropRight(1).filter(propertyAlphabet.contains(_))
+        )
+    }
+    val traceInP = property match{
+      case None => false
+      case Some(propertyDLTS) => 
+        propertyDLTS.dfa.accepts(cexTrace.filter(propertyAlphabet.contains(_)))
+    }
     if (prefixInP && !traceInP) then {
       // System.out.println("Case 22")
       dfaGenerator.addConstraint(process, cexTrace, 22)
@@ -463,12 +462,18 @@ class DFAAutomaticVerifier(
             } else {
               configuration.cex(i) = configuration.cex(i) + cexTrace
             }
-            val prefixInP = propertyDLTS.dfa.accepts(
-              cexTrace.dropRight(1).filter(propertyAlphabet.contains(_))
-            )
-            val traceInP = propertyDLTS.dfa.accepts(
-              cexTrace.filter(propertyAlphabet.contains(_))
-            )
+            val prefixInP = property match{
+              case None => false
+              case Some(propertyDLTS) => 
+                propertyDLTS.dfa.accepts(
+                  cexTrace.dropRight(1).filter(propertyAlphabet.contains(_))
+                )
+            }
+            val traceInP = property match{
+              case None => false
+              case Some(propertyDLTS) => 
+                propertyDLTS.dfa.accepts(cexTrace.filter(propertyAlphabet.contains(_)))
+            }
             if (!prefixInP && checkCounterExample(cexTrace.dropRight(1))) then {
               throw AGFalse(cexTrace.dropRight(1))
             } else if (!traceInP && checkCounterExample(cexTrace)) then {
@@ -478,7 +483,11 @@ class DFAAutomaticVerifier(
             throw AGContinue()
         }
       }
-      // DFAAssumeGuaranteeVerifier.checkFinalPremise(proofSkeleton.propertyDependencies.map(assumptions(_)).toList, propertyDLTS)
+      // If no property to check, then we are done
+      property match {
+        case None => throw AGSuccess()
+        case _ => ()
+      }      
       this.checkFinalPremise() match {
         case None =>
           System.out.println(s"${GREEN}Final premise succeeded${RESET}")

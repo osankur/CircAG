@@ -194,6 +194,19 @@ object DLTS {
     DLTS("_trace_", dfa, alph)
   }
 
+  def fromErrorSymbol(symbol : Symbol, dltsName : String = "") : DLTS = {
+    val alph = Alphabets.fromList(List(symbol))
+    val errDFA = AutomatonBuilders
+      .forDFA(FastDFA(alph))
+      .withInitial("q0")
+      .from("q0")
+      .on(symbol)
+      .to("q1")
+      .withAccepting("q0")
+      .create()
+    DLTS(dltsName, errDFA, alph.toSet)
+  }
+
   /**
     * Build deterministic LTS from possbly non-deterministic HOA Buchi automaton description.
     *

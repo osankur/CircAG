@@ -34,10 +34,10 @@ import fr.irisa.circag.isPrunedSafety
 
 class DFAAutomaticVerifierAlphabetRefinement(
     _ltsFiles: Array[File],
-    _err: String,
+    _property : DLTS,
     assumptionGeneratorType: AssumptionGeneratorType =
       AssumptionGeneratorType.RPNI,
-) extends DFAAutomaticVerifier(_ltsFiles, _err, assumptionGeneratorType) {
+) extends DFAAutomaticVerifier(_ltsFiles, Some(_property), assumptionGeneratorType) {
 
   protected var assumptionAlphabet = propertyAlphabet
 
@@ -125,8 +125,8 @@ class DFAAutomaticVerifierAlphabetRefinement(
           findMismatch(processTraces) match {
             case None =>
               // All processes agree on these traces: check also if cex is rejected by the property
-              if (!propertyDLTS.dfa.accepts(
-                  cex.filter(propertyDLTS.alphabet.contains(_))
+              if (!_property.dfa.accepts(
+                  cex.filter(_property.alphabet.contains(_))
                 ))
               then AGFalse(cex)
               else {
