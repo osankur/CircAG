@@ -188,13 +188,13 @@ object Main {
               c.copy(err = x)
             )
           .text("err is the label indicating an error; so that the property to be checked is 'G not err'."),
-        opt[Boolean]("ar")
-          .valueName("<ar>")
-          .optional()
-          .action((x, c) => 
-              c.copy(alphabetRefinement = x)
-            )
-          .text("Use automatic alphabet refinement."),
+        // opt[Boolean]("ar")
+        //   .valueName("<ar>")
+        //   .optional()
+        //   .action((x, c) => 
+        //       c.copy(alphabetRefinement = x)
+        //     )
+        //   .text("Use automatic alphabet refinement."),
         opt[Boolean]("verbose")
           .action((x, c) => c.copy(verbose = x))
           .valueName("(true|false)"),
@@ -241,7 +241,7 @@ object Main {
               val product = TA.synchronousProduct(tas.toList)
               System.out.println(product.toString())
             case "dfa-aag" =>
-              dfa.DFAAutomaticAssumeGuaranteeVerifier(configuration.get().ltsFiles, configuration.get().err, configuration.get().learnerType, config.alphabetRefinement)
+              dfa.DFAAutomaticVerifier(configuration.get().ltsFiles, configuration.get().err, configuration.get().learnerType)
               .proveGlobalPropertyByLearning()
               match {
                 case None => System.out.println(s"${GREEN}${BOLD}Success${RESET}")

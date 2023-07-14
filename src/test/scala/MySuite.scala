@@ -249,7 +249,7 @@ class DFAAAG extends munit.FunSuite {
         .create();
 
     val dltss = List(DLTS("ass1p", dfa1, dfa1.getInputAlphabet().toSet), DLTS("ass2", dfa2, dfa2.getInputAlphabet().toSet))
-    val agv = dfa.DFAAutomaticAssumeGuaranteeVerifier(Array(File("examples/lts1.ta")), err)    
+    val agv = dfa.DFAAutomaticVerifier(Array(File("examples/lts1.ta")), err)    
     agv.assumptions = dltss.toBuffer
     // val cex = agv.checkInductivePremise(0)
     // assert(cex != None)
@@ -325,7 +325,7 @@ class DFAAAG extends munit.FunSuite {
     assert(None != agv.processes(0).checkTraceMembership(List[String]("c", "c", "err"), Some(Set[String]("c", "err"))))
     assert(None != agv.processes(0).checkTraceMembership(List[String]("c", "b", "err"), Some(Set[String]("c", "err"))))
     // (checker_p.processes(0), dltss_p, DLTS("guarantee", errDFA, errDFA.getInputAlphabet()))
-    val cex4 = dfa.DFAAssumeGuaranteeVerifier.extendTrace(agv.processes(0), List[String]("c", "c", "err"), None)
+    val cex4 = dfa.DFAVerifier.extendTrace(agv.processes(0), List[String]("c", "c", "err"), None)
     // System.out.println(s"CEX4: ${cex4}")
     assert(cex4
       == Some(List("c","a","c", "err")))
@@ -394,7 +394,7 @@ class DFAAAG extends munit.FunSuite {
         .withAccepting("q0")
         .create();
 
-    val ver = dfa.DFAAutomaticAssumeGuaranteeVerifier(Array(File("examples/ums/user.ta"), File("examples/ums/scheduler.ta"), File("examples/ums/machine.ta")), "err")
+    val ver = dfa.DFAAutomaticVerifier(Array(File("examples/ums/user.ta"), File("examples/ums/scheduler.ta"), File("examples/ums/machine.ta")), "err")
     ver.assumptions(0) = DLTS("user", gUser, gUser.getInputAlphabet().toSet)
     ver.assumptions(1) = DLTS("sched", gSched, gSched.getInputAlphabet().toSet)
     ver.assumptions(2) = DLTS("machine", gMachine, gMachine.getInputAlphabet().toSet)
@@ -530,7 +530,7 @@ class DFAAAG extends munit.FunSuite {
     assert(errDFA.pruned.isPrunedSafety)
     assert(gUser.isPrunedSafety)
     assert(gUser.isSafety)
-    val ver = dfa.DFAAutomaticAssumeGuaranteeVerifier(Array(File("examples/ums/user.ta"), File("examples/ums/scheduler.ta"), File("examples/ums/machine.ta")), "err")
+    val ver = dfa.DFAAutomaticVerifier(Array(File("examples/ums/user.ta"), File("examples/ums/scheduler.ta"), File("examples/ums/machine.ta")), "err")
     ver.assumptions(0) = DLTS("user", gUser, gUser.getInputAlphabet().toSet)
     ver.assumptions(1) = DLTS("sched", gSched, gSched.getInputAlphabet().toSet)
     ver.assumptions(2) = DLTS("machine", gMachine, gMachine.getInputAlphabet().toSet)
@@ -544,9 +544,9 @@ class DFAAAG extends munit.FunSuite {
 
   test("lts from file"){
     val files = Array(File("examples/toy/lts1.ta"),File("examples/toy/lts2.ta"),File("examples/toy/lts3.ta"))
-    val verSAT = dfa.DFAAutomaticAssumeGuaranteeVerifier(files, "err", dfa.AssumptionGeneratorType.SAT, false)
-    val verUFSAT = dfa.DFAAutomaticAssumeGuaranteeVerifier(files, "err", dfa.AssumptionGeneratorType.UFSAT, false)
-    val verRPNI = dfa.DFAAutomaticAssumeGuaranteeVerifier(files, "err", dfa.AssumptionGeneratorType.RPNI, false)
+    val verSAT = dfa.DFAAutomaticVerifier(files, "err", dfa.AssumptionGeneratorType.SAT)
+    val verUFSAT = dfa.DFAAutomaticVerifier(files, "err", dfa.AssumptionGeneratorType.UFSAT)
+    val verRPNI = dfa.DFAAutomaticVerifier(files, "err", dfa.AssumptionGeneratorType.RPNI)
     assert(verUFSAT.proveGlobalPropertyByLearning() == None)
     assert(verSAT.proveGlobalPropertyByLearning() == None)
     assert(verRPNI.proveGlobalPropertyByLearning() == None)
@@ -554,19 +554,19 @@ class DFAAAG extends munit.FunSuite {
 
   test("seq-toy from file"){
     val files = Array(File("examples/seq-toy/lts0.ta"),File("examples/seq-toy/lts1.ta"),File("examples/seq-toy/lts2.ta"))
-    val verUFSAT =  dfa.DFAAutomaticAssumeGuaranteeVerifier(files, "err", dfa.AssumptionGeneratorType.SAT, false)
-    val verSAT =  dfa.DFAAutomaticAssumeGuaranteeVerifier(files, "err", dfa.AssumptionGeneratorType.SAT, false)
-    val verRPNI = dfa.DFAAutomaticAssumeGuaranteeVerifier(files, "err", dfa.AssumptionGeneratorType.RPNI, false)
+    val verUFSAT =  dfa.DFAAutomaticVerifier(files, "err", dfa.AssumptionGeneratorType.SAT)
+    val verSAT =  dfa.DFAAutomaticVerifier(files, "err", dfa.AssumptionGeneratorType.SAT)
+    val verRPNI = dfa.DFAAutomaticVerifier(files, "err", dfa.AssumptionGeneratorType.RPNI)
     assert(verRPNI.proveGlobalPropertyByLearning() != None)
     assert(verSAT.proveGlobalPropertyByLearning() != None)
     assert(verUFSAT.proveGlobalPropertyByLearning() != None)
 
     val files2 = Array(File("examples/seq-toy/lts0.ta"),File("examples/seq-toy/lts1.ta"),File("examples/seq-toy/lts2.ta"),File("examples/seq-toy/lts3.ta"))
-    val ver2SAT = dfa.DFAAutomaticAssumeGuaranteeVerifier(files2, "err", dfa.AssumptionGeneratorType.SAT, false)
+    val ver2SAT = dfa.DFAAutomaticVerifier(files2, "err", dfa.AssumptionGeneratorType.SAT)
     assert(ver2SAT.proveGlobalPropertyByLearning() == None)
-    val ver2UFSAT = dfa.DFAAutomaticAssumeGuaranteeVerifier(files2, "err", dfa.AssumptionGeneratorType.SAT, false)
+    val ver2UFSAT = dfa.DFAAutomaticVerifier(files2, "err", dfa.AssumptionGeneratorType.SAT)
     assert(ver2UFSAT.proveGlobalPropertyByLearning() == None)
-    val ver2RPNI = dfa.DFAAutomaticAssumeGuaranteeVerifier(files2, "err", dfa.AssumptionGeneratorType.RPNI, false)
+    val ver2RPNI = dfa.DFAAutomaticVerifier(files2, "err", dfa.AssumptionGeneratorType.RPNI)
     assert(ver2RPNI.proveGlobalPropertyByLearning() == None)
   }
 
@@ -915,7 +915,7 @@ class PartialLearning extends munit.FunSuite {
     assert(errDFA.pruned.isPrunedSafety)
     assert(gUser.isPrunedSafety)
     assert(gUser.isSafety)
-    val ver = dfa.DFAAutomaticAssumeGuaranteeVerifier(Array(File("examples/ums/user.ta"), File("examples/ums/scheduler.ta"), File("examples/ums/machine.ta")), "err")
+    val ver = dfa.DFAAutomaticVerifier(Array(File("examples/ums/user.ta"), File("examples/ums/scheduler.ta"), File("examples/ums/machine.ta")), "err")
     ver.assumptions(0) = DLTS("user", gUser, gUser.getInputAlphabet().toSet)
     ver.assumptions(1) = DLTS("sched", gSched, gSched.getInputAlphabet().toSet)
     ver.assumptions(2) = DLTS("machine", gMachine, gMachine.getInputAlphabet().toSet)

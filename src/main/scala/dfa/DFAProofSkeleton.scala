@@ -12,29 +12,35 @@ import fr.irisa.circag.configuration
   * 
   * @param processDependencies the set of process indices on which the proof of process(i) must depend.
   * @param propertyDependencies the set of process indices on which the proof of the final premise must depend.
-  * @param assumptionAlphabets alphabets of the assumption DFAs for each process
+  * @param commonAssumptionAlphabet 
   */
-class DFAProofSkeleton(val nbProcesses : Int) {
+class DFAProofSkeleton(val nbProcesses : Int, processAlphabets : Buffer[Set[String]], propertyAlphabet : Set[String]) {
   private val logger = LoggerFactory.getLogger("CircAG")
 
   var processDependencies = Buffer[Set[Int]]()
   var propertyDependencies = Set[Int]()
   var assumptionAlphabets = Buffer[Set[String]]()
 
-  def this(processAlphabets : Buffer[Set[String]], propertyAlphabet : Set[String], newAssumptionAlphabet : Set[String]) = {
-    this(processAlphabets.size)
-    updateByCone(processAlphabets, propertyAlphabet, newAssumptionAlphabet)
+  def setAssumptionAlphabet(i : Int, alpha : Set[String]) : Unit = {
+    assumptionAlphabets(i) = alpha
+    updateByCone()
+  }
+
+  def setAssumptionAlphabetsByCommonAlphabet(alpha : Set[String]) : Unit = {
+    assumptionAlphabets = processAlphabets.map(_.intersect(alpha))
+    updateByCone()
+  }
+
+  def this(processAlphabets : Buffer[Set[String]], propertyAlphabet : Set[String], commonAssumptionAlphabet : Set[String]) = {
+    this(processAlphabets.size, processAlphabets, propertyAlphabet)
+    setAssumptionAlphabetsByCommonAlphabet(commonAssumptionAlphabet)
   }
   /**
     * Update the fields from the given assumption alphabet: the dependencies of a process (or a property) are those assumptions that
     * share a common label, and those that share a common label with other dependencies.
     *
-    * @param processAlphabets alphabets of the TAs
-    * @param propertyAlphabet alphabet of the property
-    * @param newAssumptionAlphabet the common assumption alphabet
     */
-  def updateByCone(processAlphabets : Buffer[Set[String]], propertyAlphabet : Set[String], newAssumptionAlphabet : Set[String]) = {
-    val nbProcesses = processAlphabets.size
+  def updateByCone() = {
     processDependencies = Buffer.tabulate(nbProcesses)({_ => Set[Int]()})
     // Compute simplified sets of assumptions for the new alphabet
     // adj(i)(j) iff (i = j) or (i and j have a common symbol) or (i has a common symbol with k such that adj(k)(j))
@@ -65,7 +71,6 @@ class DFAProofSkeleton(val nbProcesses : Int) {
       processDependencies(i) = adj(i).zipWithIndex.filter({(b,i) => b}).map(_._2).toSet.diff(Set[Int](i, nbProcesses))
     }
     propertyDependencies = adj(nbProcesses).zipWithIndex.filter({(b,i) => b}).map(_._2).toSet - nbProcesses
-    assumptionAlphabets = processAlphabets.map(_.intersect(newAssumptionAlphabet))
     
     logger.debug(s"Ass alphabets: $assumptionAlphabets")
     logger.debug(s"Prop dependencies: $propertyDependencies")
