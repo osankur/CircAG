@@ -6,6 +6,7 @@ import collection.convert.ImplicitConversions._
 import scala.sys.process._
 import java.nio.file.Files
 import java.io.ByteArrayInputStream
+import java.io.PrintWriter
 import dk.brics.automaton
 import net.automatalib.brics.BricsNFA
 import net.automatalib.automata.fsa.MutableDFA
@@ -56,6 +57,10 @@ trait LTS[FA <: FiniteStateAcceptor[?, String] with Automaton[?, String, ?]](
   var comments : String= ""
   def visualize() : Unit = {
     Visualization.visualize(dfa, Alphabets.fromList(alphabet.toList))
+  }
+  def writeToFile(file : java.io.File) : Unit = {
+    val lts = this
+    new PrintWriter(file) { write(TA.fromLTS(lts).toString()); close }    
   }
 }
 

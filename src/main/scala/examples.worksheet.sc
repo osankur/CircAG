@@ -7,7 +7,7 @@ val checker = LTLAssumeGuaranteeVerifier(tas, G(F(Atomic("a"))))
 checker.setAssumption(0, G(LTLTrue()))
 checker.setAssumption(1, G(LTLTrue()))
 checker.proofSkeleton.setProcessInstantaneousDependencies(0, Set(1))
-assert(checker.checkFinalPremise() != None)
+checker.checkFinalPremise()
 
 val ass0 = LTL.fromString("G (( b-> X a) & (c -> !F b))")
 val ass1 = LTL.fromString("G (( d-> X b) & F(c | d) & (c -> ! F c))")

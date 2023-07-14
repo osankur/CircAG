@@ -321,7 +321,6 @@ class DFAAAG extends munit.FunSuite {
     // agv.assumptions = (DLTS("ass3", dfa3, dfa3.getInputAlphabet().toSet)::dltss_p.toList).toBuffer
     // val cex3 = agv.checkFinalPremise()
     // assertEquals(cex3, None)
-
     assert(None == agv.processes(0).checkTraceMembership(List[String]("c", "c", "err", "err"), Some(Set[String]("c", "err"))))
     assert(None != agv.processes(0).checkTraceMembership(List[String]("c", "c", "err"), Some(Set[String]("c", "err"))))
     assert(None != agv.processes(0).checkTraceMembership(List[String]("c", "b", "err"), Some(Set[String]("c", "err"))))
