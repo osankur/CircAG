@@ -707,7 +707,7 @@ class LTLAGTests extends munit.FunSuite {
     val ltl = ass.map(LTL.fromString)
     System.out.println(s"LTL assumptions: ${ltl}")
     val tas = Array(File("examples/ltl-toy1/a.ta"), File("examples/ltl-toy1/b.ta"))
-    val checker = LTLAssumeGuaranteeVerifier(tas, G(F(Atomic("a"))))
+    val checker = LTLVerifier(tas, G(F(Atomic("a"))))
     ltl.zipWithIndex.foreach( (ltl,i) => checker.setAssumption(i, ltl))
     // Without instantaneous assumptions, the proof fails:
     assert(checker.checkInductivePremise(0) != None)
@@ -721,7 +721,7 @@ class LTLAGTests extends munit.FunSuite {
     val ltl = ass.map(LTL.fromString)
     System.out.println(s"LTL assumptions: ${ltl}")
     val tas = Array(File("examples/ltl-toy1/a.ta"), File("examples/ltl-toy1/b.ta"))
-    val checker = LTLAssumeGuaranteeVerifier(tas, G(F(Atomic("a"))))
+    val checker = LTLVerifier(tas, G(F(Atomic("a"))))
     checker.setAssumption(1, G(G(F(Atomic("b"))))) // Overwrite
     ltl.zipWithIndex.foreach( (ltl,i) => checker.setAssumption(i, ltl))
     // Without instantaneous assumptions, the proof fails:
@@ -736,7 +736,7 @@ class LTLAGTests extends munit.FunSuite {
     val ltl = ass.map(LTL.fromString)
     System.out.println(s"LTL assumptions: ${ltl}")
     val tas = Array(File("examples/ltl-toy1/c.ta"), File("examples/ltl-toy1/d.ta"))
-    val checker = LTLAssumeGuaranteeVerifier(tas, LTLTrue())
+    val checker = LTLVerifier(tas, LTLTrue())
     ltl.zipWithIndex.foreach( (ltl,i) => checker.setAssumption(i, ltl))
 
     checker.proofSkeleton.setProcessInstantaneousDependencies(1, Set(0))
@@ -752,12 +752,12 @@ class LTLAGTests extends munit.FunSuite {
     val ltl = ass.map(LTL.fromString)
     // System.out.println(s"LTL assumptions: ${ltl}")
     val tas = Array(File("examples/ltl-toy1/a.ta"), File("examples/ltl-toy1/b.ta"))
-    val checker = LTLAssumeGuaranteeVerifier(tas, G(Not(Atomic("d"))))
+    val checker = LTLVerifier(tas, G(Not(Atomic("d"))))
     ltl.zipWithIndex.foreach( (ltl,i) => checker.setAssumption(i, ltl))
     System.out.println(checker.checkFinalPremise(true))
     assert(checker.checkFinalPremise(true) == None)
     
-    val checker2 = LTLAssumeGuaranteeVerifier(tas, G(Not(Atomic("a"))))
+    val checker2 = LTLVerifier(tas, G(Not(Atomic("a"))))
     ltl.zipWithIndex.foreach( (ltl,i) => checker2.setAssumption(i, ltl))
     assert(checker2.checkFinalPremise() != None)
   } 
@@ -766,7 +766,7 @@ class LTLAGTests extends munit.FunSuite {
 class Benjamin extends munit.FunSuite {
   test("ltl inductive check: ltl-toy1 a b - Benjamin"){
     val tas = Array(File("examples/ltl-toy1/a.ta"), File("examples/ltl-toy1/b.ta"))
-    val checker = LTLAssumeGuaranteeVerifier(tas, G(F(Atomic("a"))))
+    val checker = LTLVerifier(tas, G(F(Atomic("a"))))
     checker.setAssumption(0, G(LTLTrue()))
     checker.setAssumption(1, G(LTLTrue()))
     checker.proofSkeleton.setProcessInstantaneousDependencies(0, Set(1))
