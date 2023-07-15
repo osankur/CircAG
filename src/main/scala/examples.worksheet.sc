@@ -3,7 +3,7 @@ import fr.irisa.circag._
 import fr.irisa.circag.ltl._
 
 val tas = Array(File("examples/ltl-toy1/a.ta"), File("examples/ltl-toy1/b.ta"))
-val checker = LTLAssumeGuaranteeVerifier(tas, G(F(Atomic("a"))))
+val checker = LTLVerifier(tas, G(F(Atomic("a"))))
 checker.setAssumption(0, G(LTLTrue()))
 checker.setAssumption(1, G(LTLTrue()))
 checker.proofSkeleton.setProcessInstantaneousDependencies(0, Set(1))
@@ -16,3 +16,6 @@ ta0.checkLTL(ass0)
 checker.setAssumption(0, ass0)
 checker.setAssumption(1, ass1)
 // assert(checker.checkInductivePremise(0, false) == None)
+
+val int = Interactive(List(("examples/ltl-toy1/a.ta"), ("examples/ltl-toy1/b.ta")), Some(DLTS.fromTChecker(java.io.File("examples/ltl-toy1/b.ta"))), LTLTrue())
+int.show()

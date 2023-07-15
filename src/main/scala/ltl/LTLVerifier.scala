@@ -58,6 +58,9 @@ class LTLVerifier(ltsFiles: Array[File], val property: LTL) {
   def setAssumption(processID : Int, formula: LTL) : Unit = {
     assumptions(processID) = formula
   }
+  def getAssumption(processID : Int) : Unit = {
+    assumptions(processID)
+  }
 
   
   /**
