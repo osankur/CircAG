@@ -51,65 +51,13 @@ import fr.irisa.circag.statistics
 import com.microsoft.z3
 import fr.irisa.circag.isPrunedSafety
 
-object DFAVerifier {
-  private val logger = LoggerFactory.getLogger("CircAG")
-
-  /** Attempt to find a trace in ta that synchronizes with word; the returned
-    * trace has alphabet word's alphabet | ta's alphabet.
-    *
-    * @param ta
-    * @param word
-    * @param projectionAlphabet
-    * @return
-    */
-  def extendTrace(
-      ta: TA,
-      word: Trace,
-      projectionAlphabet: Option[Set[String]]
-  ): Option[Trace] = {
-    val wordDLTS = DLTS.fromTrace(word)
-    val productTA = TA.synchronousProduct(
-      ta,
-      List(wordDLTS),
-      acceptingLabelSuffix = Some("_accept_")
-    )
-    productTA.checkReachability(s"${wordDLTS.name}_accept_")
-  }
-
-  /** @param ta
-    * @param word
-    * @param projectionAlphabet
-    * @return
-    */
-  def attemptToExtendTraceToAllProcesses(
-      tas: Array[TA],
-      word: Trace,
-      projectionAlphabet: Option[Set[String]]
-  ): Trace = {
-    var currentTrace = word
-    for ta <- tas do {
-      val wordDLTS = DLTS.fromTrace(currentTrace)
-      val productTA = TA.synchronousProduct(
-        ta,
-        List(wordDLTS),
-        acceptingLabelSuffix = Some("_accept_")
-      )
-      productTA.checkReachability(s"${wordDLTS.name}_accept_") match {
-        case None           => ()
-        case Some(newTrace) => currentTrace = newTrace
-      }
-    }
-    currentTrace
-  }
-
-}
 
 abstract class AGIntermediateResult extends Exception
 case class AGSuccess() extends AGIntermediateResult
 case class AGContinue() extends AGIntermediateResult
 case class AGFalse(cex: Trace) extends AGIntermediateResult
 
-class DFAVerifier(val ltsFiles: Array[File], val property : Option[DLTS]) {
+class DFAVerifier(val ltsFiles: Array[File], val property : Option[DLTS] = None) {
   private val logger = LoggerFactory.getLogger("CircAG")
 
   val nbProcesses = ltsFiles.size
@@ -257,7 +205,7 @@ class DFAVerifier(val ltsFiles: Array[File], val property : Option[DLTS]) {
     property match {
       case None => None
       case Some(propertyDLTS) => 
-      val lhs = proofSkeleton.propertyDependencies.map(assumptions(_)).toList
+      val lhs = proofSkeleton.propertyDependencies().map(assumptions(_)).toList
       // Check precondition
       for dlts <- lhs do {
         val dfa = dlts.dfa
@@ -316,9 +264,6 @@ class DFAVerifier(val ltsFiles: Array[File], val property : Option[DLTS]) {
     */
   def applyAG(): AGIntermediateResult = {
     // A proof for a process must not depend on itself
-    require(proofSkeleton.assumptionAlphabets.zipWithIndex.forall({ (ass, i) =>
-      !ass.contains(i)
-    }))
     logger.debug(s"applyAG with alphabets: ${assumptions.map(_.alphabet)}")
     try {
       for (ta, i) <- processes.zipWithIndex do {
@@ -432,9 +377,6 @@ class DFAAutomaticVerifier(
     // dfaGenerator.checkValuation(dfaGenerator.z3ctx.mkAnd(concreteVal.toSeq : _*))
 
     // A proof for a process must not depend on itself
-    require(proofSkeleton.assumptionAlphabets.zipWithIndex.forall({ (ass, i) =>
-      !ass.contains(i)
-    }))
     logger.debug(s"applyAG with alphabets: ${assumptions.map(_.alphabet)}")
     try {
       for (ta, i) <- processes.zipWithIndex do {

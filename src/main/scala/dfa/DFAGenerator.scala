@@ -586,7 +586,7 @@ class DFAGenerator(proofSkeleton : DFAProofSkeleton, assumptionGeneratorType : A
           z3ctx.mkAnd(
             varOfIndexedTrace(process, trace),
             z3ctx.mkOr(
-              (proofSkeleton.propertyDependencies - process).map(
+              (proofSkeleton.propertyDependencies() - process).map(
               {
                 j => z3ctx.mkNot(varOfIndexedTrace(j, trace))
               }).toSeq : _*
@@ -610,7 +610,7 @@ class DFAGenerator(proofSkeleton : DFAProofSkeleton, assumptionGeneratorType : A
           z3ctx.mkAnd(
             varOfIndexedTrace(process, trace),
             z3ctx.mkOr(
-              (proofSkeleton.propertyDependencies -- proofSkeleton.processDependencies(process) - process).map(
+              (proofSkeleton.propertyDependencies() -- proofSkeleton.processDependencies(process) - process).map(
               {
                 j => z3ctx.mkNot(varOfIndexedTrace(j, trace))
               }).toSeq : _*
@@ -625,7 +625,7 @@ class DFAGenerator(proofSkeleton : DFAProofSkeleton, assumptionGeneratorType : A
 
   def addFinalPremiseConstraint(trace : Trace) : Unit = {
     val newConstraint = z3ctx.mkOr(
-        z3ctx.mkOr(proofSkeleton.propertyDependencies.map({j => z3ctx.mkNot(varOfIndexedTrace(j, trace))}).toSeq : _*)
+        z3ctx.mkOr(proofSkeleton.propertyDependencies().map({j => z3ctx.mkNot(varOfIndexedTrace(j, trace))}).toSeq : _*)
       )
     if configuration.get().verbose then {            
       System.out.println(s"Adding constraint ${newConstraint}")

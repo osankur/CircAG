@@ -31,6 +31,57 @@ import fr.irisa.circag.configuration
 import fr.irisa.circag.statistics
 
 import fr.irisa.circag.isPrunedSafety
+object DFAAutomaticVerifierAlphabetRefinement {
+  private val logger = LoggerFactory.getLogger("CircAG")
+
+  /** Attempt to find a trace in ta that synchronizes with word; the returned
+    * trace has alphabet word's alphabet | ta's alphabet.
+    *
+    * @param ta
+    * @param word
+    * @param projectionAlphabet
+    * @return
+    */
+  def extendTrace(
+      ta: TA,
+      word: Trace,
+      projectionAlphabet: Option[Set[String]]
+  ): Option[Trace] = {
+    val wordDLTS = DLTS.fromTrace(word)
+    val productTA = TA.synchronousProduct(
+      ta,
+      List(wordDLTS),
+      acceptingLabelSuffix = Some("_accept_")
+    )
+    productTA.checkReachability(s"${wordDLTS.name}_accept_")
+  }
+
+  /** @param ta
+    * @param word
+    * @param projectionAlphabet
+    * @return
+    */
+  def attemptToExtendTraceToAllProcesses(
+      tas: Array[TA],
+      word: Trace,
+      projectionAlphabet: Option[Set[String]]
+  ): Trace = {
+    var currentTrace = word
+    for ta <- tas do {
+      val wordDLTS = DLTS.fromTrace(currentTrace)
+      val productTA = TA.synchronousProduct(
+        ta,
+        List(wordDLTS),
+        acceptingLabelSuffix = Some("_accept_")
+      )
+      productTA.checkReachability(s"${wordDLTS.name}_accept_") match {
+        case None           => ()
+        case Some(newTrace) => currentTrace = newTrace
+      }
+    }
+    currentTrace
+  }
+}
 
 class DFAAutomaticVerifierAlphabetRefinement(
     _ltsFiles: Array[File],

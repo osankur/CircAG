@@ -181,6 +181,7 @@ class DFAAAG extends munit.FunSuite {
     assert(solver2.check() == Status.UNSATISFIABLE)
     ctx.close();      
   }
+
   test("sat learner"){
     val satLearner = dfa.SATLearner("ass", Set("a","b","c"))
     val positives = Set(List("a","b","c"),List("c","c"))
@@ -922,5 +923,60 @@ class PartialLearning extends munit.FunSuite {
     configuration.set(configuration.get().copy(verbose_MembershipQueries = true))
     assert(ver.proveGlobalPropertyByLearning(Some(List(0,1))) == None)
     assert(ver.proveGlobalPropertyByLearning(Some(List(1,2))) == None)
+  }
+}
+
+class Single extends munit.FunSuite{
+  test("dfa clusters"){
+    val files = Array(File("examples/ltl-toy1/a.ta"), File("examples/ltl-toy1/b.ta"), File("examples/ltl-toy1/b.ta"), File("examples/ltl-toy1/b.ta"))
+    val nbProcesses =files.size
+    val ver = DFAVerifier(files)
+    for i <- 0 until nbProcesses do {
+      ver.setAssumption(i, DLTS.fromTChecker(files(i)))
+    }
+    // ver.proofSkeleton.processDependencies(3) = Set(1)
+    // ver.proofSkeleton.processDependencies(1) = Set(2)
+    // ver.proofSkeleton.processDependencies(2) = Set(1,0)
+    // ver.proofSkeleton.processDependencies(0) = Set[Int]()
+    // System.out.println("\n")
+    // ver.proofSkeleton.updateClusters()
+  } 
+  test("proof invalidation"){
+    val filenames = Array("examples/seq-toy/lts0.ta", "examples/seq-toy/lts1.ta", "examples/seq-toy/lts2.ta", "examples/seq-toy/lts3.ta")
+    val int = Interactive(filenames.toList)
+    val nbProcesses = filenames.size
+    for i <- 0 until nbProcesses do {
+        int.setDFAAssumption(i, DLTS.fromTChecker(File(filenames(i))))
+    }
+    int.checkDFAAssumption(0)
+    int.checkDFAAssumption(1)
+    assert(int.getDFAProofState(0) == DFAProofState.PremiseSucceeded)
+    assert(int.getDFAProofState(1) == DFAProofState.PremiseSucceeded)
+    int.setDFAAssumption(3, DLTS.fromTChecker(File(filenames(3))))
+    assert(int.getDFAProofState(0) == DFAProofState.PremiseSucceeded)
+    assert(int.getDFAProofState(1) == DFAProofState.PremiseSucceeded)
+
+    int.setDFAAssumptionDependencies(0,Set[Int]())
+    int.setDFAAssumptionDependencies(1,Set(2))
+    int.setDFAAssumptionDependencies(2, Set(1,0))
+    int.setDFAAssumptionDependencies(3, Set(1))
+    int.checkDFAAssumption(0)
+    int.checkDFAAssumption(1)
+    int.checkDFAAssumption(2)
+    int.checkDFAAssumption(3)
+    int.setDFAAssumption(2, DLTS.fromTChecker(File(filenames(2))))
+    assert(int.getDFAProofState(0) == DFAProofState.Proved)
+    assert(int.getDFAProofState(1) == DFAProofState.Unknown)
+    assert(int.getDFAProofState(2) == DFAProofState.Unknown)
+    assert(int.getDFAProofState(3) == DFAProofState.Unknown)
+    int.checkDFAAssumption(0)
+    int.checkDFAAssumption(1)
+    int.checkDFAAssumption(2)
+    int.checkDFAAssumption(3)
+    int.setDFAAssumption(3, DLTS.fromTChecker(File(filenames(2))))
+    assert(int.getDFAProofState(0) == DFAProofState.Proved)
+    assert(int.getDFAProofState(1) == DFAProofState.Proved)
+    assert(int.getDFAProofState(2) == DFAProofState.Proved)
+
   }
 }
