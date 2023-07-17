@@ -51,24 +51,38 @@ import fr.irisa.circag.statistics
 import com.microsoft.z3
 import fr.irisa.circag.isPrunedSafety
 
+enum AGResult extends Exception:
+  case Success
+  case GlobalPropertyFail(cex : Trace)
+  case GlobalPropertyViolation(cex : Trace)
+  case PremiseFail(processID : Int, cex : Trace)
+  case AssumptionViolation(processID : Int, cex : Trace)
 
-abstract class AGIntermediateResult extends Exception
-case class AGSuccess() extends AGIntermediateResult
-case class AGContinue() extends AGIntermediateResult
-case class AGFalse(cex: Trace) extends AGIntermediateResult
+class UnsatisfiableConstraints extends Exception
 
-class DFAVerifier(val ltsFiles: Array[File], val property : Option[DLTS] = None) {
+
+class DFAVerifier(val ltsFiles: Array[File], var property : Option[DLTS] = None) {
   private val logger = LoggerFactory.getLogger("CircAG")
 
   val nbProcesses = ltsFiles.size
-  val propertyAlphabet = property match {
-    case None => Set()
-    case Some(dlts) => dlts.alphabet
-  }
+  
   val processes = ltsFiles.map(TA.fromFile(_)).toBuffer
 
+  protected var propertyAlphabet = Set[String]()
   // Set of symbols that appear in the property alphabet, or in at least two processes
-  val interfaceAlphabet =
+  protected var interfaceAlphabet = Set[String]()
+  /** Intersection of local alphabets with the interface alphabet: when all
+   * assumptions use these alphabets, the AG procedure is complete.
+   * i.e. alpha_F = alphaM_i /\ alphaP cup J_i
+   */
+  protected var completeAlphabets = Buffer.tabulate(nbProcesses)(_ => Set[String]())
+  updateAlphabets()
+
+  private def updateAlphabets() : Unit ={
+    var propertyAlphabet = property match {
+      case None => Set()
+      case Some(dlts) => dlts.alphabet
+    }    
     // Consider only symbols that appear at least in two processes (union of J_i's in CAV16)
     val symbolCount = HashMap[String, Int]()
     processes.foreach { p =>
@@ -77,20 +91,21 @@ class DFAVerifier(val ltsFiles: Array[File], val property : Option[DLTS] = None)
       }
     }
     symbolCount.filterInPlace((sigma, count) => count >= 2)
-    propertyAlphabet | symbolCount.map({ (sigma, _) => sigma }).toSet
+    interfaceAlphabet = propertyAlphabet | symbolCount.map({ (sigma, _) => sigma }).toSet
 
-  // Intersection of local alphabets with the interface alphabet: when all
-  // assumptions use these alphabets, the AG procedure is complete.
-  // i.e. alpha_F = alphaM_i /\ alphaP cup J_i
-  val completeAlphabets = processes
-    .map({ pr =>
-      interfaceAlphabet.intersect(pr.alphabet)
-    })
-    .toBuffer
+    completeAlphabets = processes
+      .map({ pr =>
+        interfaceAlphabet.intersect(pr.alphabet)
+      })
+      .toBuffer
+  }
+  def getPropertyAlphabet() : Set[String] = propertyAlphabet
+  def getInterfaceAlphabet(): Set[String] = interfaceAlphabet
+  def getCompleteAlphabet(processID : Int): Set[String] = completeAlphabets(processID)
 
   /** The assumption DLTS g_i for each process i.
     */
-  var assumptions: Buffer[DLTS] = {
+  protected var assumptions: Buffer[DLTS] = {
     (0 until ltsFiles.size)
       .map({ i =>
         val alph = interfaceAlphabet.intersect(processes(i).alphabet)
@@ -122,7 +137,11 @@ class DFAVerifier(val ltsFiles: Array[File], val property : Option[DLTS] = None)
     assumptions(i) = dlts
     proofSkeleton.setAssumptionAlphabet(i, dlts.alphabet)
   }
-
+  def setGlobalProperty(dlts : DLTS) : Unit = {
+    property = Some(dlts)
+    updateAlphabets()
+    proofSkeleton.setPropertyAlphabet(propertyAlphabet)
+  }
   /** Checks processes(processID) |= A |> G
     *
     * where A is the set of assumptions on which processID depends (according to
@@ -173,13 +192,6 @@ class DFAVerifier(val ltsFiles: Array[File], val property : Option[DLTS] = None)
           Some(s"lifted_${ass.name}")
         )
       })
-    // for (ass, liftedAss) <- assumptions.zip(liftedAssumptions) do {
-    //   System.out.println(s"Displaying assumption ${ass.name} ")
-    //   AUTWriter.writeAutomaton(ass.dfa, Alphabets.fromList(ass.alphabet.toList), System.out)
-    //   System.out.println(s"Displaying lifted assumption ${ass.name} ")
-    //   AUTWriter.writeAutomaton(liftedAss.dfa, Alphabets.fromList(liftedAss.alphabet.toList), System.out)
-    // }
-
     val premiseProduct = TA.synchronousProduct(
       ta,
       compG :: liftedAssumptions.toList,
@@ -238,34 +250,33 @@ class DFAVerifier(val ltsFiles: Array[File], val property : Option[DLTS] = None)
 
   /** Check whether all processes accept the given trace
     */
-  protected def checkCounterExample(trace: Trace): Boolean = {
+  def checkCounterExample(trace: Trace): Boolean = {
     var returnValue = true
+    class Break extends Exception
     try {
       for (ta, i) <- processes.zipWithIndex do {
         ta.checkTraceMembership(trace, Some(assumptions(i).alphabet)) match {
           case None => // ta rejects
-            throw AGContinue()
+            throw Break()
           case _ => // ta accepts
             ()
         }
       }
     } catch {
-      case _: AGContinue =>
+      case _: Break =>
         returnValue = false
     }
     returnValue
   }
 
   /** Apply AG rule with given assumptions and proof skeleton: Checks inductive
-    * premises for all processes, then checks the final premise.
+    * premises for all processes, then checks the final premise if proveGlobalProperty is true.
     * @return
-    *   AGSuccess on success, AGFalse if a confirmed counterexample is found,
-    *   and AGContinue otherwise.
     */
-  def applyAG(): AGIntermediateResult = {
+  def applyAG(proveGlobalProperty : Boolean = true): AGResult = {
     // A proof for a process must not depend on itself
     logger.debug(s"applyAG with alphabets: ${assumptions.map(_.alphabet)}")
-    try {
+    try{
       for (ta, i) <- processes.zipWithIndex do {
         // DFAAssumeGuaranteeVerifier.checkInductivePremise(ta, proofSkeleton.processDependencies(i).map(assumptions(_)).toList, assumptions(i))
         this.checkInductivePremise(i) match {
@@ -276,14 +287,20 @@ class DFAVerifier(val ltsFiles: Array[File], val property : Option[DLTS] = None)
             logger.info(
               s"${RED}Premise ${i} failed with cex: ${cexTrace}${RESET}"
             )
-            throw AGContinue()
+            if checkCounterExample(cexTrace) then {
+              logger.info(s"\tCex to assumption ${i} confirmed: ${cexTrace}")
+              throw AGResult.AssumptionViolation(i, cexTrace)
+            } else 
+              throw AGResult.PremiseFail(i, cexTrace)
         }
       }
       // DFAAssumeGuaranteeVerifier.checkFinalPremise(proofSkeleton.propertyDependencies.map(assumptions(_)).toList, propertyDLTS)
+      if property == None || !proveGlobalProperty then 
+        throw AGResult.Success
       this.checkFinalPremise() match {
         case None =>
           logger.info(s"${GREEN}Final premise succeeded${RESET}")
-          AGSuccess()
+          AGResult.Success
         case Some(cexTrace) =>
           latestCex = cexTrace
           logger.info(
@@ -292,16 +309,14 @@ class DFAVerifier(val ltsFiles: Array[File], val property : Option[DLTS] = None)
           // If all processes contain proj(cexTrace), then return false, otherwise continue
           if checkCounterExample(cexTrace) then {
             logger.info(s"\tCex confirmed: ${cexTrace}")
-            throw AGFalse(cexTrace)
+            throw AGResult.GlobalPropertyViolation(cexTrace)
           } else {
             logger.info(s"\tCex *spurious*: ${cexTrace}")
-            throw AGContinue()
+            throw AGResult.GlobalPropertyFail(cexTrace)
           }
       }
     } catch {
-      case ex: AGContinue =>
-        ex
-      case ex: AGFalse => ex
+      case ex : AGResult => ex
     }
   }
   // Latest cex encountered in any premise check. This is for debugging.
@@ -357,7 +372,7 @@ class DFAAutomaticVerifier(
 
   /** Check the AG rule once for the current assumption alphabet and DFAs
     */
-  override def applyAG(): AGIntermediateResult = {
+  override def applyAG(proveGlobalproperty : Boolean = true): AGResult = {
     // val concreteVal = processes.zipWithIndex.map({
     //   (p,i) =>
     //       val valFori =
@@ -390,16 +405,16 @@ class DFAAutomaticVerifier(
               s"${RED}Premise ${i} failed with cex: ${cexTrace}${RESET}"
             )
             if (configuration.cex(i).contains(cexTrace)) then {
-              for j <- proofSkeleton.processDependencies(i) do {
-                System.out.println(
-                  s"Dependency: Assumption ${assumptions(j).name} for ${processes(j).systemName}"
-                )
-                assumptions(j).visualize()
-              }
-              System.out.println(
-                s"Assumption for this process ${processes(i).systemName}"
-              )
-              assumptions(i).visualize()
+              // for j <- proofSkeleton.processDependencies(i) do {
+              //   System.out.println(
+              //     s"Dependency: Assumption ${assumptions(j).name} for ${processes(j).systemName}"
+              //   )
+              //   assumptions(j).visualize()
+              // }
+              // System.out.println(
+              //   s"Assumption for this process ${processes(i).systemName}"
+              // )
+              // assumptions(i).visualize()
               throw Exception("Repeated CEX")
             } else {
               configuration.cex(i) = configuration.cex(i) + cexTrace
@@ -416,24 +431,27 @@ class DFAAutomaticVerifier(
               case Some(propertyDLTS) => 
                 propertyDLTS.dfa.accepts(cexTrace.filter(propertyAlphabet.contains(_)))
             }
+            val cexAccepted = checkCounterExample(cexTrace)
             if (!prefixInP && checkCounterExample(cexTrace.dropRight(1))) then {
-              throw AGFalse(cexTrace.dropRight(1))
-            } else if (!traceInP && checkCounterExample(cexTrace)) then {
-              throw AGFalse(cexTrace)
+              throw AGResult.GlobalPropertyViolation(cexTrace.dropRight(1))
+            } else if (!traceInP && cexAccepted) then {
+              throw AGResult.GlobalPropertyViolation(cexTrace)
             }
             updateConstraints(i, cexTrace)
-            throw AGContinue()
+            if cexAccepted then {
+              throw AGResult.AssumptionViolation(i, cexTrace)
+            } else {
+              throw AGResult.PremiseFail(i, cexTrace)
+            }
         }
       }
       // If no property to check, then we are done
-      property match {
-        case None => throw AGSuccess()
-        case _ => ()
-      }      
+      if property == None || !proveGlobalproperty then 
+        throw AGResult.Success
       this.checkFinalPremise() match {
         case None =>
           System.out.println(s"${GREEN}Final premise succeeded${RESET}")
-          AGSuccess()
+          AGResult.Success
         case Some(cexTrace) =>
           latestCex = cexTrace
           System.out.println(
@@ -443,45 +461,48 @@ class DFAAutomaticVerifier(
           if checkCounterExample(cexTrace) then {
             if configuration.get().verbose then
               System.out.println(s"\tCex confirmed: ${cexTrace}")
-            throw AGFalse(cexTrace)
+            throw AGResult.GlobalPropertyViolation(cexTrace)
           } else {
             dfaGenerator.addFinalPremiseConstraint(cexTrace)
-            throw AGContinue()
+            throw AGResult.GlobalPropertyFail(cexTrace)
           }
       }
     } catch {
-      case ex: AGContinue =>
-        ex
-      case ex: AGFalse => ex
+      case ex : AGResult => ex
     }
   }
 
-  /** Apply automatic AG; retrun None on succes, and a confirmed cex otherwise.
+  /**
+    * Apply automatic AG; retrun None on succes, and a confirmed cex otherwise.
+    *
+    * @param proveGlobalProperty
+    * @param fixedAssumptions
+    * @return
     */
-  def proveGlobalPropertyByLearning(fixedAssumptions : Option[List[Int]] = None): Option[Trace] = {
+  def learnAssumptions(proveGlobalProperty : Boolean = true, fixedAssumptions : List[Int] = List()): AGResult = {
     configuration.resetCEX()
     val fixedAssumptionsMap = HashMap[Int, DLTS]()
-    fixedAssumptions.getOrElse(List()).foreach(i => 
+    fixedAssumptions.foreach(i => 
       fixedAssumptionsMap.put(i, assumptions(i))      
     )
-
-    var currentState: AGIntermediateResult = AGContinue()
-    while (currentState == AGContinue()) {
+    var doneVerification = false
+    var currentState = AGResult.PremiseFail(0, List())
+    while (!doneVerification) {
       var newAss = dfaGenerator.generateAssumptions(fixedAssumptionsMap)
-      // If the constraints are unsat, then refine the alphabet and try again
-      // They cannot be unsat if the alphabets are complete
-      assert(newAss != None)
       newAss match {
         case Some(newAss) => this.assumptions = newAss
-        case None         => throw Exception("Failed to learn assumption automata")
+        case None         => throw UnsatisfiableConstraints()
       }
-      currentState = this.applyAG()
+      currentState = this.applyAG(proveGlobalProperty) 
+      currentState match {
+        case AGResult.Success => doneVerification = true
+        case AGResult.AssumptionViolation(processID, cex) => doneVerification = true
+        case AGResult.GlobalPropertyViolation(cex) => doneVerification = true
+        case AGResult.PremiseFail(processID, cex) => ()
+        case AGResult.GlobalPropertyFail(cex) => ()
+      }
     }
-    currentState match {
-      case AGFalse(cex) => Some(cex)
-      case e: AGSuccess => None
-      case _ => throw Exception("Inconclusive") // Not reachable
-    }
+    currentState
   }
 
 }

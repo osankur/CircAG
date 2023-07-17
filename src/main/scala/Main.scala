@@ -241,13 +241,11 @@ object Main {
               val product = TA.synchronousProduct(tas.toList)
               System.out.println(product.toString())
             case "dfa-aag" =>
-              dfa.DFAAutomaticVerifier(configuration.get().ltsFiles, Some(DLTS.fromErrorSymbol(configuration.get().err)), configuration.get().learnerType)
-              .proveGlobalPropertyByLearning()
-              match {
-                case None => System.out.println(s"${GREEN}${BOLD}Success${RESET}")
-                case Some(cex) => System.out.println(s"${RED}${BOLD}Counterexample${RESET} ${cex}")
-              }
-              
+              System.out.println(
+                dfa.DFAAutomaticVerifier(configuration.get().ltsFiles, 
+                    Some(DLTS.fromErrorSymbol(configuration.get().err)), 
+                    configuration.get().learnerType
+                  ).learnAssumptions())
             case _ => 
               logger.error("Unknown command")
           }

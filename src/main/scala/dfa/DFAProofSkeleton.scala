@@ -11,11 +11,26 @@ import scala.collection.mutable.Stack
   * AG Proof skeleton specifies the dependencies for each premise of the N-way AG rule,
   * and the alphabets to be used for the assumption DFA of each TA.
   *
+  * There are several modes. 
+  * 
+  * 1) In the manual mode, the sets of dependencies for each proof are set manually.
+  * 2) updateByCone sets the dependencies of each process to all those processes
+  * with which it shares a common sync label, either directly or indirectly. The dependencies of the property
+  * are also computed similarly.
+  * 3) A common way is to use setAssumptionAlphabetsByCommonAlphabet which sets each assumption's alphabets to
+  *    the interface alphabet intersected with the given common alphabet, and applies updateByCone.
+  * 
+  * In short, manual proofs will mostly use 2, but the user can refine these using 1 if things get slow.
+  * Automatic learning uses 2. Automatic learning with alphabet refinement uses 3.
+  * 
+  * In all cases, a topological order is generated. In this order, the proofs must be done left to right.
+  * In fact, the proof of a process at a cluster at index i only depends on those further left.
+  * 
   * @param processAlphabets
   * @param propertyAlphabet
   * @param commonAssumptionAlphabet
   */
-class DFAProofSkeleton(processAlphabets : Buffer[Set[String]], propertyAlphabet : Set[String], commonAssumptionAlphabet : Set[String]) {
+class DFAProofSkeleton(processAlphabets : Buffer[Set[String]], private var _propertyAlphabet : Set[String], commonAssumptionAlphabet : Set[String]) {
   private val logger = LoggerFactory.getLogger("CircAG")
 
   val nbProcesses = processAlphabets.size
@@ -114,6 +129,10 @@ class DFAProofSkeleton(processAlphabets : Buffer[Set[String]], propertyAlphabet 
     _assumptionAlphabets(i) = alpha
     updateTopologicalOrder()    
   }
+  def setPropertyAlphabet(alpha : Set[String]) : Unit = {
+    _propertyAlphabet = alpha
+  }
+  def getPropertyAlphabet() : Set[String] = _propertyAlphabet
 
   def setAssumptionAlphabetsByCommonAlphabet(alpha : Set[String]) : Unit = {
     _assumptionAlphabets = processAlphabets.map(_.intersect(alpha))
@@ -140,7 +159,7 @@ class DFAProofSkeleton(processAlphabets : Buffer[Set[String]], propertyAlphabet 
     }
     adj(nbProcesses)(nbProcesses) = true
     for j <- 0 until nbProcesses do {
-        adj(nbProcesses)(j) = !propertyAlphabet.intersect(processAlphabets(j)).isEmpty
+        adj(nbProcesses)(j) = !_propertyAlphabet.intersect(processAlphabets(j)).isEmpty
         adj(j)(nbProcesses) = adj(nbProcesses)(j)
     }
     for k <- 0 until nbProcesses+1 do {

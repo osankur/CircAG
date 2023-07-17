@@ -54,7 +54,9 @@ The synchronized product of the processes can be output to stdout as a single TC
     run product --lts "examples/ums/machine.ta,examples/ums/scheduler.ta,examples/ums/user.ta"
 
 ## Scala3 Console
-scala3 -cp target/scala-3.1.2/CircAG.jar -Dfile.encoding=UTF-8
+Run    
+
+    scala3 -cp target/scala-3.1.2/CircAG.jar -Dfile.encoding=UTF-8
 
 ## Debug level
 Use the following property to set debug level to debug

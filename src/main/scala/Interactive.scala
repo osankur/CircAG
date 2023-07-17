@@ -52,7 +52,9 @@ class Interactive(
     var ltlVerifier = LTLVerifier(files.toArray, ltlProperty)
 
     private var dfaProofStates = Buffer.fill(nbProcesses)(DFAProofState.Unknown)
+    private var dfaPropertyProofState = DFAProofState.Unknown
     private var ltlProofStates = Buffer.fill(nbProcesses)(LTLProofState.Unknown)
+    private var ltlPropertyProofState = LTLProofState.Unknown
 
     def getDFAProofState(processID : Int ) : DFAProofState = dfaProofStates(processID)
     def getLTLProofState(processID : Int ) : LTLProofState = ltlProofStates(processID)
@@ -61,11 +63,6 @@ class Interactive(
 
     def setProofMode(mode : ProofMode) : Unit = {
         proofMode = mode
-    }
-
-    def setDFAProperty(dfaProperty : Option[DLTS]) : Unit = {
-        this.dfaProperty = dfaProperty
-        dfaVerifier = DFAAutomaticVerifier(files.toArray, dfaProperty)
     }
 
     def setLTLProperty(ltlProperty : LTL) : Unit = {
@@ -121,7 +118,7 @@ class Interactive(
     }
 
     /**
-      * Check the premise for the DFA assumption of processID, and set the DFA proof state.
+      * Check the premise for the DFA assumption of processID.
       *
       * @param processID
       */
@@ -130,11 +127,51 @@ class Interactive(
             case None => 
                 dfaProofStates(processID) = DFAProofState.PremiseSucceeded                
             case Some(cex) => 
-                dfaProofStates(processID) = DFAProofState.PremiseFailed(cex)
+                if dfaVerifier.checkCounterExample(cex) then 
+                    dfaProofStates(processID) = DFAProofState.Disproved(cex)
+                else  
+                   dfaProofStates(processID) = DFAProofState.PremiseFailed(cex)
         }
         updateDFAProofStates()
     }
-    def checkDFAProperty(processID : Int ) : Unit = {}
+    /**
+      * Discard all assumption DFAs but those with indices in fixedAssumptions, learn these automatically.
+      *
+      * @param proveGlobalProperty whether the global property is to be proved
+      * @param fixedAssumptions process indices of assumptions that are not to be learned
+      */
+    def learnDFAAssumptions(proveGlobalProperty : Boolean = true, fixedAssumptions: List[Int] = List()) : String = {
+        (0 until nbProcesses).toSet.diff(fixedAssumptions.toSet)
+            .foreach(invalidateDFAProofState)
+        try {
+            dfaVerifier.learnAssumptions(proveGlobalProperty, fixedAssumptions) match {
+                case AGResult.Success => 
+                    (0 until nbProcesses).foreach(i => dfaProofStates(i) = DFAProofState.Proved)
+                    if proveGlobalProperty then dfaPropertyProofState = DFAProofState.Proved
+                    "Success"
+                case AGResult.AssumptionViolation(i, cex) => 
+                    dfaProofStates(i) = DFAProofState.Disproved(cex)
+                    s"Assumption ${i} is violated by trace ${cex}"
+                case AGResult.GlobalPropertyViolation(cex) => 
+                    dfaPropertyProofState = DFAProofState.Disproved(cex)
+                    s"Global property is violated by trace ${cex}"
+                case _ => "Unknown result" // Un reachable
+            }
+        } catch {
+            case _ : UnsatisfiableConstraints => 
+                "Assumptions cannot be learned due to unsatisfiable constraints"
+        }
+    }
+    def checkDFAGlobalProperty(processID : Int ) : Unit = {
+        dfaVerifier.checkFinalPremise() match {
+            case None => dfaPropertyProofState = DFAProofState.Proved
+            case Some(cex) => 
+                dfaPropertyProofState = 
+                    if dfaVerifier.checkCounterExample(cex) then 
+                        DFAProofState.Disproved(cex)
+                    else DFAProofState.PremiseFailed(cex)
+        }
+    }
     def checkLTLAssumption(processID : Int ) : Unit = {}
     def checkLTLProperty(processID : Int ) : Unit = {}
 
@@ -151,7 +188,11 @@ class Interactive(
     def setDFAAssumptionDependencies(processID : Int, deps : Set[Int]) : Unit = {
         dfaVerifier.proofSkeleton.setProcessDependencies(processID, deps)
     }
-    def setDFAPropertyDependencies(deps : Set[Int]) : Unit = {
+    def setDFAGlobalProperty(dlts : DLTS) : Unit = {
+        dfaPropertyProofState = DFAProofState.Unknown
+        dfaVerifier.setGlobalProperty(dlts)
+    }
+    def setDFAGlobalPropertyDependencies(deps : Set[Int]) : Unit = {
         dfaVerifier.proofSkeleton.setPropertyDependencies(deps)
     }
     /**
