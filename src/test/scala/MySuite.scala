@@ -203,7 +203,7 @@ class DFAAAG extends munit.FunSuite {
 
   test("premiseChecker"){
     // {a,c,d}*
-    val inputs1: Alphabet[String] = Alphabets.fromList(List("c","d", "a"))
+    val inputs1: Alphabet[String] = Alphabets.fromList(List("c","d", "a", "err"))
     val dfa1 =
     AutomatonBuilders
       .forDFA(FastDFA(inputs1))
@@ -251,78 +251,10 @@ class DFAAAG extends munit.FunSuite {
 
     val dltss = List(DLTS("ass1p", dfa1, dfa1.getInputAlphabet().toSet), DLTS("ass2", dfa2, dfa2.getInputAlphabet().toSet))
     val dltsssB = dltss.toBuffer
-    val agv = dfa.DFAAutomaticVerifier(Array(File("examples/lts1.ta")), Some(DLTS.fromErrorSymbol(err)))
+    val agv = dfa.DFAAutomaticVerifier(Array(File("examples/lts1.ta"), File("examples/lts1.ta")), Some(DLTS.fromErrorSymbol(err)))
     agv.setAssumption(0, dltsssB(0))
-    agv.setAssumption(1, dltsssB(1))
-    // val cex = agv.checkInductivePremise(0)
-    // assert(cex != None)
-    //System.out.println(checker)
 
-    val dfa1_p: FastDFA[String] =
-    AutomatonBuilders
-      .forDFA(FastDFA(Alphabets.fromList(List("c","d"))))
-      .withInitial("q0")
-      .from("q0")
-      .on("d")
-      .to("q1")
-      .from("q1")
-      .on("c")
-      .to("q1")
-      .from("q1")
-      .on("d")
-      .to("q1")
-      .withAccepting("q0")
-      .withAccepting("q1")
-      .create();
-    
-    val dltss_p = Buffer(DLTS("ass1p", dfa1_p, dfa1_p.getInputAlphabet().toSet), DLTS("ass2", dfa2, dfa2.getInputAlphabet().toSet))
-    agv.setAssumption(0, dltss_p(0))
-    agv.setAssumption(1, dltss_p(1))
-    // val checker_p = agv.checkInductivePremise(0)
-    // // System.out.println(s"inductive check 0: ${checker_p}")
-    // assertEquals(checker_p, None)
- 
-    val dfa3 =
-    AutomatonBuilders
-      .forDFA(FastDFA(Alphabets.fromList(List("c","a","b", "err"))))
-      .withInitial("q0")
-      .from("q0")
-      .on("a")
-      .to("q0")
-      .from("q0")
-      .on("b")
-      .to("q0")      
-      .from("q0")
-      .on("c")
-      .to("q1")
-      .from("q1")
-      .on("b")
-      .to("q1")
-      .from("q1")
-      .on("c")
-      .to("q1")
-      .from("q1")
-      .on("a")
-      .to("q2")
-      .from("q2")
-      .on("a")
-      .to("q2")
-      .from("q2")
-      .on("b")
-      .to("q2")
-      .from("q2")
-      .on("c")
-      .to("q2")
-      .from("q2")
-      .on("err")
-      .to("q3")
-      .withAccepting("q0")
-      .withAccepting("q1")
-      .withAccepting("q2")
-      .withAccepting("q3")
-      .create();
- 
-    // agv.assumptions = (DLTS("ass3", dfa3, dfa3.getInputAlphabet().toSet)::dltss_p.toList).toBuffer
+     // agv.assumptions = (DLTS("ass3", dfa3, dfa3.getInputAlphabet().toSet)::dltss_p.toList).toBuffer
     // val cex3 = agv.checkFinalPremise()
     // assertEquals(cex3, None)
     assert(None == agv.processes(0).checkTraceMembership(List[String]("c", "c", "err", "err"), Some(Set[String]("c", "err"))))
@@ -927,23 +859,6 @@ class PartialLearning extends munit.FunSuite {
     assert(ver.learnAssumptions(true, (List(0,1))) == AGResult.Success)
     assert(ver.learnAssumptions(true, (List(1,2))) == AGResult.Success)
   }
-}
-
-class Single extends munit.FunSuite{
-  test("dfa clusters"){
-    val files = Array(File("examples/ltl-toy1/a.ta"), File("examples/ltl-toy1/b.ta"), File("examples/ltl-toy1/b.ta"), File("examples/ltl-toy1/b.ta"))
-    val nbProcesses =files.size
-    val ver = DFAVerifier(files)
-    for i <- 0 until nbProcesses do {
-      ver.setAssumption(i, DLTS.fromTChecker(files(i)))
-    }
-    // ver.proofSkeleton.processDependencies(3) = Set(1)
-    // ver.proofSkeleton.processDependencies(1) = Set(2)
-    // ver.proofSkeleton.processDependencies(2) = Set(1,0)
-    // ver.proofSkeleton.processDependencies(0) = Set[Int]()
-    // System.out.println("\n")
-    // ver.proofSkeleton.updateClusters()
-  } 
   test("proof invalidation"){
     val filenames = Array("examples/seq-toy/lts0.ta", "examples/seq-toy/lts1.ta", "examples/seq-toy/lts2.ta", "examples/seq-toy/lts3.ta")
     val int = Interactive(filenames.toList)
@@ -982,4 +897,8 @@ class Single extends munit.FunSuite{
     assert(int.getDFAProofState(2) == DFAProofState.Proved)
 
   }
+
+}
+
+class Single extends munit.FunSuite{
 }

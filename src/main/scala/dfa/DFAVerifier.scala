@@ -68,7 +68,10 @@ class DFAVerifier(val ltsFiles: Array[File], var property : Option[DLTS] = None)
   
   val processes = ltsFiles.map(TA.fromFile(_)).toBuffer
 
-  protected var propertyAlphabet = Set[String]()
+  protected var propertyAlphabet = property match{
+    case None =>Set[String]()
+    case Some(p) => p.alphabet
+  }
   // Set of symbols that appear in the property alphabet, or in at least two processes
   protected var interfaceAlphabet = Set[String]()
   /** Intersection of local alphabets with the interface alphabet: when all
@@ -131,8 +134,8 @@ class DFAVerifier(val ltsFiles: Array[File], var property : Option[DLTS] = None)
     assumptions(processID)
   }
   def setAssumption(i : Int, dlts : DLTS) : Unit = {
-    if (!dlts.alphabet.containsAll(propertyAlphabet.intersect(assumptions(i).alphabet))){
-      throw Exception("The assumption alphabet must contain the symbols that appear in the property alphabet")
+    if (!dlts.alphabet.containsAll(propertyAlphabet.intersect(processes(i).alphabet))){
+      throw Exception(s"The assumption alphabet is ${dlts.alphabet} but it must contain the intersection of the process alphabet and the property alphabet")
     }
     assumptions(i) = dlts
     proofSkeleton.setAssumptionAlphabet(i, dlts.alphabet)
@@ -141,6 +144,7 @@ class DFAVerifier(val ltsFiles: Array[File], var property : Option[DLTS] = None)
     property = Some(dlts)
     updateAlphabets()
     proofSkeleton.setPropertyAlphabet(propertyAlphabet)
+    proofSkeleton.updatePropertyDependenciesByCone()
   }
   /** Checks processes(processID) |= A |> G
     *
@@ -415,7 +419,7 @@ class DFAAutomaticVerifier(
               //   s"Assumption for this process ${processes(i).systemName}"
               // )
               // assumptions(i).visualize()
-              throw Exception("Repeated CEX")
+              throw Exception(s"Repeated CEX: ${cexTrace}")
             } else {
               configuration.cex(i) = configuration.cex(i) + cexTrace
             }
@@ -496,7 +500,7 @@ class DFAAutomaticVerifier(
       currentState = this.applyAG(proveGlobalProperty) 
       currentState match {
         case AGResult.Success => doneVerification = true
-        case AGResult.AssumptionViolation(processID, cex) => doneVerification = true
+        case AGResult.AssumptionViolation(processID, cex) => doneVerification = fixedAssumptions.contains(processID)
         case AGResult.GlobalPropertyViolation(cex) => doneVerification = true
         case AGResult.PremiseFail(processID, cex) => ()
         case AGResult.GlobalPropertyFail(cex) => ()

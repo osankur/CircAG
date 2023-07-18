@@ -146,6 +146,29 @@ class DFAProofSkeleton(processAlphabets : Buffer[Set[String]], private var _prop
     */
   def updateByCone() = {
     _processDependencies = Buffer.tabulate(nbProcesses)({_ => Set[Int]()})
+    val adj = getCones()
+    for i <- 0 until nbProcesses do {
+      _processDependencies(i) = adj(i).zipWithIndex.filter({(b,i) => b}).map(_._2).toSet.diff(Set[Int](i, nbProcesses))
+    }
+    _propertyDependencies = adj(nbProcesses).zipWithIndex.filter({(b,i) => b}).map(_._2).toSet - nbProcesses
+    // An assumption's proof must not depend on itself
+    for i <- 0 until nbProcesses do {
+      require(!processDependencies(i).contains(i))
+    }
+    updateTopologicalOrder()    
+    logger.debug(s"Ass alphabets: $_assumptionAlphabets")
+    logger.debug(s"Prop dependencies: $_propertyDependencies")
+    logger.debug(s"Process deps: $_processDependencies")
+  }
+
+  def updatePropertyDependenciesByCone() : Unit = {
+    val adj = getCones()
+    _propertyDependencies = adj(nbProcesses).zipWithIndex.filter({(b,i) => b}).map(_._2).toSet - nbProcesses
+    logger.debug(s"Prop dependencies: $_propertyDependencies")
+  }
+
+  private def getCones() : Buffer[Buffer[Boolean]] ={
+    _processDependencies = Buffer.tabulate(nbProcesses)({_ => Set[Int]()})
     // Compute simplified sets of assumptions for the new alphabet
     // adj(i)(j) iff (i = j) or (i and j have a common symbol) or (i has a common symbol with k such that adj(k)(j))
     // Index nbProcesses represents the property.
@@ -171,19 +194,6 @@ class DFAProofSkeleton(processAlphabets : Buffer[Set[String]], private var _prop
         }
       }
     }
-    for i <- 0 until nbProcesses do {
-      _processDependencies(i) = adj(i).zipWithIndex.filter({(b,i) => b}).map(_._2).toSet.diff(Set[Int](i, nbProcesses))
-    }
-    _propertyDependencies = adj(nbProcesses).zipWithIndex.filter({(b,i) => b}).map(_._2).toSet - nbProcesses
-
-    // An assumption's proof must not depend on itself
-    for i <- 0 until nbProcesses do {
-      require(!processDependencies(i).contains(i))
-    }
-    updateTopologicalOrder()    
-    logger.debug(s"Ass alphabets: $_assumptionAlphabets")
-    logger.debug(s"Prop dependencies: $_propertyDependencies")
-    logger.debug(s"Process deps: $_processDependencies")
+    adj
   }
-  
 }

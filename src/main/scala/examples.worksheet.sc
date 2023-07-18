@@ -2,6 +2,13 @@ import java.io.File
 import fr.irisa.circag.dfa._
 import fr.irisa.circag._
 import fr.irisa.circag.ltl._
+import net.automatalib.util.automata.builders.AutomatonBuilders;
+import net.automatalib.automata.fsa.impl.FastDFA
+import net.automatalib.visualization.Visualization;
+import net.automatalib.words.impl.Alphabets;
+import net.automatalib.words.Alphabet;
+import collection.JavaConverters._
+import collection.convert.ImplicitConversions._
 
 val tas = Array(File("examples/ltl-toy1/a.ta"), File("examples/ltl-toy1/b.ta"))
 val checker = LTLVerifier(tas, G(F(Atomic("a"))))
@@ -51,3 +58,5 @@ int.setDFAAssumption(2, DLTS.fromTChecker(File(filenames(2))))
 int.show()
 int.checkDFAAssumption(2)
 int.show()
+
+// agv.setAssumption(0, dltsssB(0))
