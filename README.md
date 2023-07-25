@@ -15,7 +15,7 @@ Once you have all this, execute the following in `lib` directory
 
     mvn install:install-file -Dfile=jhoafparser-1.1.1.jar -DgroupId=jhoafparser -DartifactId=jhoafparser -Dversion=1.1.1 -Dpackaging=jar -DgeneratePom=true
 
-and type
+and type in the main directory
 
     sbt assembly
 
@@ -24,7 +24,7 @@ This should create the fat executable jar target/scala-3*/CircAG.jar.
 ## DFA-based N-way Assume-Guarantee Reasoning with Learning
 The algorithm of the CAV16 paper is currently implemented with and without alphabet refinement. This can be tried as follows.
 
-    java -jar target/scala-3.2.2/CircAG.jar dfa-aag --lts "examples/toy/lts1.ta,examples/toy/lts2.ta,examples/toy/lts3.ta" --err "err" --verbose false
+    java -jar target/scala-3.1.2/CircAG.jar dfa-aag --lts "examples/toy/lts1.ta,examples/toy/lts2.ta,examples/toy/lts3.ta" --err "err" --verbose false
 
 Here, the list of automata are given wuth the option --lts: each file must contain a single process TChecker file (with or without clocks).
 All variables and clocks must have distinct names. These processes synchronize on all declared events but those that start with _.
@@ -39,14 +39,14 @@ You can add the option `--visualizeDFA true` to see the assumption DFAs that wer
 ### Other examples
 Two toy examples easy to understand:
 
-    java -jar target/scala-3.2.2/CircAG.jar dfa-aag --lts "examples/toy/lts1.ta,examples/toy/lts2.ta,examples/toy/lts3.ta" --err "err" --verbose false --ar false
-    java -jar target/scala-3.2.2/CircAG.jar dfa-aag --lts "examples/seq-toy/lts0.ta,examples/seq-toy/lts1.ta,examples/seq-toy/lts2.ta,examples/seq-toy/lts3.ta" --err "err" --ar false
+    java -jar target/scala-3.1.2/CircAG.jar dfa-aag --lts "examples/toy/lts1.ta,examples/toy/lts2.ta,examples/toy/lts3.ta" --err "err" --verbose false --ar false
+    java -jar target/scala-3.1.2/CircAG.jar dfa-aag --lts "examples/seq-toy/lts0.ta,examples/seq-toy/lts1.ta,examples/seq-toy/lts2.ta,examples/seq-toy/lts3.ta" --err "err" --ar false
 
 To enable automatic alphabet refinement, use `--ar true`.
 
 A small but less trivial example that does not currently terminate :(
 
-    java -jar target/scala-3.2.2/CircAG.jar dfa-aag --lts "examples/ums/machine.ta,examples/ums/scheduler.ta,examples/ums/user.ta" --err "err" --ar false
+    java -jar target/scala-3.1.2/CircAG.jar dfa-aag --lts "examples/ums/machine.ta,examples/ums/scheduler.ta,examples/ums/user.ta" --err "err" --ar false
 
 ## Utilities
 The synchronized product of the processes can be output to stdout as a single TChecker file using
@@ -54,7 +54,8 @@ The synchronized product of the processes can be output to stdout as a single TC
     run product --lts "examples/ums/machine.ta,examples/ums/scheduler.ta,examples/ums/user.ta"
 
 ## Scala3 Console
-scala3 -cp target/scala-3.1.2/CircAG.jar -Dfile.encoding=UTF-8
+
+    scala3 -cp target/scala-3.1.2/CircAG.jar -Dfile.encoding=UTF-8
 
 ## Debug level
 Use the following property to set debug level to debug
