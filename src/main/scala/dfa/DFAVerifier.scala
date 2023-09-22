@@ -244,7 +244,7 @@ class DFAVerifier(val ltsFiles: Array[File], var property : Option[DLTS] = None)
         propertyDLTS.alphabet
       )
       val premiseProduct = TA.synchronousProduct(
-        TA.fromLTS(compG, acceptingLabelSuffix = Some("_accept_")),
+        TA.fromLTS[FastDFAState](compG, acceptingLabelSuffix = Some("_accept_")),
         lhs
       )
       // System.out.println(premiseProduct)

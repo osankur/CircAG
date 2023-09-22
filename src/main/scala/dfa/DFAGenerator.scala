@@ -39,6 +39,7 @@ import fr.irisa.circag.statistics
 import fr.irisa.circag.configuration
 import fr.irisa.circag.{Trace, DLTS, Alphabet}
 import fr.irisa.circag.pruned
+import fr.irisa.circag.toFastDFA
 
 
 trait DFALearner(name : String, alphabet : Alphabet) {
@@ -76,11 +77,14 @@ class RPNILearner(name : String, alphabet : Alphabet) extends DFALearner(name, a
         learner.addPositiveSamples(positiveSamples.map(Word.fromList(_)))
         learner.addNegativeSamples(negativeSamples.map(Word.fromList(_)))
         var beginTime = System.nanoTime()
-        val initialModel = learner.computeModel()
+        val initialModel = learner.computeModel() match {
+          case cdfa : CompactDFA[String] => cdfa
+          case _ => throw Exception("I can only work with CompactDFA")
+        }
         statistics.Timers.incrementTimer("rpni-learner", System.nanoTime() - beginTime)
         val dlts = DLTS(
               name,
-              dfa = DLTS.makePrefixClosed(initialModel, alphabet, removeNonAcceptingStates = true),
+              dfa = DLTS.makePrefixClosed(initialModel.toFastDFA, alphabet, removeNonAcceptingStates = true),
               alphabet = alphabet
           )
         this.dlts = Some(dlts)

@@ -7,6 +7,8 @@ import collection.convert.ImplicitConversions._
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable.ListBuffer
 import scala.collection.mutable.Buffer
+import scala.collection.immutable.Set
+import scala.collection.mutable
 import scala.sys.process._
 import scala.io
 import scala.collection.mutable.StringBuilder
@@ -20,6 +22,7 @@ import java.io.ByteArrayInputStream
 
 import net.automatalib.automata.Automaton
 import net.automatalib.automata.fsa.FiniteStateAcceptor
+import net.automatalib.automata.fsa.impl.{FastDFA, FastNFA, FastDFAState, FastNFAState}
 
 import fr.irisa.circag._
 import fr.irisa.circag.ltl.LTL
@@ -154,7 +157,7 @@ class TA (
           ".cert"
         )
         .toFile()
-    val cmd = "tck-liveness -a ndfs %s -l %s -o %s"
+    val cmd = "tck-liveness -a ndfs %s -C symbolic -l %s -o %s"
       .format(modelFile.toString, label, certFile.toString)
     System.out.println(cmd)
     TA.logger.debug(cmd)
@@ -243,7 +246,7 @@ object TA{
   /**
    * Build a TA object that represents the given LTS.
    */
-  def fromLTS(dlts : LTS[? <: FiniteStateAcceptor[?, String] with Automaton[?, String, ?]], acceptingLabelSuffix : Option[String] = None) : TA = {
+  def fromLTS[S](dlts : LTS[S], acceptingLabelSuffix : Option[String] = None) : TA = {
     val ta = TA(dlts.name, dlts.alphabet.toSet)
     ta.eventsOfProcesses += (dlts.name -> ta.alphabet )
     val strStates = StringBuilder()  
@@ -313,7 +316,7 @@ object TA{
    * @param acceptingLabel if not None, the label of the accepting states in the produced TA
    */
   def fromHOA(automatonString : String, fullAlphabet : Option[Alphabet], acceptingLabel : Option[String]) : TA = {
-    TA.fromLTS(NLTS.fromHOA(automatonString, fullAlphabet), acceptingLabel)
+    TA.fromLTS[FastNFAState](NLTS.fromHOA(automatonString, fullAlphabet), acceptingLabel)
   }
 
   /**
@@ -321,7 +324,7 @@ object TA{
    */
   def fromLTL(ltlString : String, fullAlphabet : Option[Alphabet], acceptingLabel : Option[String] = None) : TA = {
     val nlts = NLTS.fromLTL(ltlString, fullAlphabet)
-    this.fromLTS(nlts, acceptingLabel)
+    this.fromLTS[FastNFAState](nlts, acceptingLabel)
   }
 
   /**
@@ -337,7 +340,7 @@ object TA{
       throw Exception("Attempting synchronous product of processes of the same name")
     }
     //if dlts.map(_.name).distinct.size < dlts.size || dlts.map(_.name).contains(ta.systemName) then {
-    val dltsTA = dlts.map({d => this.fromLTS(d, acceptingLabelSuffix)})
+    val dltsTA = dlts.map({d => this.fromLTS[FastDFAState](d, acceptingLabelSuffix)})
     val jointAlphabet = ta.alphabet | dlts.foldLeft(Set[String]())( (alph, d) => alph | d.alphabet)
     val sb = StringBuilder()
     val systemName = s"_premise_${ta.systemName}"
@@ -384,13 +387,7 @@ object TA{
     TA(systemName, jointAlphabet, jointInternalAlphabet, sb.toString(), eventsOfProcesses, syncs)
   }
 
-
-  /** 
-   *  Given the counterexample description output by TChecker, given as a list of lines,
-   *  return the trace, that is, the sequence of events in the alphabet encoded by the said counterexample.
-   */
-  def getTraceFromCounterExampleOutput(cexDescription : List[String], events : Set[String]) : Trace = {
-      val word = ListBuffer[String]()
+  private def getGraphFromCounterExampleOutput(cexDescription : List[String], events : Set[String]) : (HashMap[Int,(String,Int)], HashMap[Int,Int]) = {
       val edges = HashMap[Int,(String,Int)]()
       val parents = HashMap[Int,Int]()
       val regEdge = "\\s*([0-9]+)\\s*->\\s*([0-9]+).*vedge=\"<(.*)>\".*".r
@@ -409,6 +406,15 @@ object TA{
           }
         case _ => ()
       })
+      (edges,parents)
+  }
+  /** 
+   *  Given the counterexample description output by TChecker, given as a list of lines,
+   *  return the trace, that is, the sequence of events in the alphabet encoded by the said counterexample.
+   */
+  def getTraceFromCounterExampleOutput(cexDescription : List[String], events : Set[String]) : Trace = {
+      val word = ListBuffer[String]()
+      val (edges, parents) = getGraphFromCounterExampleOutput(cexDescription : List[String], events : Set[String])
       if edges.size > 0 then {
         val root =
             var node = parents.keys().nextElement()
@@ -433,6 +439,42 @@ object TA{
    *  return the trace, that is, the sequence of events in the alphabet encoded by the said counterexample.
    */
   def getLassoFromCounterExampleOutput(cexDescription : List[String], events : Set[String]) : Lasso = {
-    (List[String](),List[String]())
+    val prefix = ListBuffer[String]()
+    val cycle = ListBuffer[String]()
+    val (edges, parents) = getGraphFromCounterExampleOutput(cexDescription : List[String], events : Set[String])
+    if edges.size > 0 then {
+      // Find root
+      val root =
+          var node = parents.keys().nextElement()
+          while ( parents.contains(node)) do {
+            node = parents(node)
+          }
+          node
+      // Find beginning of cycle
+      val beginCycle = {
+        var node = root
+        val seen = mutable.Set[Int]()
+        while ( seen.add(node) && edges.contains(node)) do {
+          node = edges(node)._2
+        }
+        node
+      }
+      var node = root
+      var atPrefix = true
+      // Iterate forward from root, stop at beginCycle unless this is the first time we are seeing it (atPrefix)
+      while( edges.contains(node) && (node != beginCycle || atPrefix)) do {
+        if node == beginCycle then {
+          atPrefix = false
+        }
+        val (sigma, next) = edges(node)
+        if atPrefix then 
+          prefix.append(sigma)
+        else 
+          cycle.append(sigma)
+        node = next
+      }
+    }
+    
+    (prefix.toList, cycle.toList)
   }
 }

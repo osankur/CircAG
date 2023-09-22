@@ -134,7 +134,7 @@ class ParserTests extends munit.FunSuite {
     assert(!dlts.dfa.accepts(List("a","b","b")))
   }
   test("fromTchecker"){
-    val dlts = DLTS.fromTChecker(java.io.File("examples/lts1.ta"))
+    val dlts = DLTS.fromTCheckerFile(java.io.File("examples/lts1.ta"))
     // dlts.visualize()
     assert(dlts.dfa.accepts(List("a", "b", "c")))
     assert(dlts.dfa.accepts(List("c", "b", "a", "err")))
@@ -697,6 +697,12 @@ class LTLAGTests extends munit.FunSuite {
     ltl.zipWithIndex.foreach( (ltl,i) => checker2.setAssumption(i, ltl))
     assert(checker2.checkFinalPremise() != None)
   } 
+
+  test("TA Buchi check"){
+    val ta = TA.fromFile(File("examples/untimed.ta"))
+    assert(ta.checkBuchi("3") == Some(List("a","b"), List("c", "a")))
+    assert(ta.checkBuchi("4") == None)
+  }
 }
 
 class Benjamin extends munit.FunSuite {
@@ -864,13 +870,13 @@ class PartialLearning extends munit.FunSuite {
     val int = Interactive(filenames.toList)
     val nbProcesses = filenames.size
     for i <- 0 until nbProcesses do {
-        int.setDFAAssumption(i, DLTS.fromTChecker(File(filenames(i))))
+        int.setDFAAssumption(i, DLTS.fromTCheckerFile(File(filenames(i))))
     }
     int.checkDFAAssumption(0)
     int.checkDFAAssumption(1)
     assert(int.getDFAProofState(0) == DFAProofState.PremiseSucceeded)
     assert(int.getDFAProofState(1) == DFAProofState.PremiseSucceeded)
-    int.setDFAAssumption(3, DLTS.fromTChecker(File(filenames(3))))
+    int.setDFAAssumption(3, DLTS.fromTCheckerFile(File(filenames(3))))
     assert(int.getDFAProofState(0) == DFAProofState.PremiseSucceeded)
     assert(int.getDFAProofState(1) == DFAProofState.PremiseSucceeded)
 
@@ -882,7 +888,7 @@ class PartialLearning extends munit.FunSuite {
     int.checkDFAAssumption(1)
     int.checkDFAAssumption(2)
     int.checkDFAAssumption(3)
-    int.setDFAAssumption(2, DLTS.fromTChecker(File(filenames(2))))
+    int.setDFAAssumption(2, DLTS.fromTCheckerFile(File(filenames(2))))
     assert(int.getDFAProofState(0) == DFAProofState.Proved)
     assert(int.getDFAProofState(1) == DFAProofState.Unknown)
     assert(int.getDFAProofState(2) == DFAProofState.Unknown)
@@ -891,7 +897,7 @@ class PartialLearning extends munit.FunSuite {
     int.checkDFAAssumption(1)
     int.checkDFAAssumption(2)
     int.checkDFAAssumption(3)
-    int.setDFAAssumption(3, DLTS.fromTChecker(File(filenames(2))))
+    int.setDFAAssumption(3, DLTS.fromTCheckerFile(File(filenames(2))))
     assert(int.getDFAProofState(0) == DFAProofState.Proved)
     assert(int.getDFAProofState(1) == DFAProofState.Proved)
     assert(int.getDFAProofState(2) == DFAProofState.Proved)

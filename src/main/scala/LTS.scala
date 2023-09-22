@@ -49,33 +49,31 @@ type Lasso = (Trace, Trace)
   * @param dfa
   * @param alphabet
   */
-trait LTS[FA <: FiniteStateAcceptor[?, String] with Automaton[?, String, ?]](
+trait LTS[S](
     val name: String,
-    val dfa: FA,
+    val dfa: FiniteStateAcceptor[S, String] with Automaton[S, String, S],
     val alphabet: Set[String]
 ) {
   var comments : String= ""
   def visualize() : Unit = {
-    Visualization.visualize(dfa, Alphabets.fromList(alphabet.toList))
+    Visualization.visualize(dfa : Automaton[S, String, S], Alphabets.fromList(alphabet.toList))
   }
   def writeToFile(file : java.io.File) : Unit = {
     val lts = this
     new PrintWriter(file) { write(TA.fromLTS(lts).toString()); close }    
   }
 }
-
 case class DLTS(
     override val name: String,
     override val dfa: FastDFA[String],
     override val alphabet: Set[String]
-) extends LTS[FastDFA[String]](name, dfa, alphabet)
+) extends LTS[FastDFAState](name, dfa, alphabet)
 
 case class NLTS(
     override val name: String,
     override val dfa: FastNFA[String],
     override val alphabet: Set[String]
-) extends LTS[FastNFA[String]](name, dfa, alphabet)
-
+) extends LTS[FastNFAState](name, dfa, alphabet)
 
 object DLTS {
 
@@ -231,7 +229,7 @@ object DLTS {
     this.fromHOAString(scala.io.Source.fromFile(file).getLines().mkString("\n"), fullAlphabet)
   }
 
-  def fromTChecker(file : java.io.File) : DLTS = {
+  def fromTCheckerFile(file : java.io.File) : DLTS = {
     val ta = TA.fromFile(file)
     if ta.syncs.length > 0 || ta.eventsOfProcesses.keys.size > 1 then {
       throw Exception("The DLTS parser only accepts single-process TA without synchronization labels")
@@ -263,7 +261,7 @@ object DLTS {
     content.foreach( line =>
       line match {
         case regProcess(_) => ()
-        case regEdge(pr, src, tgt, event) => ()
+        case regEdge(pr, src, tgt, event) =>
           dfa.addTransition(statesMap(src),event, statesMap(tgt))
         case regLocation(pr, loc) =>  ()
         case _ => ()
@@ -330,7 +328,7 @@ object DLTS {
     * @return
     */
   def makePrefixClosed(
-      dfa: DFA[?, String],
+      dfa: FastDFA[String],
       alphabet: Set[String],
       removeNonAcceptingStates: Boolean = false
   ): FastDFA[String] = {
@@ -405,7 +403,7 @@ object DLTS {
 }
 
 
-extension(dfa : CompactDFA[?]){
+extension(dfa : CompactDFA[String]){
   def toFastDFA = {
     val statesMap = HashMap((dfa.getInitialState(), FastDFAState(0,false)))
     val alphabet = dfa.getInputAlphabet()
@@ -437,7 +435,7 @@ extension(dfa : CompactDFA[?]){
     newDFA
   }
 }
-extension(dfa : FastDFA[?]){
+extension(dfa : FastDFA[String]){
   /**
     * Check if all states reachable from init are accepting
     *
