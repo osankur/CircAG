@@ -1,0 +1,3 @@
+[submodule "samples2ltl"]
+	path = samples2ltl
+	url = https://gitlab.inria.fr/osankur/samples2ltl

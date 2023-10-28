@@ -43,7 +43,7 @@ type Alphabet = Set[Symbol]
 type Trace = List[String]
 type Lasso = (Trace, Trace)
 
-/** Deterministic LTS used as hypotheses and properties.
+/** @brief Deterministic or nondeterministic LTS used as assumptions and properties.
   *
   * @param name
   * @param dfa
@@ -77,7 +77,7 @@ case class NLTS(
 
 object DLTS {
 
-  /** Given (dfa, alphabet), compute the lifting of the dfa to extendedAlphabet
+  /** @brief Given (dfa, alphabet), compute the lifting of the dfa to extendedAlphabet
     * by copying it and adding self-loops at all states on symbols in
     * extendedAlphabet \\ alphabet.
     *
@@ -121,7 +121,7 @@ object DLTS {
     return DLTS(name.getOrElse(dlts.name), liftedDFA, newAlphabet)
   }
 
-  /** Complete, lift to extendedAlphabet, and remove all transitions from
+  /** @brief Complete, lift to extendedAlphabet, and remove all transitions from
     * non-accepting states
     *
     * @param dlts
@@ -164,7 +164,7 @@ object DLTS {
     }
   }
 
-  /** Make straight-line DLTS reading a given trace, projected to
+  /** @brief Make straight-line DLTS reading a given trace, projected to
     * projectionAlphabet
     *
     * @param trace
@@ -206,7 +206,7 @@ object DLTS {
   }
 
   /**
-    * Build deterministic LTS from possbly non-deterministic HOA Buchi automaton description.
+    * @brief Build deterministic LTS from possbly non-deterministic HOA Buchi automaton description.
     *
     * @param automatonString
     * @param acceptingLabel
@@ -218,8 +218,8 @@ object DLTS {
   }
 
   /**
-    * Build deterministic LTS from possbly non-deterministic HOA Buchi automaton description:
-      this will be interpreted
+    * @brief Build deterministic LTS from possbly non-deterministic HOA Buchi automaton description:
+    *  this will be interpreted
     *
     * @param automatonString
     * @param acceptingLabel
@@ -319,7 +319,7 @@ object DLTS {
   }
 
   /**
-    * Make the DFA prefix-closed by removing all transitions from non-accepting states;
+    * @brief Make the DFA prefix-closed by removing all transitions from non-accepting states;
     * and removing non-accepting states if removeNonAcceptingStates is true
     *
     * @param dfa
@@ -636,9 +636,6 @@ object NLTS {
                 throw Exception(s"Cannot build NLTS from HOA: Not all atomic predicates of HOA are contained in the given alphabet: ${header.getAPs()} not contained in ${symbols}")
             }
     }
-    // System.out.println(s"Full Alphabet: ${fullAlphabet}")
-    // System.out.println(s"alphabet: ${alphabet}")
-    // System.out.println(s"Complementary alphabet: ${complementaryAlphabet}")
     if(aut.hasEdgesImplicit()) then {
         throw Exception("Implicit edges are not accepted")
     }
@@ -662,7 +659,6 @@ object NLTS {
             }
         }
         
-    // val nfa = FastNFA(Alphabets.fromList(header.getAPs()))
     val nfaAlphabet = header.getAPs().toSet | complementaryAlphabet
     val nfa = FastNFA(Alphabets.fromList(nfaAlphabet.toList))
     val newStates = Buffer[FastNFAState]()
@@ -683,9 +679,7 @@ object NLTS {
                 nfa.addTransition(s, alphabet(sigma).toString, newStates(succ))
             }                
             if (hasFalseValuation(edge.getLabelExpr())) then {
-                // System.out.println(s"${s} -> s$succ: ${edge.getLabelExpr()}. has false as a valuation")
                 for sigma <- complementaryAlphabet do {
-                    // System.out.println(s"Adding ${(s, sigma, newStates(succ))}")
                     nfa.addTransition(s, sigma, newStates(succ))
                 }
             }
