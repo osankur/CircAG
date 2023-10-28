@@ -907,4 +907,13 @@ class PartialLearning extends munit.FunSuite {
 }
 
 class Single extends munit.FunSuite{
+  test("sat-ltl-learner"){
+    val learner = ltl.SATLearner("a", Set("a","b","c"))
+    learner.setPositiveSamples(Set((List("a","b"), List("c"))))
+    learner.setNegativeSamples(Set((List("b","b"), List("b")), (List("a","a"), List("b","b"))))
+    learner.samples2LTL(true) match {
+      case None => assert(false)
+      case Some(ltl) => assert(ltl.toString == "(G (F c))")
+    }    
+  }
 }

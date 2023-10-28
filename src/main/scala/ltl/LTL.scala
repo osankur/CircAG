@@ -5,7 +5,7 @@ import org.slf4j.LoggerFactory
 import java.nio.file._
 import scala.sys.process._
 import fr.irisa.circag.{Alphabet, Trace}
-
+import scala.collection.mutable.Map
 class MalformedLTL(msg : String) extends Exception(msg)
 
 abstract class LTL {
@@ -211,6 +211,27 @@ object LTL {
             case F(phi) => F(And(List(alpha, asynchronousTransform(phi, alphabet))))
             case G(phi) => G(Implies(alpha, asynchronousTransform(phi, alphabet)))
             case op => throw Exception(s"asynchronousTransform: Operator ${op.getClass()} not supported")
+        }
+    }
+
+    def substitute(ltl : LTL, st : Map[String, String]) : LTL = {
+        ltl match {
+            case LTLTrue() => LTLTrue()
+            case LTLFalse() => LTLFalse()
+            case Atomic(atom) => 
+                if st.contains(atom) then 
+                    Atomic(st(atom))
+                else
+                    Atomic(atom)
+            case Not(phi) => Not(substitute(phi, st))
+            case And(phis) => And(phis.map(substitute(_, st)))
+            case Or(phis) => Or(phis.map(substitute(_, st)))
+            case Implies(phi,psi) => Implies(substitute(phi, st), substitute(psi, st))
+            case U(phi,psi) => U(substitute(phi, st), substitute(psi, st))
+            case X(phi) => X(substitute(phi, st))
+            case F(phi) => F(substitute(phi, st))
+            case G(phi) => G(substitute(phi, st))
+            case op => throw Exception(s"substitute: Operator ${op.getClass()} not supported")
         }
     }
 }

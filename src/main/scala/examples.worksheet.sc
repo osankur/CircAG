@@ -10,6 +10,9 @@ import net.automatalib.words.Alphabet;
 import collection.JavaConverters._
 import collection.convert.ImplicitConversions._
 
+// val l = List(1,2,3)
+// val li = l.zipWithIndex()
+
 val tas = Array(File("examples/ltl-toy1/a.ta"), File("examples/ltl-toy1/b.ta"))
 val checker = LTLVerifier(tas, G(F(Atomic("a"))))
 checker.setAssumption(0, G(LTLTrue()))
