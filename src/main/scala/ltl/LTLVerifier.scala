@@ -65,6 +65,41 @@ class LTLVerifier(ltsFiles: Array[File], val property: LTL) {
   val proofSkeleton = AGProofSkeleton(processes, property)
   logger.debug(s"Circularity of the assumptions: ${(0 until nbProcesses).map(proofSkeleton.isCircular(_))}")
 
+  protected abstract class PremiseQuery(val processID : Int)
+  /**
+    * @brief Content of the premise query
+    *
+    * @param _processID
+    * @param noncircularDeps
+    * @param circularDeps
+    * @param instantaneousDeps
+    * @param mainAssumption
+    * @param fairness
+    */
+  protected case class CircularPremiseQuery (
+    _processID : Int,
+    noncircularDeps : List[(Int, LTL)],
+    circularDeps : List[(Int, LTL)],
+    instantaneousDeps : List[(Int, LTL)],
+    mainAssumption : LTL,
+    fairness : LTL
+    ) extends PremiseQuery(_processID)
+
+  /**
+    * 
+    *
+    * @param _processID
+    * @param noncircularDeps
+    * @param mainAssumption
+    * @param fairness
+    */
+  protected case class NonCircularPremiseQuery(
+    _processID : Int,
+    noncircularDeps : List[(Int, LTL)],
+    mainAssumption : LTL,
+    fairness : LTL
+  ) extends PremiseQuery(_processID)
+
   def setAssumption(processID : Int, formula: LTL) : Unit = {
     assumptions(processID) = formula
   }
@@ -73,15 +108,13 @@ class LTLVerifier(ltsFiles: Array[File], val property: LTL) {
   }
 
   
-  private def makePremiseQuery(processId : Int, fairness : Boolean = true) : Unit = {}
-
   /**
     * Check the inductive premise for process processID:
     * If processID is circular in the proof skeleton, then we require assumptions(processID)
     * as well as all dependency formulas to be universal (i.e. G _ ). We check for a counterexample for the premise
     * according to McMillan's method: 
     *  
-    *  ( /\\_{d} phi_d ) U ( ~phi /\\_{d'} phi_{d'} ) /\\ fairness
+    *  /\\_{d} psi_d /\\ (( /\\_{d} phi_d ) U ( ~phi /\\_{d'} phi_{d'} )) /\\ fairness
     * 
     * where the G(phi_d) are the set of all dependencies of processID, transformed for the asynchronous composition,
     * and the G(phi_{d'}) are the subset of those dependencies that are instantaneous.
@@ -90,15 +123,13 @@ class LTLVerifier(ltsFiles: Array[File], val property: LTL) {
     * fairness = /\\_{i} GF alpha_i
     *
     * where alpha_i is the alphabet of assumption i. 
+    * The leftmost formulas psi_d are noncircular dependencies.
     * 
     * @param processID id of the process for which the premise is to be checked
     * @param fairness whether fairness constraint is to be added to the cex check
-    * @return
+    * @return a premise query object
     */
-  def checkInductivePremise(
-      processID: Int,
-      fairness : Boolean = true
-  ): Option[Lasso] = {
+  protected def makePremiseQuery(processID : Int, fairness : Boolean = true) : PremiseQuery = {
     // Fairness: /\\_{i} GF alpha_i for each process i, and its alphabet alpha_i
     val fairnessConstraint =
       if fairness then {
@@ -109,9 +140,7 @@ class LTLVerifier(ltsFiles: Array[File], val property: LTL) {
             })
             .toList
           )
-      } else {
-        LTLTrue()
-      }
+      } else LTLTrue()
     // System.out.println(s"Fairness constraint: ${fairnessConstraint}")
     val guarantee = assumptions(processID)
     val dependencies = proofSkeleton.processDependencies(processID)
@@ -122,8 +151,7 @@ class LTLVerifier(ltsFiles: Array[File], val property: LTL) {
         case _ => throw Exception(s"Guarantee formula for circular process ${processID} must be universal: ${guarantee}")
       }
       println(s"Guarantee matrix: ${guarantee_matrix}")
-      val circularDeps = dependencies.filter(proofSkeleton.isCircular)
-      val noncircularDeps = dependencies.filterNot(proofSkeleton.isCircular)
+      
       // Check for CEX with an LTL formula of the form: /\_i noncircular-assumptions(i) /\ (/\_i circular-assumptions(i) U !guarantee)
       def getAsynchronousMatrix(i : Int) : LTL = {
           assumptions(i) match {
@@ -137,60 +165,55 @@ class LTLVerifier(ltsFiles: Array[File], val property: LTL) {
               )
           }
       }
-      val assumptionMatrices = 
-        circularDeps
-        .toSeq
-        .map(getAsynchronousMatrix)
-      println(s"Assumption matrices: ${assumptionMatrices}")
+      val circularDeps = 
+        dependencies.filter(proofSkeleton.isCircular).toList
+        .map(i => (i,getAsynchronousMatrix(i)))
+      println(s"Assumption matrices: ${circularDeps}")
 
-      val circularLHS = 
-        if assumptionMatrices.size == 0 then LTLTrue()
-        else And(assumptionMatrices.toList)
-        // else assumptionMatrices.tail.fold(assumptionMatrices.head)({ (a,b) => And(a,b)})
-      val noncircularLHS =
-        val formulas = 
-          noncircularDeps
-          .map({i => LTL.asynchronousTransform(assumptions(i), proofSkeleton.assumptionAlphabet(i))})
+      val noncircularDeps =
+          dependencies.filterNot(proofSkeleton.isCircular)
+          .map({i => (i,LTL.asynchronousTransform(assumptions(i), proofSkeleton.assumptionAlphabet(i)))})
           .toList
-        if formulas.size == 0 then LTLTrue()
-        else And(formulas) //formulas.tail.fold(formulas.head)({ (a,b) => And(a,b)})
-      val rhs = 
-        if proofSkeleton.processInstantaneousDependencies(processID).isEmpty then 
-          Not(guarantee_matrix)
-        else {          
-          val matrices = 
+
+      val instantaneousDeps = 
             proofSkeleton
-            .processInstantaneousDependencies(processID)
-            .map(getAsynchronousMatrix)
-          System.out.println(s"RHS w/out guarantee: ${matrices}")
-          And(Not(guarantee_matrix) :: matrices.toList)
-        }
-      // System.out.println(s"guarantee_matrix:\n${guarantee_matrix}")
-      val f = noncircularLHS match {
-        case LTLTrue() => 
-          And(List(U(circularLHS, rhs), fairnessConstraint))
-        case _ => 
-          And(List(noncircularLHS,U(circularLHS, rhs), fairnessConstraint))
-      }
-      // System.out.println(s"LHS:\n${circularLHS}")
-      // System.out.println(s"RHS:\n${rhs}")
-      System.out.println(s"Checking circular inductive premise for process ${processID}: ${f} ")
-      processes(processID).checkLTL(Not(f))
+            .processInstantaneousDependencies(processID).toList
+            .map(i => (i,getAsynchronousMatrix(i)))
+      CircularPremiseQuery(processID, noncircularDeps, circularDeps, instantaneousDeps, guarantee_matrix, fairnessConstraint)
     } else {
       // Check for CEX of the form: /\_i assumptions(i) /\ !guarantee
-      val noncircularLHS =
-        val formulas = 
+      val noncircularDeps =
           dependencies
-          .toSeq
-          .map({i => LTL.asynchronousTransform(assumptions(i), proofSkeleton.assumptionAlphabet(i))})
-        if formulas.size == 0 then LTLTrue()
-        else And(formulas.toList)
-      val f = And(List(noncircularLHS,Not(guarantee), fairnessConstraint))
-      System.out.println(s"Checking non-circular inductive permise for process ${processID}: ${f} ")
-      processes(processID).checkLTL(Not(f))
+          .toList
+          .map({i => (i,LTL.asynchronousTransform(assumptions(i), proofSkeleton.assumptionAlphabet(i)))})
+      NonCircularPremiseQuery(processID, noncircularDeps, (assumptions(processID)), fairnessConstraint)
     }
   }
 
+  def checkInductivePremise(premise : PremiseQuery) : Option[Lasso] = {
+    def andOfList(f : List[LTL]) : LTL = {
+      f match{
+        case List() => LTLTrue()
+        case fl => And(fl.map(And(_)))
+      }
+    }
+    println(s"Checking premise ${premise}")
+    val f = premise match {
+      case CircularPremiseQuery(processID, noncircularDeps, circularDeps, instantaneousDeps, mainAssumption, fairness) => 
+        val noncircularLHS = andOfList(noncircularDeps.map(_._2))
+        val circularLHS = andOfList(circularDeps.map(_._2))
+        val instantaneousRHS = andOfList(instantaneousDeps.map(_._2))
+        And( fairness, noncircularLHS, U(circularLHS, And(instantaneousRHS, Not(mainAssumption))))
+      case NonCircularPremiseQuery(processID, deps, mainAssumption, fairness) => 
+        val noncircularLHS = andOfList(deps.map(_._2))
+        And( fairness, noncircularLHS, Not(mainAssumption))
+    }
+    processes(premise.processID).checkLTL(Not(f))
+  }
+
+  def checkInductivePremise(processID : Int, fairness : Boolean = true) : Option[Lasso] = {
+    checkInductivePremise(makePremiseQuery(processID, fairness))
+  }
 
   def checkFinalPremise(
       fairness : Boolean = true

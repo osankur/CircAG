@@ -129,7 +129,14 @@ class SATLearner(name : String, alphabet : Alphabet) extends LTLLearner(name, al
 
     val stdout = StringBuilder()
     val stderr = StringBuilder()
-    val output = cmd !! ProcessLogger(stdout append _, stderr append _)
+    val output =
+      try{
+       cmd !! ProcessLogger(stdout append _, stderr append _)
+      } catch {        
+        case e => 
+          logger.error(s"Unexpected return value when executing: ${cmd}")
+          throw e
+      }
     
     if output.contains("NO SOLUTION") then
       logger.debug(s"Samples2LTL returned NO SOLUTION")

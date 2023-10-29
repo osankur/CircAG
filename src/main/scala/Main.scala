@@ -32,6 +32,7 @@ import net.automatalib.util.automata.fsa.NFAs
 import net.automatalib.automata.fsa.impl.compact.CompactDFA;
 import net.automatalib.util.automata.builders.AutomatonBuilders;
 
+import fr.irisa.circag.ltl._
 object Main {
   val logger = LoggerFactory.getLogger("CircAG")
 
@@ -41,7 +42,7 @@ object Main {
     val parser1 = {
       import builder._
       OParser.sequence(
-        programName("circAG"),
+        programName("CircAG"),
         head("circAG", "0.1"),
         opt[Seq[File]]("lts")
           .required()

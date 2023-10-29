@@ -599,6 +599,7 @@ class LTLAGTests extends munit.FunSuite {
     assert(nlts.dfa.accepts(List("a","a")))
     assert(!nlts.dfa.accepts(List("a","a","b")))
   }
+
   test("ltl inductive check: ltl-toy1 a b"){
     // val ass = List("G ((a -> X !a) & !c)", "G F b")
     val ass = List("G ((a -> X !a))", "G F b")
@@ -665,9 +666,7 @@ class LTLAGTests extends munit.FunSuite {
     assert(ta.checkBuchi("3") == Some(List("a","b"), List("c", "a")))
     assert(ta.checkBuchi("4") == None)
   }
-}
 
-class LTLAGProofs extends munit.FunSuite {
   test("ltl inductive check: ltl-toy1 a b - Benjamin"){
     val tas = Array(File("examples/ltl-toy1/a.ta"), File("examples/ltl-toy1/b.ta"))
     val checker = LTLVerifier(tas, G(F(Atomic("a"))))
@@ -891,13 +890,20 @@ class PartialLearning extends munit.FunSuite {
 
 }
 
-class Single extends munit.FunSuite{
- test("ltl generate samples"){
+class Single extends munit.FunSuite {
+  test("ltl inductive check: ltl-toy1 a b"){
+    // val ass = List("G ((a -> X !a) & !c)", "G F b")
+    val ass = List("G ((a -> X !a))", "G F b")
+    val ltl = ass.map(LTL.fromString)
+    System.out.println(s"LTL assumptions: ${ltl}")
     val tas = Array(File("examples/ltl-toy1/a.ta"), File("examples/ltl-toy1/b.ta"))
     val checker = LTLVerifier(tas, G(F(Atomic("a"))))
-    checker.setAssumption(0, G(LTLTrue()))
-    checker.setAssumption(1, G(LTLTrue()))
+    ltl.zipWithIndex.foreach( (ltl,i) => checker.setAssumption(i, ltl))
+    // Without instantaneous assumptions, the proof fails:
+    assert(checker.checkInductivePremise(0) != None)
+    // By making an instantaneous assumption, the proof passes:
     checker.proofSkeleton.setProcessInstantaneousDependencies(0, Set(1))
-    
- }
+    assert(checker.checkInductivePremise(0) == None)
+    assert(checker.checkFinalPremise() != None)
+  } 
 }

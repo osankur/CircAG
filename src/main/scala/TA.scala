@@ -152,7 +152,8 @@ class TA (
     val fullAlphabet = this.alphabet | ltlFormula.alphabet
     val ta_ltl = TA.fromLTL(ltl.Not(ltlFormula).toString, Some(fullAlphabet), Some(accLabel))
     val productTA = TA.synchronousProduct(List(this, ta_ltl))
-    productTA.checkBuchi(s"${ta_ltl.systemName}${accLabel}")
+    val r = productTA.checkBuchi(s"${ta_ltl.systemName}${accLabel}")
+    r
   }
   /** Check the reachability of a state labeled by label. Return such a trace if
     * any.
@@ -195,8 +196,9 @@ class TA (
       modelFile.delete()
       certFile.delete()
     }
+
+
     statistics.Timers.incrementTimer("tchecker", System.nanoTime() - beginTime)
-    // System.out.println(output)
     if (output.contains("CYCLE false")) then {
       None
     } else if (output.contains("CYCLE true")) then {
@@ -415,9 +417,11 @@ object TA{
     TA(systemName, jointAlphabet, jointInternalAlphabet, sb.toString(), eventsOfProcesses, syncs)
   }
 
-  private def getGraphFromCounterExampleOutput(cexDescription : List[String], events : Set[String]) : (HashMap[Int,(String,Int)], HashMap[Int,Int]) = {
+  /**
+   * Parser for counterexamples in which each state has a single succesor (trace, or lasso)
+   */
+  def getGraphFromCounterExampleOutput(cexDescription : List[String], events : Set[String]) : HashMap[Int,(String,Int)] = {
       val edges = HashMap[Int,(String,Int)]()
-      val parents = HashMap[Int,Int]()
       val regEdge = "\\s*([0-9]+)\\s*->\\s*([0-9]+).*vedge=\"<(.*)>\".*".r
       cexDescription.foreach({
         case regEdge(src,tgt,syncList) => 
@@ -426,15 +430,17 @@ object TA{
             val a = singleSync.toArray
             // word.append(a(0))
             edges.put(src.trim.toInt, (a(0), tgt.trim.toInt))
-            parents.put(tgt.trim.toInt, src.trim.toInt)
+            // parents.put(tgt.trim.toInt, src.trim.toInt)
+            // println(s"Added ${(tgt.trim.toInt, src.trim.toInt)}")
+            // println(s"parents: ${parents}")
           } else if (singleSync.size > 1){
             throw FailedTAModelChecking("The counterexample trace has a transition with syncs containing more than one letter of the alphabet:\n" + syncList)
           } else {
             // Ignore internal transition
           }
-        case _ => ()
+        case line => //println(s"Ignoring line ${line}")
       })
-      (edges,parents)
+      edges
   }
   /** 
    *  Given the counterexample description output by TChecker, given as a list of lines,
@@ -442,7 +448,12 @@ object TA{
    */
   def getTraceFromCounterExampleOutput(cexDescription : List[String], events : Set[String]) : Trace = {
       val word = ListBuffer[String]()
-      val (edges, parents) = getGraphFromCounterExampleOutput(cexDescription : List[String], events : Set[String])
+      val parents = HashMap[Int,Int]()
+      val edges = getGraphFromCounterExampleOutput(cexDescription : List[String], events : Set[String])
+      edges.foreachEntry{case (s,(sigma,t)) => 
+        assert(!parents.contains(t))
+        parents.put(t,s)
+      }
       if edges.size > 0 then {
         val root =
             var node = parents.keys().nextElement()
@@ -467,26 +478,26 @@ object TA{
    *  return the trace, that is, the sequence of events in the alphabet encoded by the said counterexample.
    */
   def getLassoFromCounterExampleOutput(cexDescription : List[String], events : Set[String]) : Lasso = {
+    println(cexDescription)
     val prefix = ListBuffer[String]()
     val cycle = ListBuffer[String]()
-    val (edges, parents) = getGraphFromCounterExampleOutput(cexDescription : List[String], events : Set[String])
+    val edges = getGraphFromCounterExampleOutput(cexDescription : List[String], events : Set[String])
+    var indegree = HashMap[Int,Int]()
+    edges.foreachEntry{
+      case(s,(sigma,t)) => 
+        indegree.put(t, indegree.getOrElse(t,0)+1)
+        indegree.put(s, indegree.getOrElse(s,0))
+    }
     if edges.size > 0 then {
-      // Find root
-      val root =
-          var node = parents.keys().nextElement()
-          while ( parents.contains(node)) do {
-            node = parents(node)
-          }
-          node
-      // Find beginning of cycle
-      val beginCycle = {
-        var node = root
-        val seen = mutable.Set[Int]()
-        while ( seen.add(node) && edges.contains(node)) do {
-          node = edges(node)._2
-        }
-        node
-      }
+      var root = -1
+      var beginCycle = -1
+      indegree.foreachEntry({
+        (s,ind) => if ind == 0 then root = s
+        else if ind == 2 then beginCycle =s 
+        else if ind != 1 then throw Exception("Some node has indegree 3 or more")
+      })
+      assert(root >= 0)
+      assert(beginCycle >= 0)
       var node = root
       var atPrefix = true
       // Iterate forward from root, stop at beginCycle unless this is the first time we are seeing it (atPrefix)
