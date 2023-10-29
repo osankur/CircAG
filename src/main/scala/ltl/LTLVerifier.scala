@@ -29,6 +29,16 @@ import fr.irisa.circag.statistics
 import fr.irisa.circag.configuration
 import fr.irisa.circag._
 
+enum LTLAGResult extends Exception:
+  case Success // Assumptions and global property proven
+  case GlobalPropertyProofFail(cex : Lasso) // Global property proof fails, but lasso not realizable
+  case GlobalPropertyViolation(cex : Lasso) // Global property proof fails, and lasso realizable
+  case PremiseFail(processID : Int, cex : Lasso) // Premise proof fails, but lasso not realizable
+  case AssumptionViolation(processID : Int, cex : Lasso) // Premise proof fails, and lasso realizable
+
+class UnsatisfiableConstraints extends Exception
+
+
 /** LTL syntax: each event is an atomic predicate. Produce LTL formula from the
   * premise checker Use Spot to get HOA Buchi automaton, and read it back with
   * HOAParser
@@ -45,12 +55,12 @@ import fr.irisa.circag._
   */
 
 class LTLVerifier(ltsFiles: Array[File], val property: LTL) {
-  private val logger = LoggerFactory.getLogger("CircAG")
+  protected val logger = LoggerFactory.getLogger("CircAG")
 
   val nbProcesses = ltsFiles.size
   val propertyAlphabet = property.alphabet
-  private val processes = ltsFiles.map(TA.fromFile(_)).toBuffer
-  private val assumptions : Buffer[LTL] = Buffer.fill(nbProcesses)(LTLTrue())
+  protected val processes = ltsFiles.map(TA.fromFile(_)).toBuffer
+  protected val assumptions : Buffer[LTL] = Buffer.fill(nbProcesses)(LTLTrue())
 
   val proofSkeleton = AGProofSkeleton(processes, property)
   logger.debug(s"Circularity of the assumptions: ${(0 until nbProcesses).map(proofSkeleton.isCircular(_))}")
@@ -178,6 +188,8 @@ class LTLVerifier(ltsFiles: Array[File], val property: LTL) {
       processes(processID).checkLTL(Not(f))
     }
   }
+
+
   def checkFinalPremise(
       fairness : Boolean = true
   ) : Option[Lasso] = {
@@ -206,4 +218,100 @@ class LTLVerifier(ltsFiles: Array[File], val property: LTL) {
     val ta = TA.fromLTL(cexFormula.toString, None, Some("_ltl_acc_"))
     ta.checkBuchi(s"${ta.systemName}_ltl_acc_")
   }
+
+  /**
+    * Check if all processes accept (the projection of) the lasso (to their own alphabet)
+    *
+    * @param lasso
+    * @return whether lasso is accepted by all processes
+    */
+  def checkCounterExample(lasso : Lasso): Boolean = {
+    class Break extends Exception
+    try {
+      for (ta, i) <- processes.zipWithIndex do {
+        ta.checkLassoMembership(lasso.filter(x => assumptions(i).alphabet.contains(x)), Some(ta.alphabet)) match {
+          case None => // ta rejects
+            throw Break()
+          case _ => // ta accepts
+            ()
+        }
+      }
+      true
+    } catch {
+      case _: Break => false
+    }
+  }
+  
+
+  def applyAG(proveGlobalproperty : Boolean = true, fairness : Boolean = true): LTLAGResult = {
+    try { 
+      for i <- 0 until proofSkeleton.nbProcesses do {
+        checkInductivePremise(i,fairness) match {
+          case None => ()
+          case Some(lasso) => 
+            if checkCounterExample(lasso) then {
+              throw LTLAGResult.AssumptionViolation(i, lasso)
+            } else 
+              throw LTLAGResult.PremiseFail(i, lasso)
+        }
+      }
+      if proveGlobalproperty then {
+        checkFinalPremise(fairness) match {
+          case None => ()
+          case Some(lasso) => 
+            if checkCounterExample(lasso) then {
+              throw LTLAGResult.GlobalPropertyViolation(lasso)
+            } else {
+              throw LTLAGResult.GlobalPropertyProofFail(lasso)
+            }
+        }
+      }
+    } catch {
+      case e : LTLAGResult => e
+    }
+    LTLAGResult.Success
+  }
+}
+
+
+class AutomaticLTLVerifier(_ltsFiles: Array[File], _property: LTL) extends LTLVerifier(_ltsFiles, _property){
+  private val ltlGenerator = LTLGenerator(proofSkeleton)
+  override def applyAG(proveGlobalproperty : Boolean = true, fairness : Boolean = true): LTLAGResult = {
+    LTLAGResult.Success
+    // TODO make a version where constraints are updated
+  }
+
+/**
+    * Apply automatic AG; retrun None on succes, and a confirmed cex otherwise.
+    *
+    * @param proveGlobalProperty
+    * @param fixedAssumptions
+    * @return
+    */
+  def learnAssumptions(proveGlobalProperty : Boolean = true, fixedAssumptions : List[Int] = List()): LTLAGResult = {
+    val fixedAssumptionsMap = HashMap[Int, DLTS]()
+    fixedAssumptions.foreach(i => 
+      fixedAssumptionsMap.put(i, assumptions(i))      
+    )
+    var doneVerification = false
+    LTLAGResult.Success
+    // var currentState = LTLAGResult.PremiseFail(0, List())
+    // while (!doneVerification) {
+    //   var newAss = ltlGenerator.generateAssumptions(fixedAssumptionsMap)
+    //   newAss match {
+    //     case Some(newAss) => this.assumptions = newAss
+    //     case None         => throw LTLUnsatisfiableConstraints()
+    //   }
+    //   currentState = this.applyAG(proveGlobalProperty) 
+    //   currentState match {
+    //     case LTLAGResult.Success => doneVerification = true
+    //     case LTLAGResult.AssumptionViolation(processID, cex) => doneVerification = fixedAssumptions.contains(processID)
+    //     case LTLAGResult.GlobalPropertyViolation(cex) => doneVerification = true
+    //     case LTLAGResult.PremiseFail(processID, cex) => ()
+    //     case LTLAGResult.GlobalPropertyProofFail(cex) => ()
+    //   }
+    // }
+    // currentState
+  }
+
 }

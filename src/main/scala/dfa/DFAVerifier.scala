@@ -53,12 +53,12 @@ import fr.irisa.circag.isPrunedSafety
 
 enum AGResult extends Exception:
   case Success
-  case GlobalPropertyFail(cex : Trace)
+  case GlobalPropertyProofFail(cex : Trace)
   case GlobalPropertyViolation(cex : Trace)
   case PremiseFail(processID : Int, cex : Trace)
   case AssumptionViolation(processID : Int, cex : Trace)
 
-class UnsatisfiableConstraints extends Exception
+class DFAUnsatisfiableConstraints extends Exception
 
 
 class DFAVerifier(val ltsFiles: Array[File], var property : Option[DLTS] = None) {
@@ -316,7 +316,7 @@ class DFAVerifier(val ltsFiles: Array[File], var property : Option[DLTS] = None)
             throw AGResult.GlobalPropertyViolation(cexTrace)
           } else {
             logger.info(s"\tCex *spurious*: ${cexTrace}")
-            throw AGResult.GlobalPropertyFail(cexTrace)
+            throw AGResult.GlobalPropertyProofFail(cexTrace)
           }
       }
     } catch {
@@ -468,7 +468,7 @@ class DFAAutomaticVerifier(
             throw AGResult.GlobalPropertyViolation(cexTrace)
           } else {
             dfaGenerator.addFinalPremiseConstraint(cexTrace)
-            throw AGResult.GlobalPropertyFail(cexTrace)
+            throw AGResult.GlobalPropertyProofFail(cexTrace)
           }
       }
     } catch {
@@ -495,7 +495,7 @@ class DFAAutomaticVerifier(
       var newAss = dfaGenerator.generateAssumptions(fixedAssumptionsMap)
       newAss match {
         case Some(newAss) => this.assumptions = newAss
-        case None         => throw UnsatisfiableConstraints()
+        case None         => throw DFAUnsatisfiableConstraints()
       }
       currentState = this.applyAG(proveGlobalProperty) 
       currentState match {
@@ -503,7 +503,7 @@ class DFAAutomaticVerifier(
         case AGResult.AssumptionViolation(processID, cex) => doneVerification = fixedAssumptions.contains(processID)
         case AGResult.GlobalPropertyViolation(cex) => doneVerification = true
         case AGResult.PremiseFail(processID, cex) => ()
-        case AGResult.GlobalPropertyFail(cex) => ()
+        case AGResult.GlobalPropertyProofFail(cex) => ()
       }
     }
     currentState

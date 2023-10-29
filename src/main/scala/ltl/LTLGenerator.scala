@@ -48,10 +48,10 @@ import fr.irisa.circag.configuration
 import fr.irisa.circag.{Trace, Lasso, DLTS, Alphabet}
 import fr.irisa.circag.pruned
 import fr.irisa.circag.filter
+import fr.irisa.circag.semanticEquals
 
 enum AssumptionGeneratorType:
   case SAT
-  case Fijalkow
 
   /**
   * Passive learning of LTL formulas.
@@ -170,8 +170,24 @@ class LTLGenerator(proofSkeleton : AGProofSkeleton, assumptionGeneratorType : As
   protected var positiveSamples = Buffer.tabulate(nbProcesses)({_ => Set[Lasso]()})
   protected var negativeSamples = Buffer.tabulate(nbProcesses)({_ => Set[Lasso]()})
 
-  protected val learners : Buffer[SATLearner] = Buffer.tabulate(proofSkeleton.nbProcesses)
+  // The minterm corresponding to the current assignment of the constraints
+  protected var currentAssignment = z3ctx.mkFalse()
+
+  protected val learners : Buffer[LTLLearner] = Buffer.tabulate(proofSkeleton.nbProcesses)
     (i => SATLearner(s"assumption${i}", proofSkeleton.assumptionAlphabet(i)))
+
+  /**
+    * Reinitialize the solver. Resets the constraints but keeps those coming from incremental traces
+    */
+  def reset() : Unit = {
+    this.solver = z3ctx.mkSolver()
+    this.samples.foreach(_.clear())
+    this.toVars.clear()
+    this.toIndexedLassos.clear()
+
+    this.positiveSamples = Buffer.tabulate(nbProcesses)({_ => Set[Lasso]()})
+    this.negativeSamples = Buffer.tabulate(nbProcesses)({_ => Set[Lasso]()})
+  }
 
   /**
     * Return the unique SAT variable to the given pair (process, lasso) after possibly creating it
@@ -188,11 +204,35 @@ class LTLGenerator(proofSkeleton : AGProofSkeleton, assumptionGeneratorType : As
       toVars.put((process,lasso), v)
       toIndexedLassos.put(v, (process, lasso))
       samples(process).append((lasso,v))
-      // updateTheoryConstraints(process, samples(process).size-1)
+      // Update theory constraints for this new variable, w.r.t. previous ones
+      updateTheoryConstraints(process, samples(process).size-1)
       v
     }
   } 
 
+  /**
+    * Add the constraint that for all lassos l in samples(process)(sampleIndex..), and all lassos l' in samples(process),
+    * if l and l' are semantically equal when projected to process' assumption alphabet, then the respective Boolean variables are equal.
+    *
+    * @param process process identifier for which these constraints are to be added
+    * @param sampleIndex only consider lassos l of index samplesIndex..samples.size-1; default is 0
+    * @return
+    */
+  private def updateTheoryConstraints(process : Int, sampleIndex : Int = 0) : Unit = {
+    for i <- sampleIndex until samples(process).size do {
+      val projLasso_i = this.samples(process)(i)._1.filter(proofSkeleton.assumptionAlphabet(process).contains(_))
+      val vi = this.samples(process)(i)._2
+      for j <- 0 until i do {
+        val projLasso_j = this.samples(process)(j)._1.filter(proofSkeleton.assumptionAlphabet(process).contains(_))
+        val vj = this.samples(process)(j)._2
+        if projLasso_i.semanticEquals(projLasso_j) then {
+          solver.add(z3ctx.mkEq(vi, vj))
+        }
+      }
+    }
+  }
+
+ 
   /**
    * Solve the constraints and generate samples that each assumption must satisfy.
    * All process index - DLTS pairs given as arguments are assumed to be fixed, 
@@ -207,24 +247,28 @@ class LTLGenerator(proofSkeleton : AGProofSkeleton, assumptionGeneratorType : As
     // if the current assumption accepts the sample, then add this as a constraint; otherwise, add the negation.
     for (i, ltl) <- fixedAssumptions do {
       for (lasso, v) <- samples(i) do {
-        // if ltl.accepts(lasso.filter(proofSkeleton.assumptionAlphabet(i))) then {
-        //   solver.add(v)
-        // } else {
-        //   // System.out.println(s"Ass ${i} accepts word: ${(lasso.filter(proofSkeleton.assumptionAlphabets(i)))}: ${dlts.dfa.accepts(lasso.filter(proofSkeleton.assumptionAlphabets(i)))}")
-        //   // dlts.visualize()
-        //   solver.add(z3ctx.mkNot(v))
-        // }
+        if ltl.accepts(lasso.filter(proofSkeleton.assumptionAlphabet(i))) then {
+          solver.add(v)
+        } else {
+          solver.add(z3ctx.mkNot(v))
+        }
       }
     }
+
+    println("Generating assignment for following constraints")
+    for ass <- solver.getAssertions() do
+      println(ass)
+
     var beginTime = System.nanoTime()
     if(solver.check() == z3.Status.UNSATISFIABLE){
       statistics.Timers.incrementTimer("z3", (System.nanoTime() - beginTime))
       solver.pop()
+      println("Constraints are unsat")
       None
     } else {
       val m = solver.getModel()
-      // Compute sets of negative samples, and prefix-closed sets of pos samples from the valuation
-      // We only make this update for 
+      currentAssignment = z3ctx.mkTrue()
+      // Compute sets of negative samples, and sets of pos samples from the valuation
       samples.zipWithIndex.foreach({
         (isamples, i) => 
           isamples.foreach({
@@ -233,19 +277,74 @@ class LTLGenerator(proofSkeleton : AGProofSkeleton, assumptionGeneratorType : As
                 case z3.enumerations.Z3_lbool.Z3_L_TRUE =>
                   val sample = lasso.filter(proofSkeleton.assumptionAlphabet(i))
                   positiveSamples(i) = positiveSamples(i).incl(sample)
+                  currentAssignment = z3ctx.mkAnd(currentAssignment, v)
                 case z3.enumerations.Z3_lbool.Z3_L_FALSE => 
                   negativeSamples(i) = negativeSamples(i).incl(lasso.filter(proofSkeleton.assumptionAlphabet(i)))
+                  currentAssignment = z3ctx.mkAnd(currentAssignment, z3ctx.mkNot(v))
                 case _ =>
                   val sample = lasso.filter(proofSkeleton.assumptionAlphabet(i))
-                  // Add all prefixes
                   positiveSamples(i) = positiveSamples(i).incl(sample)
+                  currentAssignment = z3ctx.mkAnd(currentAssignment, v)
               }
           })
       })
+      println("Generated:")
+      println(s"Positive samples: ${positiveSamples}")
+      println(s"Negative samples: ${negativeSamples}")
+
       statistics.Timers.incrementTimer("z3", (System.nanoTime() - beginTime))
       solver.pop()
       Some(positiveSamples, negativeSamples)
     }
   }
 
+  /**
+    * @brief exclude the current assignment
+    */
+  def blockCurrentAssignment() : Unit = {
+    solver.add(z3ctx.mkNot(currentAssignment))
+  }
+
+  /**
+    * Generate assumptions satisfying the constraints, except that those processes 
+    * whose LTL formulas are given in fixedAssumptions. Note that fixing 
+    * some of the assumptions can make the constraints unsatisfiable.
+    *
+    * @param fixedAssumptions partial map from process indices to their fixed assumptions
+    * @return None if the constraints are unsat, and an assumption for each process otherwise.
+    */
+  def generateAssumptions(fixedAssumptions : mutable.Map[Int,LTL] = mutable.Map()) : Option[Buffer[LTL]] = {
+    class UnsatAssumption extends Exception
+    def findAssumptions() : Option[Buffer[LTL]] = {
+      try {
+        generateSamples(fixedAssumptions) match {
+          case None => None // Constraints are unsatisfiable
+          case Some(posSamples, negSamples) =>
+            Some(Buffer.tabulate(proofSkeleton.nbProcesses)
+              (i => 
+                if fixedAssumptions.contains(i) then 
+                  fixedAssumptions(i)
+                else {
+                  learners(i).setPositiveSamples(posSamples(i))
+                  learners(i).setNegativeSamples(negSamples(i))
+                  learners(i).getLTL() match {
+                    case None => 
+                      // There is no LTL formula for separating these samples
+                      // Block the current assignment, and try again with another assignment
+                      println(s"No solution for ${i}. Blocking assignment ${currentAssignment}")
+                      blockCurrentAssignment()
+                      throw UnsatAssumption()
+                    case Some(ltl) => ltl
+                  }
+                }
+              )
+            )
+        }
+      } catch {
+        case _ : UnsatAssumption => findAssumptions()
+        case e => throw e
+      }
+    }
+    findAssumptions()
+  }
 }

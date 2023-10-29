@@ -705,7 +705,7 @@ class LTLAGTests extends munit.FunSuite {
   }
 }
 
-class Benjamin extends munit.FunSuite {
+class LTLAGProofs extends munit.FunSuite {
   test("ltl inductive check: ltl-toy1 a b - Benjamin"){
     val tas = Array(File("examples/ltl-toy1/a.ta"), File("examples/ltl-toy1/b.ta"))
     val checker = LTLVerifier(tas, G(F(Atomic("a"))))
@@ -729,6 +729,21 @@ class Benjamin extends munit.FunSuite {
     assert(checker.checkInductivePremise(0, true) == None)
     assert(checker.checkFinalPremise() == None)
   }
+
+  test("ltl inductive check: ltl-toy1 applyAG"){
+    val tas = Array(File("examples/ltl-toy1/a.ta"), File("examples/ltl-toy1/b.ta"))
+    val checker = LTLVerifier(tas, G(F(Atomic("a"))))
+    checker.setAssumption(0, G(LTLTrue()))
+    checker.setAssumption(1, G(LTLTrue()))
+    checker.proofSkeleton.setProcessInstantaneousDependencies(0, Set(1))
+
+    val ass0 = "G (( b-> X a) & (c -> !(F b)))"
+    val ass1 = "G (( d-> X b) & F(c | d) & (c -> ! F c))"
+    checker.setAssumption(0, LTL.fromString(ass0))
+    checker.setAssumption(1, LTL.fromString(ass1))
+    assert(checker.applyAG(false) == LTLAGResult.Success)
+  }
+
 }
 
 class PartialLearning extends munit.FunSuite {
@@ -938,5 +953,14 @@ class Single extends munit.FunSuite{
     assert(f1.accepts(l3))
     assert(f2.accepts(l3))
     assert(!f3.accepts(l3))
+  }
+  test("lasso membership"){
+    val ta = TA.fromFile(File("examples/untimed.ta"))
+    val l1 : Lasso = (List("a","a","b"), List("c", "a", "c", "a"))
+    val l2 : Lasso = (List("b"), List("c"))
+    val l3 : Lasso = (List("b","b"), List("c"))
+    assert(ta.checkLassoMembership(l1) != None)
+    assert(ta.checkLassoMembership(l2) != None)
+    assert(ta.checkLassoMembership(l3) == None)
   }
 }

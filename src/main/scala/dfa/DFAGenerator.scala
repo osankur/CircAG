@@ -507,7 +507,7 @@ class DFAGenerator(proofSkeleton : DFAProofSkeleton, assumptionGeneratorType : A
     * Here w ranges over samples(process)(sampleIndex..) and w' ranges over samples(process)(sampleIndex-1)
     *
     * @param process
-    * @param alphabet
+    * @param sampleIndex
     * @return
     */
   private def updateTheoryConstraints(process : Int, sampleIndex : Int = 0) : Unit = {
@@ -536,10 +536,6 @@ class DFAGenerator(proofSkeleton : DFAProofSkeleton, assumptionGeneratorType : A
 
   /**
     * Reinitialize the solver. Resets the constraints but keeps those coming from incremental traces
-    *
-    * @param processDependencies
-    * @param propertyDependencies
-    * @param assumptionAlphabets
     */
   def reset() : Unit = {
     this.solver = z3ctx.mkSolver()

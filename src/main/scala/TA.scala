@@ -109,18 +109,37 @@ class TA (
     * Check whether trace|_alph is accepted by ta|_alph where alph is syncAlphabet (default is trace.toSet)
     *
     * @param trace a trace
-    * @param syncAlphabet alphabet on which synchronous product is to be defined
+    * @param syncAlphabet synchronization alphabet for the synchronous product. Default is trace.toSet.
     * @return None if no such execution exists, and Some(trace) otherwise.
     */
   def checkTraceMembership(trace : Trace, syncAlphabet : Option[Set[String]] = None) : Option[Trace] = {  
     statistics.Counters.incrementCounter("trace-membership")
-    val traceAlphabet = syncAlphabet.getOrElse(trace.toSet)
-    val projTrace = trace.filter(traceAlphabet.contains(_))
-    val traceProcess = DLTS.fromTrace(projTrace, Some(traceAlphabet))
+    val syncAlpha = syncAlphabet.getOrElse(trace.toSet)
+    // We project trace to syncAlpha because we want to create a process with a given alphabet (there cannot be letters outside of its alphabet)
+    val projTrace = trace.filter(syncAlpha.contains(_))
+    val traceProcess = DLTS.fromTrace(projTrace, Some(syncAlpha))
     val productTA = TA.synchronousProduct(this, List(traceProcess), Some("_accept_"))
     val result = productTA.checkReachability(s"${traceProcess.name}_accept_")
     result
   }
+
+    /**
+    * Check whether lasso|_alph is accepted by ta|_alph where alph is syncAlphabet (default is lasso.toSet)
+    *
+    * @param lasso a lasso
+    * @param syncAlphabet synchronization alphabet for the synchronous product. Default is lasso.toSet.
+    * @return None if no such execution exists, and Some(lasso) otherwise.
+    */
+  def checkLassoMembership(lasso : Lasso, syncAlphabet : Option[Set[String]] = None) : Option[Lasso] = {  
+    statistics.Counters.incrementCounter("lasso-membership")
+    val lassoAlphabet = syncAlphabet.getOrElse(lasso._1.toSet ++ lasso._2.toSet)
+    val projLasso = lasso.filter(lassoAlphabet.contains(_))
+    val lassoProcess = DLTS.fromLasso(projLasso, Some(lassoAlphabet))
+    val productTA = TA.synchronousProduct(this, List(lassoProcess), Some("_accept_"))
+    val result = productTA.checkBuchi(s"${lassoProcess.name}_accept_")
+    result
+  }
+
 
   /**
     * @brief Check whether all infinite runs of the TA satisfy the LTL formula.

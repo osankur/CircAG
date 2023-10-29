@@ -158,7 +158,7 @@ class DFAAutomaticVerifierAlphabetRefinement(
         // This cannot fail when cex == cexTrace, but can afterwards
         try {
           val processTraces = processes.zipWithIndex.map { (p, i) =>
-            p.checkTraceMembership(cex) match {
+            p.checkTraceMembership(cex, Some(cex.toSet)) match {
               case Some(processTrace) =>
                 val interfaceTrace =
                   processTrace.filter(interfaceAlphabet.contains(_))
@@ -294,7 +294,7 @@ class DFAAutomaticVerifierAlphabetRefinement(
         case AGResult.Success => AGSuccess()
         case AGResult.AssumptionViolation(processID, cex) => AGFalse(cex)
         case AGResult.GlobalPropertyViolation(cex) => AGFalse(cex)
-        case AGResult.GlobalPropertyFail(cex) => AGContinue()
+        case AGResult.GlobalPropertyProofFail(cex) => AGContinue()
         case AGResult.PremiseFail(_, cex) => AGContinue()
       }
       currentState match {

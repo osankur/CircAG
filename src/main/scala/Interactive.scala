@@ -158,7 +158,7 @@ class Interactive(
                 case _ => "Unknown result" // Un reachable
             }
         } catch {
-            case _ : UnsatisfiableConstraints => 
+            case _ : DFAUnsatisfiableConstraints => 
                 "Assumptions cannot be learned due to unsatisfiable constraints"
         }
     }
