@@ -23,6 +23,7 @@ import java.io.ByteArrayInputStream
 import net.automatalib.automata.Automaton
 import net.automatalib.automata.fsa.FiniteStateAcceptor
 import net.automatalib.automata.fsa.impl.{FastDFA, FastNFA, FastDFAState, FastNFAState}
+import net.automatalib.words.impl.Alphabets;
 
 import fr.irisa.circag._
 import fr.irisa.circag.ltl.LTL
@@ -121,6 +122,12 @@ class TA (
     result
   }
 
+  /**
+    * @brief Check whether all infinite runs of the TA satisfy the LTL formula.
+    *
+    * @param ltlFormula
+    * @return None if the formula is satisfied, and a counterexample lasso violating the formula otherwise.
+    */
   def checkLTL(ltlFormula: LTL): Option[Lasso] = {
     val accLabel = "_ltl_accept_"
     val fullAlphabet = this.alphabet | ltlFormula.alphabet
@@ -326,6 +333,8 @@ object TA{
     val nlts = NLTS.fromLTL(ltlString, fullAlphabet)
     this.fromLTS[FastNFAState](nlts, acceptingLabel)
   }
+
+
 
   /**
     * @param ta timed automaton

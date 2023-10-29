@@ -7,9 +7,12 @@ You need
 - sbt 1.8
 - maven
   
-And the following must be on your path:
+And the executables of the following must be on your path:
 - [tchecker](https://github.com/ticktac-project/tchecker)
+
+  we use `tck-reach`, and `tck-liveness`
 - [spot](https://spot.lre.epita.fr/)
+  we use `ltlfilt`
  
 Once you have all this, execute the following in `lib` directory
 
@@ -20,6 +23,15 @@ and type in the main directory
     sbt assembly
 
 This should create the fat executable jar target/scala-3*/CircAG.jar.
+
+### Samples2LTL
+To check out the samples2LTL submodule, and test it, run:
+
+    git submodule init
+    git submodule update
+    cd samples2ltl
+    pip3 install -r requirements.txt
+    python3 samples2LTL.py --sat --traces traces/alt.trace
 
 ## DFA-based N-way Assume-Guarantee Reasoning with Learning
 The algorithm of the CAV16 paper is currently implemented with and without alphabet refinement. This can be tried as follows.

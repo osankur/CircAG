@@ -47,6 +47,7 @@ import fr.irisa.circag.statistics
 import fr.irisa.circag.configuration
 import fr.irisa.circag.{Trace, Lasso, DLTS, Alphabet}
 import fr.irisa.circag.pruned
+import fr.irisa.circag.filter
 
 enum AssumptionGeneratorType:
   case SAT
@@ -158,15 +159,93 @@ class LTLGenerator(proofSkeleton : AGProofSkeleton, assumptionGeneratorType : As
   }
 
   protected val nbProcesses = proofSkeleton.nbProcesses
-  // Set of all samples added so far
-  protected val samples = Buffer.tabulate(nbProcesses)({_ => Buffer[(Trace,z3.BoolExpr)]()})
-  // Boolean variable corresponding to each pair (pr,trace)
-  protected val toVars = HashMap[(Int,Trace), z3.BoolExpr]()
-  protected val toIndexedTraces = HashMap[z3.BoolExpr, (Int,Trace)]()
+  // Set of all samples added so far for each process
+  protected val samples = Buffer.tabulate(nbProcesses)({_ => Buffer[(Lasso,z3.BoolExpr)]()})
+  // Boolean variable corresponding to each pair (process,trace)
+  protected val toVars = HashMap[(Int,Lasso), z3.BoolExpr]()
+  protected val toIndexedLassos = HashMap[z3.BoolExpr, (Int,Lasso)]()
 
   protected var solver = z3ctx.mkSolver()
 
-  // Samples that were used to compute assumptions the last time. Here the prefix closure of the positive samples were added
-  protected var positiveSamples = Buffer.tabulate(nbProcesses)({_ => Set[Trace]()})
-  protected var negativeSamples = Buffer.tabulate(nbProcesses)({_ => Set[Trace]()})
+  protected var positiveSamples = Buffer.tabulate(nbProcesses)({_ => Set[Lasso]()})
+  protected var negativeSamples = Buffer.tabulate(nbProcesses)({_ => Set[Lasso]()})
+
+  protected val learners : Buffer[SATLearner] = Buffer.tabulate(proofSkeleton.nbProcesses)
+    (i => SATLearner(s"assumption${i}", proofSkeleton.assumptionAlphabet(i)))
+
+  /**
+    * Return the unique SAT variable to the given pair (process, lasso) after possibly creating it
+    *
+    * @param process
+    * @param trace
+    * @return
+    */
+  private def varOfIndexedTrace(process : Int, lasso : Lasso) : z3.BoolExpr = {
+    if (toVars.contains((process, lasso))) then {
+      toVars((process, lasso))
+    } else {
+      val v = z3ctx.mkBoolConst(z3ctx.mkSymbol(s"${(process,lasso)}"))
+      toVars.put((process,lasso), v)
+      toIndexedLassos.put(v, (process, lasso))
+      samples(process).append((lasso,v))
+      // updateTheoryConstraints(process, samples(process).size-1)
+      v
+    }
+  } 
+
+  /**
+   * Solve the constraints and generate samples that each assumption must satisfy.
+   * All process index - DLTS pairs given as arguments are assumed to be fixed, 
+   * so we update the constraints (temporarily) so that the solution respects these existing assumptions.
+   */
+  private def generateSamples(fixedAssumptions : mutable.Map[Int,LTL] = mutable.Map()) : Option[(Buffer[Set[Lasso]], Buffer[Set[Lasso]])] = {
+    var positiveSamples = Buffer.tabulate(nbProcesses)({_ => collection.immutable.Set[Lasso]()})
+    var negativeSamples = Buffer.tabulate(nbProcesses)({_ => Set[Lasso]()})
+
+    solver.push()
+    // For all processes whose assumptions are fixed, and for all samples for process i,
+    // if the current assumption accepts the sample, then add this as a constraint; otherwise, add the negation.
+    for (i, ltl) <- fixedAssumptions do {
+      for (lasso, v) <- samples(i) do {
+        // if ltl.accepts(lasso.filter(proofSkeleton.assumptionAlphabet(i))) then {
+        //   solver.add(v)
+        // } else {
+        //   // System.out.println(s"Ass ${i} accepts word: ${(lasso.filter(proofSkeleton.assumptionAlphabets(i)))}: ${dlts.dfa.accepts(lasso.filter(proofSkeleton.assumptionAlphabets(i)))}")
+        //   // dlts.visualize()
+        //   solver.add(z3ctx.mkNot(v))
+        // }
+      }
+    }
+    var beginTime = System.nanoTime()
+    if(solver.check() == z3.Status.UNSATISFIABLE){
+      statistics.Timers.incrementTimer("z3", (System.nanoTime() - beginTime))
+      solver.pop()
+      None
+    } else {
+      val m = solver.getModel()
+      // Compute sets of negative samples, and prefix-closed sets of pos samples from the valuation
+      // We only make this update for 
+      samples.zipWithIndex.foreach({
+        (isamples, i) => 
+          isamples.foreach({
+            (lasso, v) =>
+              m.evaluate(v, true).getBoolValue() match {
+                case z3.enumerations.Z3_lbool.Z3_L_TRUE =>
+                  val sample = lasso.filter(proofSkeleton.assumptionAlphabet(i))
+                  positiveSamples(i) = positiveSamples(i).incl(sample)
+                case z3.enumerations.Z3_lbool.Z3_L_FALSE => 
+                  negativeSamples(i) = negativeSamples(i).incl(lasso.filter(proofSkeleton.assumptionAlphabet(i)))
+                case _ =>
+                  val sample = lasso.filter(proofSkeleton.assumptionAlphabet(i))
+                  // Add all prefixes
+                  positiveSamples(i) = positiveSamples(i).incl(sample)
+              }
+          })
+      })
+      statistics.Timers.incrementTimer("z3", (System.nanoTime() - beginTime))
+      solver.pop()
+      Some(positiveSamples, negativeSamples)
+    }
+  }
+
 }

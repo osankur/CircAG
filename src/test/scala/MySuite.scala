@@ -916,4 +916,27 @@ class Single extends munit.FunSuite{
       case Some(ltl) => assert(ltl.toString == "(G (F c))")
     }    
   }
+  test("lasso-semantic-equals"){
+    val l1 : Lasso = (List("a","b"), List("a", "c"))
+    val l2 : Lasso = (List("a","b","a"), List("c", "a"))
+    val l3 : Lasso = (List("a","b","a"), List("c", "a", "c", "a"))
+    val l4 : Lasso = (List("a","b","a"), List("c", "a", "c"))
+    assert(l1.semanticEquals(l1))
+    assert(l1.semanticEquals(l2))
+    assert(l1.semanticEquals(l3))
+    assert(l2.semanticEquals(l1))
+    assert(l3.semanticEquals(l1))
+    assert(!l4.semanticEquals(l1))
+    assert(!l1.semanticEquals(l4))
+  }
+  test("ta from lasso"){
+    val l3 : Lasso = (List("a","b","a"), List("c", "a", "c", "a"))
+    val f1 = G(F(Atomic("a")))
+    val f2 = F(G(Not(Atomic("b"))))
+    val f3 = F(G(Not(Atomic("c"))))
+
+    assert(f1.accepts(l3))
+    assert(f2.accepts(l3))
+    assert(!f3.accepts(l3))
+  }
 }

@@ -1,7 +1,9 @@
 package fr.irisa.circag
 
 import scala.collection.mutable.{Buffer, HashMap, ArrayBuffer}
+import scala.collection.mutable.Queue
 import scala.collection.immutable.Set
+import scala.collection.immutable.StringOps
 import collection.convert.ImplicitConversions._
 import scala.sys.process._
 import java.nio.file.Files
@@ -191,6 +193,31 @@ object DLTS {
     // dfa.setAccepting(projTace.size, true)
     DLTS("_trace_", dfa, alph)
   }
+
+  def fromLasso(lasso : Lasso, alphabet : Option[Alphabet] = None) : DLTS = {
+    val prefix = lasso._1
+    val cycle = lasso._2
+    val occurringSymbols = prefix.toSet ++ cycle.toSet
+    val givenAlphabet = alphabet.getOrElse(occurringSymbols)
+    require(occurringSymbols.subsetOf(givenAlphabet))
+    val n = prefix.size + cycle.size
+    val newDFA =
+     new FastDFA(Alphabets.fromList(givenAlphabet.toList))
+    val states = Buffer.tabulate(n){i => newDFA.addState(i == prefix.size)}
+    newDFA.setInitial(states(0), true)
+    for (sigma, i) <- prefix.zipWithIndex do {
+      newDFA.addTransition(states(i), sigma, states(i+1))
+    }
+    for (sigma, i) <- cycle.zipWithIndex do {
+      newDFA.addTransition(
+          states(prefix.size + i), 
+          sigma, 
+          states(prefix.size + ((i+1) % cycle.size))
+        )
+    }    
+    DLTS("lasso", newDFA, givenAlphabet)
+  }
+
 
   def fromErrorSymbol(symbol : Symbol, dltsName : String = "") : DLTS = {
     val alph = Alphabets.fromList(List(symbol))
@@ -435,6 +462,63 @@ extension(dfa : CompactDFA[String]){
     newDFA
   }
 }
+
+extension(lasso : Lasso){
+  def filter(f : String => Boolean) : Lasso = {
+    (lasso._1.filter(f), lasso._2.filter(f))
+  }
+  /**
+   * @brief Determine whether given two lassos represent the same omega-word 
+   */
+  def semanticEquals(lasso2 : Lasso) : Boolean = {
+    def gcd(a: Int, b: Int): Int = b match {
+      case 0 => a
+      case n => gcd(b, a % b)
+    }
+    def powerOfList[A](l : List[A], k : Int) : List[A] = {
+      var q = Queue[A]()
+      for i <- 1 to k do {
+        q ++= l
+      }
+      q.toList
+    }
+    var (p1,c1) = lasso
+    var (p2,c2) = lasso2
+    if p1.size != p2.size then {
+      // switch them if needed to make sure p1.size < p2.size
+      if (p1.size > p2.size) {
+        val tmp_p = p1
+        val tmp_c = c1
+        p1 = p2
+        c1 = c2
+        p2 = tmp_p
+        c2 = tmp_c
+      }
+
+      // replace p1 with p1 . c1^k . c1_{0..i}
+      // replace c1 with c1_{i...c1.size} ++ c1_{0..i}
+      val k = (p2.size - p1.size) / c1.size
+      var q = Queue[String]()
+      q ++= p1
+      for _ <- 1 to k do {
+        q ++= c1
+      }
+      val i = p2.size - p1.size
+      q ++= c1.slice(0, i)
+      p1 = q.toList
+      c1 = c1.slice(i, c1.size) ++ c1.slice(0, i) 
+
+      assert(p1.size == p2.size)
+      if p1 != p2 then
+        return false      
+    }
+    val lcm = (c1.size * c2.size)  / gcd(c1.size, c2.size)
+    val extended_c1 = powerOfList(c1, lcm / c1.size)
+    val extended_c2 = powerOfList(c2, lcm / c2.size)
+    extended_c1 == extended_c2
+  }  
+}
+
 extension(dfa : FastDFA[String]){
   /**
     * Check if all states reachable from init are accepting
