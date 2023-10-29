@@ -36,7 +36,7 @@ enum LTLAGResult extends Exception:
   case PremiseFail(processID : Int, cex : Lasso) // Premise proof fails, but lasso not realizable
   case AssumptionViolation(processID : Int, cex : Lasso) // Premise proof fails, and lasso realizable
 
-class UnsatisfiableConstraints extends Exception
+class LTLUnsatisfiableConstraints extends Exception
 
 
 /** LTL syntax: each event is an atomic predicate. Produce LTL formula from the
@@ -73,6 +73,8 @@ class LTLVerifier(ltsFiles: Array[File], val property: LTL) {
   }
 
   
+  private def makePremiseQuery(processId : Int, fairness : Boolean = true) : Unit = {}
+
   /**
     * Check the inductive premise for process processID:
     * If processID is circular in the proof skeleton, then we require assumptions(processID)
@@ -119,7 +121,7 @@ class LTLVerifier(ltsFiles: Array[File], val property: LTL) {
           LTL.asynchronousTransform(matrix, proofSkeleton.assumptionAlphabet(processID))
         case _ => throw Exception(s"Guarantee formula for circular process ${processID} must be universal: ${guarantee}")
       }
-      System.out.println(s"Guarantee matrix: ${guarantee_matrix}")
+      println(s"Guarantee matrix: ${guarantee_matrix}")
       val circularDeps = dependencies.filter(proofSkeleton.isCircular)
       val noncircularDeps = dependencies.filterNot(proofSkeleton.isCircular)
       // Check for CEX with an LTL formula of the form: /\_i noncircular-assumptions(i) /\ (/\_i circular-assumptions(i) U !guarantee)
@@ -139,7 +141,7 @@ class LTLVerifier(ltsFiles: Array[File], val property: LTL) {
         circularDeps
         .toSeq
         .map(getAsynchronousMatrix)
-      System.out.println(s"Assumption matrices: ${assumptionMatrices}")
+      println(s"Assumption matrices: ${assumptionMatrices}")
 
       val circularLHS = 
         if assumptionMatrices.size == 0 then LTLTrue()

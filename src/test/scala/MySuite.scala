@@ -85,8 +85,6 @@ class Z3Tests extends munit.FunSuite {
     solver3.add( ctx.mkOr(ctx.mkEq(x,esa), ctx.mkEq(y,esb)))
     solver3.add( ctx.mkOr(ctx.mkNot(ctx.mkEq(x,y))))
     assert(solver3.check() == Status.SATISFIABLE)
-    // val m = solver3.getModel()
-    // System.out.println(m)
   }
   test("z3 unsat core"){
     val cfg = HashMap[String, String]()
@@ -101,17 +99,14 @@ class Z3Tests extends munit.FunSuite {
     val solver = ctx.mkSolver()
     solver.add(e)
     assert(solver.check(vary) == Status.UNSATISFIABLE)
-    System.out.println(solver.getProof())
-    for ass <- solver.getUnsatCore() do {
-      System.out.println(ass)
-    }    
+    // System.out.println(solver.getProof())
+    // for ass <- solver.getUnsatCore() do {
+    //   System.out.println(ass)
+    // }    
   }
 }
 
-class ParserTests extends munit.FunSuite {
-  test("CEX Parsing from TChecker"){
-    // get cex from tchecker
-  }
+class TAandLTSTests extends munit.FunSuite {
   test("CEX Parsing from String"){
     val tck_output = """digraph _premise_lts1 {
       0 [initial="true", intval="", labels="lifted_g_1_accept_,lifted_g_2_accept_", vloc="<q1,qs0,qs0,qs0>", zone="()"]
@@ -127,78 +122,70 @@ class ParserTests extends munit.FunSuite {
     val trace = TA.getTraceFromCounterExampleOutput(tck_output.split("\n").toList, Set("a","b","c"))
     assert(trace == List("a","b","c","a"))
   }
-  test("fromTrace"){
+  test("DLTS from fromTrace"){
     val dlts = DLTS.fromTrace(List("a","b","c","a"))
     assert(dlts.dfa.accepts(List("a","b","c", "a")))
     assert(!dlts.dfa.accepts(List("a","a","a")))
     assert(!dlts.dfa.accepts(List("a","b","b")))
   }
-  test("fromTchecker"){
+  test("Read TA fromTCheckerFile"){
     val dlts = DLTS.fromTCheckerFile(java.io.File("examples/lts1.ta"))
     // dlts.visualize()
     assert(dlts.dfa.accepts(List("a", "b", "c")))
     assert(dlts.dfa.accepts(List("c", "b", "a", "err")))
     assert(!dlts.dfa.accepts(List("c", "b", "err")))
-
   }
+  test("regexp"){
+    val dlts = DLTS.fromRegExp("ocan", "(~(.*@start1[^@end1]*@start1.*))&(~(.*@start2[^@end2]*@start2.*))")
+    val r = new RegExp("(a*b*c*)&(a*c*)");
+    val a = r.toAutomaton();
+    val ba = new BricsNFA(a);
+    assert(ba.accepts(List[Character]('a','c')))
+    assert(!ba.accepts(List[Character]('a','b', 'c')))
+  }
+  test("lasso-semantic-equals"){
+    val l1 : Lasso = (List("a","b"), List("a", "c"))
+    val l2 : Lasso = (List("a","b","a"), List("c", "a"))
+    val l3 : Lasso = (List("a","b","a"), List("c", "a", "c", "a"))
+    val l4 : Lasso = (List("a","b","a"), List("c", "a", "c"))
+    assert(l1.semanticEquals(l1))
+    assert(l1.semanticEquals(l2))
+    assert(l1.semanticEquals(l3))
+    assert(l2.semanticEquals(l1))
+    assert(l3.semanticEquals(l1))
+    assert(!l4.semanticEquals(l1))
+    assert(!l1.semanticEquals(l4))
+  }
+  test("ta from lasso"){
+    val l3 : Lasso = (List("a","b","a"), List("c", "a", "c", "a"))
+    val f1 = G(F(Atomic("a")))
+    val f2 = F(G(Not(Atomic("b"))))
+    val f3 = F(G(Not(Atomic("c"))))
 
+    assert(f1.accepts(l3))
+    assert(f2.accepts(l3))
+    assert(!f3.accepts(l3))
+  }
+  test("lasso membership"){
+    val ta = TA.fromFile(File("examples/untimed.ta"))
+    val l1 : Lasso = (List("a","a","b"), List("c", "a", "c", "a"))
+    val l2 : Lasso = (List("b"), List("c"))
+    val l3 : Lasso = (List("b","b"), List("c"))
+    assert(ta.checkLassoMembership(l1) != None)
+    assert(ta.checkLassoMembership(l2) != None)
+    assert(ta.checkLassoMembership(l3) == None)
+  }
 }
 class DFAAAG extends munit.FunSuite {
-  test("SAT Solver") {
-    // Global.ToggleWarningMessages(true);
-    // Log.open("test.log");
-    // System.out.print("Z3 Major Version: ");
-    // System.out.println(Version.getMajor());
-    // System.out.print("Z3 Full Version: ");
-    // System.out.println(Version.getString());
-    // System.out.print("Z3 Full Version String: ");
-    // System.out.println(Version.getFullVersion());
-
-    val cfg = HashMap[String, String]()
-    cfg.put("model", "true");
-    // cfg.put("proof", "true");
-    // cfg.put("unsat_core", "true")
-    val ctx = Context(cfg);      
-    /* do something with the context */
-
-    val x = ctx.mkSymbol("x")
-    val y = ctx.mkSymbol("y")
-    val varx = ctx.mkBoolConst(x)
-    val vary = ctx.mkBoolConst(y)
-    val e = ctx.mkEq(varx, ctx.mkNot(vary))
-    val solver = ctx.mkSolver()
-    solver.add(e)
-    // System.out.println(e)
-    // System.out.println(solver.check())
-    assert(solver.check() == Status.SATISFIABLE)
-    val m = solver.getModel()
-    // System.out.println(m)
-    // System.out.println("x:" + (m.evaluate(varx, false).getBoolValue() == Z3_lbool.Z3_L_TRUE))
-    // System.out.println("y:" + (m.evaluate(vary, false).getBoolValue() == Z3_lbool.Z3_L_TRUE))
-    val a = m.evaluate(varx, false)
-    val solver2 = ctx.mkSolver()
-    solver2.add(ctx.mkAnd(varx,ctx.mkNot(varx)))
-    assert(solver2.check() == Status.UNSATISFIABLE)
-    ctx.close();      
-  }
-
   test("sat learner"){
     val satLearner = dfa.SATLearner("ass", Set("a","b","c"))
     val positives = Set(List("a","b","c"),List("c","c"))
     val negatives = Set(List("b","c"),List("a","b","b"))
     satLearner.setPositiveSamples(positives)
     satLearner.setNegativeSamples(negatives)
-    // satLearner.setPositiveSamples(Set(List("a","b")))
-    // satLearner.setNegativeSamples(Set(List("a","b","b"), List("c")))
-    // satLearner.setNegativeSamples(Set(List("b","b")))
     val dlts = satLearner.getDLTS()
-    // dlts.visualize()
     positives.foreach(x => assert(dlts.dfa.accepts(x)))
     negatives.foreach(x => assert(!dlts.dfa.accepts(x)))
-    // assert(dlts.dfa.accepts(List("a","b")))
-    // assert(!dlts.dfa.accepts(List("c")))
-    // assert(!dlts.dfa.accepts(List("a","b","b")))
-    // dlts.visualize()
   }
 
   test("premiseChecker"){
@@ -254,15 +241,10 @@ class DFAAAG extends munit.FunSuite {
     val agv = dfa.DFAAutomaticVerifier(Array(File("examples/lts1.ta"), File("examples/lts1.ta")), Some(DLTS.fromErrorSymbol(err)))
     agv.setAssumption(0, dltsssB(0))
 
-     // agv.assumptions = (DLTS("ass3", dfa3, dfa3.getInputAlphabet().toSet)::dltss_p.toList).toBuffer
-    // val cex3 = agv.checkFinalPremise()
-    // assertEquals(cex3, None)
     assert(None == agv.processes(0).checkTraceMembership(List[String]("c", "c", "err", "err"), Some(Set[String]("c", "err"))))
     assert(None != agv.processes(0).checkTraceMembership(List[String]("c", "c", "err"), Some(Set[String]("c", "err"))))
     assert(None != agv.processes(0).checkTraceMembership(List[String]("c", "b", "err"), Some(Set[String]("c", "err"))))
-    // (checker_p.processes(0), dltss_p, DLTS("guarantee", errDFA, errDFA.getInputAlphabet()))
     val cex4 = DFAAutomaticVerifierAlphabetRefinement.extendTrace(agv.processes(0), List[String]("c", "c", "err"), None)
-    // System.out.println(s"CEX4: ${cex4}")
     assert(cex4
       == Some(List("c","a","c", "err")))
   }
@@ -478,7 +460,7 @@ class DFAAAG extends munit.FunSuite {
   }
 
 
-  test("lts from file"){
+  test("toy: with SAT, UFSAT, RPNI"){
     val files = Array(File("examples/toy/lts1.ta"),File("examples/toy/lts2.ta"),File("examples/toy/lts3.ta"))
     val verSAT = dfa.DFAAutomaticVerifier(files, Some(DLTS.fromErrorSymbol("err")), dfa.AssumptionGeneratorType.SAT)
     val verUFSAT = dfa.DFAAutomaticVerifier(files, Some(DLTS.fromErrorSymbol("err")), dfa.AssumptionGeneratorType.UFSAT)
@@ -488,7 +470,7 @@ class DFAAAG extends munit.FunSuite {
     assert(verRPNI.learnAssumptions() == AGResult.Success)
   }
 
-  test("seq-toy from file"){
+  test("seq-toy"){
     val files = Array(File("examples/seq-toy/lts0.ta"),File("examples/seq-toy/lts1.ta"),File("examples/seq-toy/lts2.ta"))
     val verUFSAT =  dfa.DFAAutomaticVerifier(files, Some(DLTS.fromErrorSymbol("err")), dfa.AssumptionGeneratorType.SAT)
     val verSAT =  dfa.DFAAutomaticVerifier(files, Some(DLTS.fromErrorSymbol("err")), dfa.AssumptionGeneratorType.SAT)
@@ -506,28 +488,6 @@ class DFAAAG extends munit.FunSuite {
     assert(ver2RPNI.learnAssumptions() == AGResult.Success)
   }
 
-  test("regexp"){
-    // DLTS.fromRegExp("ocan", "@a@b+(@c|@d)*@e?")
-    val dlts = DLTS.fromRegExp("ocan", "(~(.*@start1[^@end1]*@start1.*))&(~(.*@start2[^@end2]*@start2.*))")
-    // dlts.visualize()
-    // val r = new RegExp("~(ab+(c|d)*e?)");
-    val r = new RegExp("(a*b*c*)&(a*c*)");
-    // val r = new RegExp("(a*)&(a*)");
-    // System.out.println(r)
-    // val r = new RegExp("(~(.*a[^b]*a.*)) ")
-    val a = r.toAutomaton();
-    val ba = new BricsNFA(a);
-    assert(ba.accepts(List[Character]('a','c')))
-    assert(!ba.accepts(List[Character]('a','b', 'c')))
-    // AUTWriter.writeAutomaton(ba, ba.getIn)
-    // Then, display a DOT representation of this automaton
-    // Visualization.visualize(ba, true);
-    // val r2 = dk.brics.automaton.RegExp("~(ab)")
-    // val aut = r2.toAutomaton()
-    // val baut : AbstractBricsAutomaton = BricsNFA(aut)
-    // Visualization.visualize(baut, true)
-  }
-
   test("ltl skeleton"){
     val skeleton = ltl.AGProofSkeleton(3)
     var processAlphabets = Buffer(Set[String]("a","b","c"), Set[String]("a","d"), Set[String]("d","e"))
@@ -536,7 +496,6 @@ class DFAAAG extends munit.FunSuite {
     skeleton.updateByCone(processAlphabets, propertyAlphabet)
     assert((0 until 3).forall(skeleton.isCircular(_)))
     assert((0 until 3).forall({i => (0 until 3).forall({j => i == j || skeleton.processDependencies(i).contains(j)})}))
-
     skeleton.setProcessDependencies(0,Set(1))
     skeleton.setProcessDependencies(1,Set(0))
     assert((0 to 1).forall(skeleton.isCircular(_)))
@@ -569,6 +528,32 @@ class DFAAAG extends munit.FunSuite {
     // SAFSerializationDFA.getInstance().writeModel(System.out, aut, inputs2)
     // System.out.println(AUTWriter.writeAutomaton(aut, inputs2, System.out))
   }  
+}
+
+class LTLTests extends munit.FunSuite {
+  test("ltl parsing"){
+    val input = "X M \"a\" | ! \"b\" \"c\""
+    val ltl = LTL.fromLBT(input)
+    assert(!ltl.isUniversal)
+    val input2 = "G M \"a\" | ! \"b\" \"c\""
+    val ltl2 = LTL.fromLBT(input2)
+    assert(ltl2.isUniversal)
+    assert(LTL.fromString("G F (a & !b)").isUniversal)
+  }
+  test("ltl asynchronous transformation"){
+    val alph = Set("a","b")
+    val falph = Or(List(Atomic("a"),Atomic("b")))
+    val fnalph = Not(falph) // And(List(Not(Atomic("a")),Not(Atomic("b"))))
+    val f1 = LTL.asynchronousTransform(Atomic("b"),alph)
+    assert(f1 == U(Not(Or(Atomic("a"), Atomic("b"))), Atomic("b")))
+    val f2 = LTL.asynchronousTransform(X(Atomic("b")),alph)
+    val expected2 = U(fnalph, And(List(falph, X(U(fnalph, And(List(falph, f1)))))))
+    assert(f2 == expected2)
+    val f3 = LTL.asynchronousTransform(U(Atomic("b"), X(Atomic("b"))), alph)
+    val expected3 = U(Implies(falph, f1), And(List(falph, f2)))
+    assert(f3 == expected3)
+  }
+
 }
 
 class LTLAGTests extends munit.FunSuite {
@@ -613,29 +598,6 @@ class LTLAGTests extends munit.FunSuite {
     val nlts = NLTS.fromLTL("G~(a U b)", Some(Set("a","b")))
     assert(nlts.dfa.accepts(List("a","a")))
     assert(!nlts.dfa.accepts(List("a","a","b")))
-  }
-  test("ltl parsing"){
-    val input = "X M \"a\" | ! \"b\" \"c\""
-    val ltl = LTL.fromLBT(input)
-    assert(!ltl.isUniversal)
-    val input2 = "G M \"a\" | ! \"b\" \"c\""
-    val ltl2 = LTL.fromLBT(input2)
-    assert(ltl2.isUniversal)
-    assert(LTL.fromString("G F (a & !b)").isUniversal)
-    // System.out.println(ltl)ltl.Not(
-  }
-  test("ltl asynchronous transformation"){
-    val alph = Set("a","b")
-    val falph = Or(List(Atomic("a"),Atomic("b")))
-    val fnalph = Not(falph) // And(List(Not(Atomic("a")),Not(Atomic("b"))))
-    val f1 = LTL.asynchronousTransform(Atomic("b"),alph)
-    assert(f1 == U(Not(Or(Atomic("a"), Atomic("b"))), Atomic("b")))
-    val f2 = LTL.asynchronousTransform(X(Atomic("b")),alph)
-    val expected2 = U(fnalph, And(List(falph, X(U(fnalph, And(List(falph, f1)))))))
-    assert(f2 == expected2)
-    val f3 = LTL.asynchronousTransform(U(Atomic("b"), X(Atomic("b"))), alph)
-    val expected3 = U(Implies(falph, f1), And(List(falph, f2)))
-    assert(f3 == expected3)
   }
   test("ltl inductive check: ltl-toy1 a b"){
     // val ass = List("G ((a -> X !a) & !c)", "G F b")
@@ -743,7 +705,15 @@ class LTLAGProofs extends munit.FunSuite {
     checker.setAssumption(1, LTL.fromString(ass1))
     assert(checker.applyAG(false) == LTLAGResult.Success)
   }
-
+  test("sat-ltl-learner"){
+    val learner = ltl.SATLearner("a", Set("a","b","c"))
+    learner.setPositiveSamples(Set((List("a","b"), List("c"))))
+    learner.setNegativeSamples(Set((List("b","b"), List("b")), (List("a","a"), List("b","b"))))
+    learner.samples2LTL(true) match {
+      case None => assert(false)
+      case Some(ltl) => assert(ltl.toString == "(G (F c))")
+    }    
+  }
 }
 
 class PartialLearning extends munit.FunSuite {
@@ -922,45 +892,12 @@ class PartialLearning extends munit.FunSuite {
 }
 
 class Single extends munit.FunSuite{
-  test("sat-ltl-learner"){
-    val learner = ltl.SATLearner("a", Set("a","b","c"))
-    learner.setPositiveSamples(Set((List("a","b"), List("c"))))
-    learner.setNegativeSamples(Set((List("b","b"), List("b")), (List("a","a"), List("b","b"))))
-    learner.samples2LTL(true) match {
-      case None => assert(false)
-      case Some(ltl) => assert(ltl.toString == "(G (F c))")
-    }    
-  }
-  test("lasso-semantic-equals"){
-    val l1 : Lasso = (List("a","b"), List("a", "c"))
-    val l2 : Lasso = (List("a","b","a"), List("c", "a"))
-    val l3 : Lasso = (List("a","b","a"), List("c", "a", "c", "a"))
-    val l4 : Lasso = (List("a","b","a"), List("c", "a", "c"))
-    assert(l1.semanticEquals(l1))
-    assert(l1.semanticEquals(l2))
-    assert(l1.semanticEquals(l3))
-    assert(l2.semanticEquals(l1))
-    assert(l3.semanticEquals(l1))
-    assert(!l4.semanticEquals(l1))
-    assert(!l1.semanticEquals(l4))
-  }
-  test("ta from lasso"){
-    val l3 : Lasso = (List("a","b","a"), List("c", "a", "c", "a"))
-    val f1 = G(F(Atomic("a")))
-    val f2 = F(G(Not(Atomic("b"))))
-    val f3 = F(G(Not(Atomic("c"))))
-
-    assert(f1.accepts(l3))
-    assert(f2.accepts(l3))
-    assert(!f3.accepts(l3))
-  }
-  test("lasso membership"){
-    val ta = TA.fromFile(File("examples/untimed.ta"))
-    val l1 : Lasso = (List("a","a","b"), List("c", "a", "c", "a"))
-    val l2 : Lasso = (List("b"), List("c"))
-    val l3 : Lasso = (List("b","b"), List("c"))
-    assert(ta.checkLassoMembership(l1) != None)
-    assert(ta.checkLassoMembership(l2) != None)
-    assert(ta.checkLassoMembership(l3) == None)
-  }
+ test("ltl generate samples"){
+    val tas = Array(File("examples/ltl-toy1/a.ta"), File("examples/ltl-toy1/b.ta"))
+    val checker = LTLVerifier(tas, G(F(Atomic("a"))))
+    checker.setAssumption(0, G(LTLTrue()))
+    checker.setAssumption(1, G(LTLTrue()))
+    checker.proofSkeleton.setProcessInstantaneousDependencies(0, Set(1))
+    
+ }
 }
