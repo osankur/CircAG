@@ -60,7 +60,7 @@ class LTLVerifier(ltsFiles: Array[File], val property: LTL) {
   val nbProcesses = ltsFiles.size
   val propertyAlphabet = property.alphabet
   protected val processes = ltsFiles.map(TA.fromFile(_)).toBuffer
-  protected val assumptions : Buffer[LTL] = Buffer.fill(nbProcesses)(LTLTrue())
+  protected var assumptions : Buffer[LTL] = Buffer.fill(nbProcesses)(LTLTrue())
 
   val proofSkeleton = AGProofSkeleton(processes, property)
   logger.debug(s"Circularity of the assumptions: ${(0 until nbProcesses).map(proofSkeleton.isCircular(_))}")
@@ -314,29 +314,27 @@ class AutomaticLTLVerifier(_ltsFiles: Array[File], _property: LTL) extends LTLVe
     * @return
     */
   def learnAssumptions(proveGlobalProperty : Boolean = true, fixedAssumptions : List[Int] = List()): LTLAGResult = {
-    val fixedAssumptionsMap = HashMap[Int, DLTS]()
+    val fixedAssumptionsMap = HashMap[Int, LTL]()
     fixedAssumptions.foreach(i => 
       fixedAssumptionsMap.put(i, assumptions(i))      
     )
     var doneVerification = false
-    LTLAGResult.Success
-    // var currentState = LTLAGResult.PremiseFail(0, List())
-    // while (!doneVerification) {
-    //   var newAss = ltlGenerator.generateAssumptions(fixedAssumptionsMap)
-    //   newAss match {
-    //     case Some(newAss) => this.assumptions = newAss
-    //     case None         => throw LTLUnsatisfiableConstraints()
-    //   }
-    //   currentState = this.applyAG(proveGlobalProperty) 
-    //   currentState match {
-    //     case LTLAGResult.Success => doneVerification = true
-    //     case LTLAGResult.AssumptionViolation(processID, cex) => doneVerification = fixedAssumptions.contains(processID)
-    //     case LTLAGResult.GlobalPropertyViolation(cex) => doneVerification = true
-    //     case LTLAGResult.PremiseFail(processID, cex) => ()
-    //     case LTLAGResult.GlobalPropertyProofFail(cex) => ()
-    //   }
-    // }
-    // currentState
+    var currentState = LTLAGResult.Success
+    while (!doneVerification) {
+      ltlGenerator.generateAssumptions(fixedAssumptionsMap) match {
+        case Some(newAss) => this.assumptions = newAss
+        case None         => throw LTLUnsatisfiableConstraints()
+      }
+      currentState = this.applyAG(proveGlobalProperty) 
+      currentState match {
+        case LTLAGResult.Success => doneVerification = true
+        case LTLAGResult.AssumptionViolation(processID, cex) => doneVerification = fixedAssumptions.contains(processID)
+        case LTLAGResult.GlobalPropertyViolation(cex) => doneVerification = true
+        case LTLAGResult.PremiseFail(processID, cex) => ()
+        case LTLAGResult.GlobalPropertyProofFail(cex) => ()
+      }
+    }
+    currentState
   }
 
 }

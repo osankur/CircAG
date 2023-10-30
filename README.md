@@ -2,6 +2,7 @@
 
 ## Installation
 You need
+- Some standard Linux or Mac operating system
 - Scala 3.3
 - Java 1.7
 - sbt 1.8
@@ -12,17 +13,18 @@ And the executables of the following must be on your path:
 
   we use `tck-reach`, and `tck-liveness`
 - [spot](https://spot.lre.epita.fr/)
-  we use `ltlfilt`
+
+  we use `ltlfilt` and `ltl2tgba`
  
-Once you have all this, execute the following in `lib` directory
+Once you have all this, execute the following in `lib` directory. This installs the provided hoaf parser library into the maven repository.
 
     mvn install:install-file -Dfile=jhoafparser-1.1.1.jar -DgroupId=jhoafparser -DartifactId=jhoafparser -Dversion=1.1.1 -Dpackaging=jar -DgeneratePom=true
 
-and type in the main directory
+Then run the following in the main directory
 
     sbt assembly
 
-This should create the fat executable jar target/scala-3*/CircAG.jar.
+This will create a fat executable jar target/scala-3*/CircAG.jar.
 
 ### Samples2LTL
 To check out the samples2LTL submodule, and test it, run:
@@ -36,7 +38,7 @@ To check out the samples2LTL submodule, and test it, run:
 ## DFA-based N-way Assume-Guarantee Reasoning with Learning
 The algorithm of the CAV16 paper is currently implemented with and without alphabet refinement. This can be tried as follows.
 
-    java -jar target/scala-3.1.2/CircAG.jar dfa-aag --lts "examples/toy/lts1.ta,examples/toy/lts2.ta,examples/toy/lts3.ta" --err "err" --verbose false
+    java -jar target/scala-3.3/CircAG.jar dfa-aag --lts "examples/toy/lts1.ta,examples/toy/lts2.ta,examples/toy/lts3.ta" --err "err" --verbose false
 
 Here, the list of automata are given wuth the option --lts: each file must contain a single process TChecker file (with or without clocks).
 All variables and clocks must have distinct names. These processes synchronize on all declared events but those that start with _.
@@ -51,12 +53,12 @@ You can add the option `--visualizeDFA true` to see the assumption DFAs that wer
 ### Other examples
 Two toy examples easy to understand:
 
-    java -jar target/scala-3.1.2/CircAG.jar dfa-aag --lts "examples/toy/lts1.ta,examples/toy/lts2.ta,examples/toy/lts3.ta" --err "err" --verbose false
-    java -jar target/scala-3.1.2/CircAG.jar dfa-aag --lts "examples/seq-toy/lts0.ta,examples/seq-toy/lts1.ta,examples/seq-toy/lts2.ta,examples/seq-toy/lts3.ta" --err "err"
+    java -jar target/scala-3.3/CircAG.jar dfa-aag --lts "examples/toy/lts1.ta,examples/toy/lts2.ta,examples/toy/lts3.ta" --err "err" --verbose false
+    java -jar target/scala-3.3/CircAG.jar dfa-aag --lts "examples/seq-toy/lts0.ta,examples/seq-toy/lts1.ta,examples/seq-toy/lts2.ta,examples/seq-toy/lts3.ta" --err "err"
 
 A small but less trivial example that does not currently terminate :(
 
-    java -jar target/scala-3.1.2/CircAG.jar dfa-aag --lts "examples/ums/machine.ta,examples/ums/scheduler.ta,examples/ums/user.ta" --err "err"
+    java -jar target/scala-3.3/CircAG.jar dfa-aag --lts "examples/ums/machine.ta,examples/ums/scheduler.ta,examples/ums/user.ta" --err "err"
 
 Alphabet refinement is also implemented by not accessible for now on the command line.
 
@@ -66,12 +68,14 @@ The synchronized product of the processes can be output to stdout as a single TC
     run product --lts "examples/ums/machine.ta,examples/ums/scheduler.ta,examples/ums/user.ta"
 
 ## Scala3 Console
-Run    
+To use the API as an interactive proof system, you can use the Scala console:
 
     scala3 -cp target/scala-3.1.2/CircAG.jar -Dfile.encoding=UTF-8
 
+Alternatively, just run `interactive.sh`.
+
 ## Debug level
-Use the following property to set debug level to debug
+Use the following property while running the jar to set debug level to debug
     
      -Dorg.slf4j.simpleLogger.defaultLogLevel=debug
 
