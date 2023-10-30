@@ -29,11 +29,47 @@ import fr.irisa.circag.statistics
 import fr.irisa.circag.configuration
 import fr.irisa.circag._
 
+abstract class PremiseQuery(val processID : Int)
+/**
+  * @brief Content of the premise query
+  *
+  * @param _processID
+  * @param noncircularDeps
+  * @param circularDeps
+  * @param instantaneousDeps
+  * @param mainAssumption
+  * @param fairness
+  */
+case class CircularPremiseQuery (
+  _processID : Int,
+  noncircularDeps : List[(Int, LTL)],
+  circularDeps : List[(Int, LTL)],
+  instantaneousDeps : List[(Int, LTL)],
+  mainAssumption : LTL,
+  fairness : LTL
+  ) extends PremiseQuery(_processID)
+
+/**
+  * 
+  *
+  * @param _processID
+  * @param noncircularDeps
+  * @param mainAssumption
+  * @param fairness
+  */
+case class NonCircularPremiseQuery(
+  _processID : Int,
+  noncircularDeps : List[(Int, LTL)],
+  mainAssumption : LTL,
+  fairness : LTL
+) extends PremiseQuery(_processID)
+
+
 enum LTLAGResult extends Exception:
   case Success // Assumptions and global property proven
   case GlobalPropertyProofFail(cex : Lasso) // Global property proof fails, but lasso not realizable
   case GlobalPropertyViolation(cex : Lasso) // Global property proof fails, and lasso realizable
-  case PremiseFail(processID : Int, cex : Lasso) // Premise proof fails, but lasso not realizable
+  case PremiseFail(processID : Int, cex : Lasso, query : PremiseQuery) // Premise proof fails, but lasso not realizable
   case AssumptionViolation(processID : Int, cex : Lasso) // Premise proof fails, and lasso realizable
 
 class LTLUnsatisfiableConstraints extends Exception
@@ -64,41 +100,6 @@ class LTLVerifier(ltsFiles: Array[File], val property: LTL) {
 
   val proofSkeleton = AGProofSkeleton(processes, property)
   logger.debug(s"Circularity of the assumptions: ${(0 until nbProcesses).map(proofSkeleton.isCircular(_))}")
-
-  protected abstract class PremiseQuery(val processID : Int)
-  /**
-    * @brief Content of the premise query
-    *
-    * @param _processID
-    * @param noncircularDeps
-    * @param circularDeps
-    * @param instantaneousDeps
-    * @param mainAssumption
-    * @param fairness
-    */
-  protected case class CircularPremiseQuery (
-    _processID : Int,
-    noncircularDeps : List[(Int, LTL)],
-    circularDeps : List[(Int, LTL)],
-    instantaneousDeps : List[(Int, LTL)],
-    mainAssumption : LTL,
-    fairness : LTL
-    ) extends PremiseQuery(_processID)
-
-  /**
-    * 
-    *
-    * @param _processID
-    * @param noncircularDeps
-    * @param mainAssumption
-    * @param fairness
-    */
-  protected case class NonCircularPremiseQuery(
-    _processID : Int,
-    noncircularDeps : List[(Int, LTL)],
-    mainAssumption : LTL,
-    fairness : LTL
-  ) extends PremiseQuery(_processID)
 
   def setAssumption(processID : Int, formula: LTL) : Unit = {
     assumptions(processID) = formula
@@ -271,13 +272,14 @@ class LTLVerifier(ltsFiles: Array[File], val property: LTL) {
   def applyAG(proveGlobalproperty : Boolean = true, fairness : Boolean = true): LTLAGResult = {
     try { 
       for i <- 0 until proofSkeleton.nbProcesses do {
-        checkInductivePremise(i,fairness) match {
+        val query = makePremiseQuery(i, fairness)
+        checkInductivePremise(query) match {
           case None => ()
           case Some(lasso) => 
             if checkCounterExample(lasso) then {
               throw LTLAGResult.AssumptionViolation(i, lasso)
             } else 
-              throw LTLAGResult.PremiseFail(i, lasso)
+              throw LTLAGResult.PremiseFail(i, lasso, query)
         }
       }
       if proveGlobalproperty then {
@@ -306,7 +308,7 @@ class AutomaticLTLVerifier(_ltsFiles: Array[File], _property: LTL) extends LTLVe
     // TODO make a version where constraints are updated
   }
 
-/**
+  /**
     * Apply automatic AG; retrun None on succes, and a confirmed cex otherwise.
     *
     * @param proveGlobalProperty
@@ -330,8 +332,8 @@ class AutomaticLTLVerifier(_ltsFiles: Array[File], _property: LTL) extends LTLVe
         case LTLAGResult.Success => doneVerification = true
         case LTLAGResult.AssumptionViolation(processID, cex) => doneVerification = fixedAssumptions.contains(processID)
         case LTLAGResult.GlobalPropertyViolation(cex) => doneVerification = true
-        case LTLAGResult.PremiseFail(processID, cex) => ()
-        case LTLAGResult.GlobalPropertyProofFail(cex) => ()
+        case LTLAGResult.PremiseFail(processID, cex, query) => ltlGenerator.refineConstraintsByPremiseQuery(cex, query)
+        case LTLAGResult.GlobalPropertyProofFail(cex) => ltlGenerator.refineConstraintsByFinal(cex)
       }
     }
     currentState

@@ -308,9 +308,38 @@ class LTLGenerator(proofSkeleton : AGProofSkeleton, assumptionGeneratorType : As
   /**
     * @brief exclude the current assignment
     */
-  def blockCurrentAssignment() : Unit = {
+  private def blockCurrentAssignment() : Unit = {
     solver.add(z3ctx.mkNot(currentAssignment))
   }
+
+  /**
+    * This implements the approximate refinement by adding constraints to rule out lasso.
+    * 
+    * @notes All the information about the query is not useful for the approximate version but will be useful in a future exact refinement version
+    * in order to extract the index k_0.
+    * @param lasso counterexample lasso
+    * @param query premise query whose failure gave lasso
+    */
+  def refineConstraintsByPremiseQuery(lasso : Lasso, query : PremiseQuery) : Unit = {
+    query match {
+      case CircularPremiseQuery(_processID, noncircularDeps, circularDeps, instantaneousDeps, mainAssumption, fairness) => 
+        // approximate constraint: mainAssumption \/ \/_j ~ noncircdep_j \/ \/_j ~ circdep_j \/ \/_j ~ instantdep_j
+        val constraint = z3ctx.mkOr(varOfIndexedTrace(_processID, lasso)::proofSkeleton.processDependencies(_processID).toList.map({ i => z3ctx.mkNot(varOfIndexedTrace(i, lasso))}) :_*)
+        println(s"refineConstraintByQuery: ${constraint}")
+        solver.add(constraint)
+      case NonCircularPremiseQuery(_processID, noncircularDeps, mainAssumption, fairness) => 
+        // mainAssumption \/ \/_i ~ noncircdep_i
+        val constraint = z3ctx.mkOr(varOfIndexedTrace(_processID, lasso)::proofSkeleton.processDependencies(_processID).toList.map({ i => z3ctx.mkNot(varOfIndexedTrace(i, lasso))}) :_*)
+        println(s"refineConstraintByQuery: ${constraint}")
+        solver.add(constraint)
+    }
+  }
+  def refineConstraintsByFinal(lasso : Lasso) : Unit = {
+    val constraint = z3ctx.mkOr((0 until nbProcesses).map({ i => z3ctx.mkNot(varOfIndexedTrace(i, lasso))}) :_*)
+    println(s"refineConstraintByFinal: ${constraint}")
+    solver.add(constraint)
+  }
+
 
   /**
     * Generate assumptions satisfying the constraints, except that those processes 

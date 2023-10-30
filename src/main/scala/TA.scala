@@ -155,11 +155,11 @@ class TA (
     val r = productTA.checkBuchi(s"${ta_ltl.systemName}${accLabel}")
     r
   }
-  /** Check the reachability of a state labeled by label. Return such a trace if
-    * any.
+  /** @brief Check the existence of a lasso with infinitely many label. 
     *
-    * @param ta
-    * @param label
+    * @param ta process
+    * @param label label to be seen infinitely often
+    * @return None if the process has no lasso satisfying GF label, and otherwise Some(lasso) that is a witness.
     */
   def checkBuchi(label: String): Option[Lasso] = {
     val beginTime = System.nanoTime()
