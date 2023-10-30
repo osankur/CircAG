@@ -10,7 +10,7 @@ class MalformedLTL(msg : String) extends Exception(msg)
 
 abstract class LTL {
     def isUniversal : Boolean = false
-    def alphabet : Alphabet 
+    def getAlphabet : Alphabet 
     def accepts(lasso : Lasso) : Boolean = {
         val ta = TA.fromLTS(DLTS.fromLasso(lasso))
         ta.checkLTL(this) == None
@@ -18,64 +18,64 @@ abstract class LTL {
 }
 case class LTLTrue() extends LTL {
     override def toString() = "1"
-    override def alphabet = Set[String]()
+    override def getAlphabet = Set[String]()
 }
 case class LTLFalse() extends LTL {
     override def toString() = "0"
-    override def alphabet = Set[String]()
+    override def getAlphabet = Set[String]()
 }
 case class G(subformula : LTL) extends LTL{
     override def isUniversal = true
     override def toString() = {
         s"(G ${subformula.toString()})"
     }
-    override def alphabet = subformula.alphabet
+    override def getAlphabet = subformula.getAlphabet
 }
 case class X(subformula : LTL) extends LTL{
     override def toString() = {
         s"(X ${subformula.toString()})"
     }
-    override def alphabet = subformula.alphabet 
+    override def getAlphabet = subformula.getAlphabet 
 }
 case class F(subformula : LTL) extends LTL {
     override def toString() = {
         s"(F ${subformula.toString()})"
     }
-    override def alphabet = subformula.alphabet
+    override def getAlphabet = subformula.getAlphabet
 }
 case class U(left : LTL, right : LTL) extends LTL {
     override def toString() = {
         s"(${left.toString()} U ${right.toString()})"
     }
-    override def alphabet = left.alphabet | right.alphabet
+    override def getAlphabet = left.getAlphabet | right.getAlphabet
 }
 case class W(left : LTL, right : LTL) extends LTL {
     override def toString() = {
         s"(${left.toString()} W ${right.toString()})"
     }
-    override def alphabet = left.alphabet | right.alphabet
+    override def getAlphabet = left.getAlphabet | right.getAlphabet
 
 }
 case class R(left : LTL, right : LTL) extends LTL {
     override def toString() = {
         s"(${left.toString()} R ${right.toString()})"
     }
-    override def alphabet = left.alphabet | right.alphabet
+    override def getAlphabet = left.getAlphabet | right.getAlphabet
 
 }
 case class M(left : LTL, right : LTL) extends LTL {
     override def toString() = {
         s"(${left.toString()} M ${right.toString()})"
     }
-    override def alphabet = left.alphabet | right.alphabet
+    override def getAlphabet = left.getAlphabet | right.getAlphabet
 }
 case class And(subformulas : List[LTL]) extends LTL {
     override def toString() = {
         if subformulas.size == 0 then "1"
         else s"(${subformulas.map(_.toString()).mkString(" & ")})"
     }
-    override def alphabet = 
-        subformulas.map(_.alphabet).foldLeft(Set[String]())({ (a,b) => a|b})
+    override def getAlphabet = 
+        subformulas.map(_.getAlphabet).foldLeft(Set[String]())({ (a,b) => a|b})
 
 }
 case class Or(subformulas : List[LTL]) extends LTL {
@@ -83,36 +83,38 @@ case class Or(subformulas : List[LTL]) extends LTL {
         if subformulas.size == 0 then "0"
         else s"(${subformulas.map(_.toString()).mkString(" | ")})"
     }
-    override def alphabet = 
-        subformulas.map(_.alphabet).foldLeft(Set[String]())({ (a,b) => a|b})
+    override def getAlphabet = 
+        subformulas.map(_.getAlphabet).foldLeft(Set[String]())({ (a,b) => a|b})
 }
 case class Implies(left : LTL, right : LTL) extends LTL {
     override def toString() = {
         s"(${left.toString()} -> ${right.toString()})"
     }
-    override def alphabet = left.alphabet | right.alphabet
+    override def getAlphabet = left.getAlphabet | right.getAlphabet
 }
 
 case class Not(subformula : LTL) extends LTL {
     override def toString() = {
-        s"!${subformula.toString()}"
+        s"(!${subformula.toString()})"
     }
-    override def alphabet = subformula.alphabet
+    override def getAlphabet = subformula.getAlphabet
 }
 case class Atomic(atom : String) extends LTL {
     override def toString() = atom
-    override def alphabet = Set(atom)
+    override def getAlphabet = Set(atom)
 }
 
 object And {
-    def apply(args : LTL*) : And = {
-        And(args.toList)
+    def apply(args : LTL*) : LTL = {
+        if args.size == 0 then LTLTrue()
+        else And(args.toList)
     }
 }
 
 object Or {
-    def apply(args : LTL*) : Or = {
-        Or(args.toList)
+    def apply(args : LTL*) : LTL = {
+        if args.size == 0 then LTLFalse()
+        else Or(args.toList)
     }
 }
 

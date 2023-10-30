@@ -36,8 +36,7 @@ import fr.irisa.circag.ltl._
 object Main {
   val logger = LoggerFactory.getLogger("CircAG")
 
-  def main(args: Array[String]): Unit = {
-
+  def main(args: Array[String]): Unit = {   
     val builder = OParser.builder[Configuration]
     val parser1 = {
       import builder._

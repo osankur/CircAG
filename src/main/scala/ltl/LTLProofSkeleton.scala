@@ -103,7 +103,7 @@ class AGProofSkeleton(val nbProcesses: Int) {
     */
   def this( processes: Buffer[TA], property : LTL ) = {
     this(processes.size)
-    val propertyAlphabet = property.alphabet
+    val propertyAlphabet = property.getAlphabet
     updateByCone(processes.map(_.alphabet), propertyAlphabet)
   }
 

@@ -1,6 +1,7 @@
 package fr.irisa.circag
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import io.AnsiColor._
 
 import collection.JavaConverters._
 import collection.convert.ImplicitConversions._
@@ -85,7 +86,7 @@ class TA (
     val cmd = "tck-reach -a reach %s -l %s -C symbolic -o %s"
             .format(modelFile.toString, label, certFile.toString)
 
-    TA.logger.debug(cmd)
+    TA.logger.debug(s"${BLUE}${cmd}${RESET}")
     // System.out.println(cmd)
 
     val output = cmd.!!
@@ -125,13 +126,14 @@ class TA (
 
     /**
     * Check whether lasso|_alph is accepted by ta|_alph where alph is syncAlphabet (default is lasso.toSet)
-    *
     * @param lasso a lasso
     * @param syncAlphabet synchronization alphabet for the synchronous product. Default is lasso.toSet.
+    * @pre the projection of lasso to syncAlphabet is infinite
     * @return None if no such execution exists, and Some(lasso) otherwise.
     */
   def checkLassoMembership(lasso : Lasso, syncAlphabet : Option[Set[String]] = None) : Option[Lasso] = {  
     statistics.Counters.incrementCounter("lasso-membership")
+    println(s"Checking membership of ${lasso} in ${systemName} with sync alphabet ${syncAlphabet}")
     val lassoAlphabet = syncAlphabet.getOrElse(lasso._1.toSet ++ lasso._2.toSet)
     val projLasso = lasso.filter(lassoAlphabet.contains(_))
     val lassoProcess = DLTS.fromLasso(projLasso, Some(lassoAlphabet))
@@ -142,20 +144,23 @@ class TA (
 
 
   /**
-    * @brief Check whether all infinite runs of the TA satisfy the LTL formula.
+    * Check whether all infinite runs of the TA satisfy the LTL formula.
     *
     * @param ltlFormula
     * @return None if the formula is satisfied, and a counterexample lasso violating the formula otherwise.
     */
   def checkLTL(ltlFormula: LTL): Option[Lasso] = {
     val accLabel = "_ltl_accept_"
-    val fullAlphabet = this.alphabet | ltlFormula.alphabet
+    val fullAlphabet = this.alphabet | ltlFormula.getAlphabet
     val ta_ltl = TA.fromLTL(ltl.Not(ltlFormula).toString, Some(fullAlphabet), Some(accLabel))
-    val productTA = TA.synchronousProduct(List(this, ta_ltl))
+    // extend the alphabet of this to fullAlphabet so that the LTL part cannot move alone
+    val ta_ext_alphabet = TA(systemName, fullAlphabet, internalAlphabet, core, eventsOfProcesses, syncs)
+    val productTA = TA.synchronousProduct(List(ta_ext_alphabet, ta_ltl))
     val r = productTA.checkBuchi(s"${ta_ltl.systemName}${accLabel}")
+    // println(r)
     r
   }
-  /** @brief Check the existence of a lasso with infinitely many label. 
+  /** Check the existence of a lasso with infinitely many label. 
     *
     * @param ta process
     * @param label label to be seen infinitely often
@@ -186,7 +191,7 @@ class TA (
         .toFile()
     val cmd = "tck-liveness -a ndfs %s -C symbolic -l %s -o %s"
       .format(modelFile.toString, label, certFile.toString)
-    System.out.println(cmd)
+    System.out.println(s"${BLUE}${cmd}${RESET}")
     TA.logger.debug(cmd)
 
     val output = cmd.!!
@@ -268,6 +273,12 @@ object TA{
       case regSync(event) => false
       case _               => true
     }).mkString("\n")
+    val nbProcesses = ta.eventsOfProcesses.keys().size
+    if nbProcesses > 1 then {
+      throw BadTimedAutomaton("Timed automata can only have a single process")
+    } else if nbProcesses == 0 then {
+      throw BadTimedAutomaton("Timed automata must have at least one process")
+    }
     return ta
   }
 
@@ -355,8 +366,7 @@ object TA{
     this.fromLTS[FastNFAState](nlts, acceptingLabel)
   }
 
-
-
+  
   /**
     * @param ta timed automaton
     * @param dlts list of DLTSs with which sync product is to be computed
@@ -370,7 +380,7 @@ object TA{
       throw Exception("Attempting synchronous product of processes of the same name")
     }
     //if dlts.map(_.name).distinct.size < dlts.size || dlts.map(_.name).contains(ta.systemName) then {
-    val dltsTA = dlts.map({d => this.fromLTS[FastDFAState](d, acceptingLabelSuffix)})
+    val dltsTA = dlts.map({d => TA.fromLTS[FastDFAState](d, acceptingLabelSuffix)})
     val jointAlphabet = ta.alphabet | dlts.foldLeft(Set[String]())( (alph, d) => alph | d.alphabet)
     val sb = StringBuilder()
     val systemName = s"_premise_${ta.systemName}"
@@ -380,39 +390,55 @@ object TA{
     dlts.foreach({d => eventsOfProcesses += (d.name -> d.alphabet.toSet)})
     ta.eventsOfProcesses.foreach({(p,e) => eventsOfProcesses += (p -> e)})
     val allProcesses = eventsOfProcesses.keys.toList
+
     val syncs = jointAlphabet.map(
-      sigma => 
-        allProcesses.filter(eventsOfProcesses(_).contains(sigma))
-        .map({process => (process,sigma)})
+      sigma => ta::dltsTA flatMap { ta => 
+            if !ta.alphabet.contains(sigma) then None
+            else Some((ta.getProcessNames().head, sigma))
+        }
     ).toList.filter(_.size > 1)
+    // val syncs = jointAlphabet.map(
+    //   sigma => 
+    //     allProcesses.filter(eventsOfProcesses(_).contains(sigma))
+    //     .map({process => (process,sigma)})
+    // ).toList.filter(_.size > 1)
     TA(systemName, jointAlphabet, ta.internalAlphabet, sb.toString(), eventsOfProcesses, syncs)
   }
 
   /**
-    * Synchronous product of the given TAs.
-    * The TAs must have distinct process and variable names.
+    * Synchronous product of the given processes.
     * 
-    * @param tas
-    * @return
+    * @param tas pocesses whose product is to be taken
+    * @pre The TAs must have distinct process and variable names.
+    * @pre Each TA has a single process
+    * @return product TA
     */
   def synchronousProduct(tas : List[TA]) : TA = {
     require(tas.size > 0)
-    val allProcesses = (tas.map(_.eventsOfProcesses.keys().toSet)).foldLeft(Set[String]())({(a,b) => a | b}).toList
+    require(tas.forall(p => p.eventsOfProcesses.keys().size == 1))
+    def unionOfList[A](l : List[Set[A]]) : Set[A] = {
+      l.foldLeft(Set[A]())({(a,b) => a | b})
+    }
+    // println("Product of:")
+    // tas.foreach(ta => println(s"${ta.systemName} on alphabet ${ta.alphabet}"))
+    val allProcesses = unionOfList(tas.map(_.eventsOfProcesses.keys().toSet)).toList
     val processCount = (tas.map(_.eventsOfProcesses.keys().size)).sum
     if allProcesses.size < processCount then {
-      throw Exception("Attempting synchronous product of processes of the same name")
+      throw Exception("Attempted synchronous product of processes of the same name")
     }
     val jointAlphabet = tas.foldLeft(Set[String]())((alph,ta) => alph | ta.alphabet)
     val jointInternalAlphabet = tas.foldLeft(Set[String]())((alph,ta) => alph | ta.internalAlphabet)
+
+    val eventsOfProcesses = HashMap[String,Set[String]]()
     val sb = StringBuilder()
     val systemName = s"_product_"
     tas.foreach({d => sb.append(d.core); sb.append("\n")})
-    val eventsOfProcesses = HashMap[String,Set[String]]()
     tas.foreach({_.eventsOfProcesses.foreach({(p,e) => eventsOfProcesses.put(p, e)})})
     val syncs = jointAlphabet.map(
-      sigma => 
-        allProcesses.filter(eventsOfProcesses(_).contains(sigma))
-        .map({process => (process,sigma)})
+      sigma => tas flatMap { ta => 
+            if !ta.alphabet.contains(sigma) then None
+            else Some((ta.getProcessNames().head, sigma))
+        }
     ).toList.filter(_.size > 1)
     TA(systemName, jointAlphabet, jointInternalAlphabet, sb.toString(), eventsOfProcesses, syncs)
   }
@@ -478,7 +504,6 @@ object TA{
    *  return the trace, that is, the sequence of events in the alphabet encoded by the said counterexample.
    */
   def getLassoFromCounterExampleOutput(cexDescription : List[String], events : Set[String]) : Lasso = {
-    println(cexDescription)
     val prefix = ListBuffer[String]()
     val cycle = ListBuffer[String]()
     val edges = getGraphFromCounterExampleOutput(cexDescription : List[String], events : Set[String])

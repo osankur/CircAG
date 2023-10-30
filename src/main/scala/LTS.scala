@@ -503,7 +503,7 @@ extension(lasso : Lasso){
       for _ <- 1 to k do {
         q ++= c1
       }
-      val i = p2.size - p1.size
+      val i = p2.size - q.size
       q ++= c1.slice(0, i)
       p1 = q.toList
       c1 = c1.slice(i, c1.size) ++ c1.slice(0, i) 

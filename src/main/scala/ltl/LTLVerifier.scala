@@ -1,7 +1,9 @@
 package fr.irisa.circag.ltl
 
+import scala.util.boundary, boundary.break
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import io.AnsiColor._
 
 import collection.JavaConverters._
 import collection.convert.ImplicitConversions._
@@ -34,11 +36,11 @@ abstract class PremiseQuery(val processID : Int)
   * @brief Content of the premise query
   *
   * @param _processID
-  * @param noncircularDeps
-  * @param circularDeps
-  * @param instantaneousDeps
-  * @param mainAssumption
-  * @param fairness
+  * @param noncircularDeps pairs of process id and assumption formulas
+  * @param circularDeps pairs of process id and *matrices of* assumption formulas
+  * @param instantaneousDeps pairs of process id and *matrices of* assumption formulas
+  * @param mainAssumption the *matrix* of the assumption of processID
+  * @param fairness the formula expressing the fairness constraint
   */
 case class CircularPremiseQuery (
   _processID : Int,
@@ -53,9 +55,9 @@ case class CircularPremiseQuery (
   * 
   *
   * @param _processID
-  * @param noncircularDeps
-  * @param mainAssumption
-  * @param fairness
+  * @param noncircularDeps pairs of process id and assumption formulas
+  * @param mainAssumption the assumption of processID
+  * @param fairness the formula expressing the fairness constraint
   */
 case class NonCircularPremiseQuery(
   _processID : Int,
@@ -74,31 +76,19 @@ enum LTLAGResult extends Exception:
 
 class LTLUnsatisfiableConstraints extends Exception
 
-
-/** LTL syntax: each event is an atomic predicate. Produce LTL formula from the
-  * premise checker Use Spot to get HOA Buchi automaton, and read it back with
-  * HOAParser
-  *   - The automaton labels are Boolean expressions
-  *   - infeasible valuations such as "a & b" appear in transitions; that's OK
-  *   - Make sure acceptance condition in on states (state-acc), and it is Buchi
-  *     (not gen Buchi)
-  *   - Make sure there are no implicit labels 
-  *   - Translate this to a TChecker
-  *     automaton by using Z3 to explicitly enumerate all valuations in which a
-  *     single event is true
-  *   - Discard other transitions Make the product with the process TA by
-  *     synchronizing on common events Use tck-liveness to model check
-  */
-
 class LTLVerifier(ltsFiles: Array[File], val property: LTL) {
   protected val logger = LoggerFactory.getLogger("CircAG")
 
   val nbProcesses = ltsFiles.size
-  val propertyAlphabet = property.alphabet
+  val propertyAlphabet = property.getAlphabet
   protected val processes = ltsFiles.map(TA.fromFile(_)).toBuffer
-  protected var assumptions : Buffer[LTL] = Buffer.fill(nbProcesses)(LTLTrue())
-
   val proofSkeleton = AGProofSkeleton(processes, property)
+
+  // Initial assumptions: True or G(True) for circular processes
+  protected var assumptions : Buffer[LTL] = Buffer.tabulate(nbProcesses){
+    i => if proofSkeleton.isCircular(i) then G(LTLTrue())
+         else LTLTrue()
+  }
   logger.debug(s"Circularity of the assumptions: ${(0 until nbProcesses).map(proofSkeleton.isCircular(_))}")
 
   def setAssumption(processID : Int, formula: LTL) : Unit = {
@@ -212,6 +202,34 @@ class LTLVerifier(ltsFiles: Array[File], val property: LTL) {
     processes(premise.processID).checkLTL(Not(f))
   }
 
+  /**
+    * @brief Given a circular premise query failed by lasso rho, find least k0 such that
+    * forall 1<=k<=k0, lasso, k |= circular-deps 
+    * lasso, k0 = instant-deps & ~main-assumption"
+    *
+    * @param lasso the cex lasso that fails the premise query
+    * @param query the failed circular premise query 
+    * @return
+    */
+  def getPremiseViolationIndex(lasso : Lasso, query : CircularPremiseQuery) : Int = {
+    query match {
+      case CircularPremiseQuery(_processID, noncircularDeps, circularDeps, instantaneousDeps, mainAssumption, fairness) => 
+        // val lhs = And(circularDeps.map(_._2))
+        val rhs = And(Not(mainAssumption) :: instantaneousDeps.map(_._2))
+        val (p,c) = lasso
+        val pc = p ++ c
+        val k0 = boundary:
+          for i <- 0 to pc.size do {
+            val newp = pc.drop(i)
+            val lassoTA = TA.fromLTS(DLTS.fromLasso((newp, c)))            
+            if lassoTA.checkLTL(rhs) == None then 
+              break(i)
+          }
+          throw Exception(s"Failed to find the violation index of lasso ${lasso} and query ${query}")        
+        return k0
+    }
+  }
+
   def checkInductivePremise(processID : Int, fairness : Boolean = true) : Option[Lasso] = {
     checkInductivePremise(makePremiseQuery(processID, fairness))
   }
@@ -255,10 +273,14 @@ class LTLVerifier(ltsFiles: Array[File], val property: LTL) {
     class Break extends Exception
     try {
       for (ta, i) <- processes.zipWithIndex do {
-        ta.checkLassoMembership(lasso.filter(x => assumptions(i).alphabet.contains(x)), Some(ta.alphabet)) match {
+        // val projLasso = lasso.filter(x => assumptions(i).getAlphabet.contains(x))
+        println(s"Checking if ${lasso} is accepted by process ${i} (${ta.systemName})")
+        ta.checkLassoMembership(lasso, Some(ta.alphabet)) match {
           case None => // ta rejects
+            println("No")
             throw Break()
           case _ => // ta accepts
+            println("Yes")
             ()
         }
       }
@@ -274,8 +296,11 @@ class LTLVerifier(ltsFiles: Array[File], val property: LTL) {
       for i <- 0 until proofSkeleton.nbProcesses do {
         val query = makePremiseQuery(i, fairness)
         checkInductivePremise(query) match {
-          case None => ()
+          case None =>
+            println(s"${GREEN}Check passes${RESET}")
+            ()
           case Some(lasso) => 
+            println(s"${RED}Check fails with lasso: ${lasso}${RESET}")
             if checkCounterExample(lasso) then {
               throw LTLAGResult.AssumptionViolation(i, lasso)
             } else 
@@ -284,8 +309,11 @@ class LTLVerifier(ltsFiles: Array[File], val property: LTL) {
       }
       if proveGlobalproperty then {
         checkFinalPremise(fairness) match {
-          case None => ()
+          case None =>
+            println(s"${GREEN}Final premise passes${RESET}")
+            ()
           case Some(lasso) => 
+            println(s"${RED}Final premise fails with ${lasso}${RESET}")
             if checkCounterExample(lasso) then {
               throw LTLAGResult.GlobalPropertyViolation(lasso)
             } else {
@@ -293,47 +321,65 @@ class LTLVerifier(ltsFiles: Array[File], val property: LTL) {
             }
         }
       }
+      LTLAGResult.Success
     } catch {
-      case e : LTLAGResult => e
+      case e : LTLAGResult =>
+        e
     }
-    LTLAGResult.Success
   }
 }
 
 
 class AutomaticLTLVerifier(_ltsFiles: Array[File], _property: LTL) extends LTLVerifier(_ltsFiles, _property){
   private val ltlGenerator = LTLGenerator(proofSkeleton)
-  override def applyAG(proveGlobalproperty : Boolean = true, fairness : Boolean = true): LTLAGResult = {
-    LTLAGResult.Success
-    // TODO make a version where constraints are updated
-  }
 
   /**
-    * Apply automatic AG; retrun None on succes, and a confirmed cex otherwise.
-    *
-    * @param proveGlobalProperty
-    * @param fixedAssumptions
+    * @brief Prove or disprove the fixed assumptions and the global property by learning nonfixed assumptions
+    * 
+    * @param proveGlobalProperty whether the given global property is to be checked
+    * @param fixedAssumptions list of process ids for which the assumptions are fixed; these will not be learned
+    * @param approximate whether to use approximate constraints for inductive premises
     * @return
     */
-  def learnAssumptions(proveGlobalProperty : Boolean = true, fixedAssumptions : List[Int] = List()): LTLAGResult = {
+  def learnAssumptions(proveGlobalProperty : Boolean = true, fixedAssumptions : List[Int] = List(), approximate : Boolean = true): LTLAGResult = {
+    var count = 0
     val fixedAssumptionsMap = HashMap[Int, LTL]()
     fixedAssumptions.foreach(i => 
       fixedAssumptionsMap.put(i, assumptions(i))      
     )
     var doneVerification = false
     var currentState = LTLAGResult.Success
-    while (!doneVerification) {
+    while (!doneVerification && count < 10) {
+      count += 1
       ltlGenerator.generateAssumptions(fixedAssumptionsMap) match {
         case Some(newAss) => this.assumptions = newAss
         case None         => throw LTLUnsatisfiableConstraints()
       }
+      println(s"${MAGENTA}Assumptions: ${assumptions}${RESET}")
       currentState = this.applyAG(proveGlobalProperty) 
       currentState match {
-        case LTLAGResult.Success => doneVerification = true
-        case LTLAGResult.AssumptionViolation(processID, cex) => doneVerification = fixedAssumptions.contains(processID)
-        case LTLAGResult.GlobalPropertyViolation(cex) => doneVerification = true
-        case LTLAGResult.PremiseFail(processID, cex, query) => ltlGenerator.refineConstraintsByPremiseQuery(cex, query)
-        case LTLAGResult.GlobalPropertyProofFail(cex) => ltlGenerator.refineConstraintsByFinal(cex)
+        case LTLAGResult.Success => 
+          println("Success")
+          doneVerification = true
+        case LTLAGResult.AssumptionViolation(processID, cex) => 
+          println(s"AssumptionViolation ${processID} ${cex}")
+          doneVerification = fixedAssumptions.contains(processID)
+        case LTLAGResult.GlobalPropertyViolation(cex) => 
+          println(s"Gobalproperty violation ${cex}")
+          doneVerification = true
+        case LTLAGResult.PremiseFail(processID, cex, query) => 
+          println(s"PremiseFail ${processID} ${cex}")
+          query match {
+            case q : NonCircularPremiseQuery => 
+              ltlGenerator.refineConstraintsByPremiseQuery(cex, q)
+            case q : CircularPremiseQuery => 
+              val k0 = getPremiseViolationIndex(cex, q)
+              ltlGenerator.refineConstraintsByPremiseQuery(cex, q)
+          }
+          ltlGenerator.refineConstraintsByPremiseQuery(cex, query)
+        case LTLAGResult.GlobalPropertyProofFail(cex) => 
+          println(s"Global Proof fail ${cex}")
+          ltlGenerator.refineConstraintsByFinal(cex)
       }
     }
     currentState

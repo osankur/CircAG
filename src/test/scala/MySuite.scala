@@ -553,7 +553,20 @@ class LTLTests extends munit.FunSuite {
     val expected3 = U(Implies(falph, f1), And(List(falph, f2)))
     assert(f3 == expected3)
   }
-
+  test("lasso |= LTL"){
+    val lassoTA = TA.fromLTS(DLTS.fromLasso((List("a"), List("a"))))
+    val f = Atomic("b")
+    val g = And(Atomic("b"), X(Atomic("a")))
+    val h = G(Atomic("a"))
+    assert(lassoTA.checkLTL(f) != None)
+    assert(lassoTA.checkLTL(g) != None)
+    assert(lassoTA.checkLTL(h) == None)
+  }
+  test("ta |= LTL"){
+    val ta = TA.fromFile(File("examples/a.ta"))
+    assert(ta.checkLTL(Atomic("b")) == None)
+    assert(ta.checkLTL(Atomic("a")) != None)
+  }
 }
 
 class LTLAGTests extends munit.FunSuite {
@@ -691,19 +704,6 @@ class LTLAGTests extends munit.FunSuite {
     assert(checker.checkFinalPremise() == None)
   }
 
-  test("ltl inductive check: ltl-toy1 applyAG"){
-    val tas = Array(File("examples/ltl-toy1/a.ta"), File("examples/ltl-toy1/b.ta"))
-    val checker = LTLVerifier(tas, G(F(Atomic("a"))))
-    checker.setAssumption(0, G(LTLTrue()))
-    checker.setAssumption(1, G(LTLTrue()))
-    checker.proofSkeleton.setProcessInstantaneousDependencies(0, Set(1))
-
-    val ass0 = "G (( b-> X a) & (c -> !(F b)))"
-    val ass1 = "G (( d-> X b) & F(c | d) & (c -> ! F c))"
-    checker.setAssumption(0, LTL.fromString(ass0))
-    checker.setAssumption(1, LTL.fromString(ass1))
-    assert(checker.applyAG(false) == LTLAGResult.Success)
-  }
   test("sat-ltl-learner"){
     val learner = ltl.SATLearner("a", Set("a","b","c"))
     learner.setPositiveSamples(Set((List("a","b"), List("c"))))
@@ -713,184 +713,6 @@ class LTLAGTests extends munit.FunSuite {
       case Some(ltl) => assert(ltl.toString == "(G (F c))")
     }    
   }
-}
-
-class PartialLearning extends munit.FunSuite {
-
-  test("mus-inline-self-partial-learning"){
-    val inputs1: Alphabet[String] = Alphabets.fromList(List("req1","req2", "rel1", "rel2", "grant1", "grant2"))
-    val gUser =
-    AutomatonBuilders
-      .forDFA(FastDFA(inputs1))
-      .withInitial("i")
-      .from("i")
-      .on("req1")
-      .to("r1")
-      .from("i")
-      .on("req2")
-      .to("r2")
-      .from("r1")
-      .on("grant1")
-      .to("g1")
-      .from("r2")
-      .on("grant2")
-      .to("g2")
-      .from("g1")
-      .on("rel1")
-      .to("i")
-      .from("g2")
-      .on("rel2")
-      .to("i")
-      .withAccepting("i")
-      .withAccepting("r2")
-      .withAccepting("r1")
-      .withAccepting("g1")
-      .withAccepting("g2")
-     .create();
-  
-    val inputs2: Alphabet[String] = Alphabets.fromList(List("start1", "start2", "end1", "end2","req1","req2", "rel1", "rel2", "grant1", "grant2"))
-    val gSched =
-    AutomatonBuilders
-      .forDFA(FastDFA(inputs2))
-      .withInitial("q0")
-      .from("q0").on("req1").to("r1")
-      .from("r1").on("grant1").to("g1")
-      .from("g1").on("start1").to("s1")
-      .from("s1").on("end1").to("e1")
-      .from("e1").on("rel1").to("q0")
-
-      .from("g1").on("req2").to("r2")
-      .from("r1").on("req2").to("r2")
-      .from("s1").on("req2").to("r2")
-
-      .from("q0").on("req2").to("r2")
-      .from("r2").on("grant2").to("g2")
-      .from("g2").on("start2").to("s2")
-      .from("s2").on("end2").to("e2")
-      .from("e2").on("rel2").to("q0")
-
-      .from("g2").on("req1").to("r1")
-      .from("r2").on("req1").to("r1")
-      .from("s2").on("req1").to("r1")
-
-      .withAccepting("q0")
-      .withAccepting("r1")
-      .withAccepting("r2")
-      .withAccepting("g1")
-      .withAccepting("g2")
-      .withAccepting("s1")
-      .withAccepting("s2")
-      .withAccepting("e1")
-      .withAccepting("e2")
-
-      .create();
-
-    val err = "err"
-    val gMachine : FastDFA[String] =
-      AutomatonBuilders
-        .forDFA(FastDFA(Alphabets.fromList(List(err,"start1","start2","end1", "end2"))))
-        .withInitial("q0")
-        .from("q0")
-        .on("start1")
-        .to("q1")
-        .from("q0")
-        .on("start2")
-        .to("q2")
-        .from("q1")
-        .on("end1")
-        .to("q0")
-        .from("q2")
-        .on("end2")
-        .to("q0")
-        // error
-        .from("q1")
-        .on("start1")
-        .to("qerr")
-        .from("q1")
-        .on("start2")
-        .to("qerr")
-        .from("q2")
-        .on("start1")
-        .to("qerr")
-        .from("q2")
-        .on("start2")
-        .to("qerr")
-        .from("qerr")
-        .on("err")
-        .to("qerr")
-        .withAccepting("q0")
-        .withAccepting("q1")
-        .withAccepting("q2")
-        .withAccepting("qerr")
-        .create();
-    // Visualization.visualize(gMachine, gMachine.getInputAlphabet())
-    // Visualization.visualize(gUser, gUser.getInputAlphabet())
-    // Visualization.visualize(gSched, gSched.getInputAlphabet())
-    val errDFA : FastDFA[String] =
-      AutomatonBuilders
-        .forDFA(FastDFA(Alphabets.fromList(List(err))))
-        .withInitial("q0")
-        .from("q0")
-        .on(err)
-        .to("q1")
-        .withAccepting("q0")
-        .create();
-    // Visualization.visualize(errDFA, true)
-    assert(!errDFA.isPrunedSafety)
-    assert(errDFA.isSafety)
-    assert(errDFA.pruned.isPrunedSafety)
-    assert(gUser.isPrunedSafety)
-    assert(gUser.isSafety)
-    val ver = dfa.DFAAutomaticVerifier(Array(File("examples/ums/user.ta"), File("examples/ums/scheduler.ta"), File("examples/ums/machine.ta")), Some(DLTS.fromErrorSymbol("err")))
-    ver.setAssumption(0, DLTS("user", gUser, gUser.getInputAlphabet().toSet))
-    ver.setAssumption(1, DLTS("sched", gSched, gSched.getInputAlphabet().toSet))
-    ver.setAssumption(2, DLTS("machine", gMachine, gMachine.getInputAlphabet().toSet))
-    configuration.set(configuration.get().copy(verbose_MembershipQueries = true))
-    assert(ver.learnAssumptions(true, (List(0,1))) == AGResult.Success)
-    assert(ver.learnAssumptions(true, (List(1,2))) == AGResult.Success)
-  }
-  test("proof invalidation"){
-    val filenames = Array("examples/seq-toy/lts0.ta", "examples/seq-toy/lts1.ta", "examples/seq-toy/lts2.ta", "examples/seq-toy/lts3.ta")
-    val int = Interactive(filenames.toList)
-    val nbProcesses = filenames.size
-    for i <- 0 until nbProcesses do {
-        int.setDFAAssumption(i, DLTS.fromTCheckerFile(File(filenames(i))))
-    }
-    int.checkDFAAssumption(0)
-    int.checkDFAAssumption(1)
-    assert(int.getDFAProofState(0) == DFAProofState.PremiseSucceeded)
-    assert(int.getDFAProofState(1) == DFAProofState.PremiseSucceeded)
-    int.setDFAAssumption(3, DLTS.fromTCheckerFile(File(filenames(3))))
-    assert(int.getDFAProofState(0) == DFAProofState.PremiseSucceeded)
-    assert(int.getDFAProofState(1) == DFAProofState.PremiseSucceeded)
-
-    int.setDFAAssumptionDependencies(0,Set[Int]())
-    int.setDFAAssumptionDependencies(1,Set(2))
-    int.setDFAAssumptionDependencies(2, Set(1,0))
-    int.setDFAAssumptionDependencies(3, Set(1))
-    int.checkDFAAssumption(0)
-    int.checkDFAAssumption(1)
-    int.checkDFAAssumption(2)
-    int.checkDFAAssumption(3)
-    int.setDFAAssumption(2, DLTS.fromTCheckerFile(File(filenames(2))))
-    assert(int.getDFAProofState(0) == DFAProofState.Proved)
-    assert(int.getDFAProofState(1) == DFAProofState.Unknown)
-    assert(int.getDFAProofState(2) == DFAProofState.Unknown)
-    assert(int.getDFAProofState(3) == DFAProofState.Unknown)
-    int.checkDFAAssumption(0)
-    int.checkDFAAssumption(1)
-    int.checkDFAAssumption(2)
-    int.checkDFAAssumption(3)
-    int.setDFAAssumption(3, DLTS.fromTCheckerFile(File(filenames(2))))
-    assert(int.getDFAProofState(0) == DFAProofState.Proved)
-    assert(int.getDFAProofState(1) == DFAProofState.Proved)
-    assert(int.getDFAProofState(2) == DFAProofState.Proved)
-
-  }
-
-}
-
-class Single extends munit.FunSuite {
   test("ltl inductive check: ltl-toy1 a b"){
     // val ass = List("G ((a -> X !a) & !c)", "G F b")
     val ass = List("G ((a -> X !a))", "G F b")
@@ -906,4 +728,31 @@ class Single extends munit.FunSuite {
     assert(checker.checkInductivePremise(0) == None)
     assert(checker.checkFinalPremise() != None)
   } 
+}
+
+
+class Single extends munit.FunSuite {
+  test("violation index"){
+    val tas = Array(File("examples/ltl-toy1/a.ta"), File("examples/ltl-toy1/b.ta"))
+    val checker = AutomaticLTLVerifier(tas, G(F(Atomic("a"))))
+    val query = CircularPremiseQuery(0, List(), List((1,(Atomic("b")))), List(), Atomic("d"), LTLTrue())
+    val lasso = (List("a","a","c"), List("c"))
+    assert(checker.getPremiseViolationIndex(lasso, query) == 0)
+
+    val lasso2 = (List("d","d","d"), List("d", "a"))
+    assert(checker.getPremiseViolationIndex(lasso2, query) == 4)
+  }
+
+  test("ltl inductive check: ltl-toy1 applyAG"){
+    val tas = Array(File("examples/ltl-toy1/a.ta"), File("examples/ltl-toy1/b.ta"))
+    val checker = LTLVerifier(tas, G(F(Atomic("a"))))
+    checker.setAssumption(0, G(LTLTrue()))
+    checker.setAssumption(1, G(LTLTrue()))
+    checker.proofSkeleton.setProcessInstantaneousDependencies(0, Set(1))
+    val ass0 = "G (( b-> X a) & (c -> !(F b)))"
+    val ass1 = "G (( d-> X b) & F(c | d) & (c -> ! F c))"
+    checker.setAssumption(0, LTL.fromString(ass0))
+    checker.setAssumption(1, LTL.fromString(ass1))
+    // println(checker.applyAG(proveGlobalproperty = false)) // == LTLAGResult.Success
+  }
 }

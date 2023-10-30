@@ -72,7 +72,7 @@ trait LTLLearner(name : String, alphabet : Alphabet) {
       dlts = None
     }
   }
-  def getLTL() : Option[LTL]
+  def getLTL(universal : Boolean) : Option[LTL]
   protected var dlts : Option[LTL] = None
   protected var positiveSamples : Set[Lasso] = Set()
   protected var negativeSamples : Set[Lasso] = Set()
@@ -89,6 +89,12 @@ class SATLearner(name : String, alphabet : Alphabet) extends LTLLearner(name, al
   protected val logger = LoggerFactory.getLogger("CircAG")
 
   def samples2LTL(universal : Boolean) : Option[LTL] = {
+    println(s"Entering samples2LTL with samples ${positiveSamples} and ${negativeSamples}")
+    // Take care of the corner case not handled by samples2LTL
+    if positiveSamples.isEmpty && negativeSamples.isEmpty then
+      if universal then return Some(G(LTLTrue()))
+      else return Some(LTLTrue())
+
     // Map each symbol of alphabet to 1,0,0; 0,1,0; 0,0,1 etc.
     val symbol2code = mutable.Map[String, String]()
     // Backward substitution: x0 -> a, x1 -> b, x2 -> c etc
@@ -125,6 +131,7 @@ class SATLearner(name : String, alphabet : Alphabet) extends LTLLearner(name, al
     val universalStr = if universal then "--universal" else ""
     val cmd = s"python samples2ltl/samples2LTL.py --sat ${universalStr} --traces ${inputFile.toString}"
 
+    println(s"${BLUE}${cmd}${RESET}")
     logger.debug(cmd)
 
     val stdout = StringBuilder()
@@ -149,11 +156,12 @@ class SATLearner(name : String, alphabet : Alphabet) extends LTLLearner(name, al
     }
   }
 
-  override def getLTL() : Option[LTL] = {
+  override def getLTL(universal : Boolean) : Option[LTL] = {
     dlts match {
       case Some(dlts) => Some(dlts)
       case None => 
-        None
+        dlts = samples2LTL(universal)
+        dlts
     }
   }
 }
@@ -296,6 +304,7 @@ class LTLGenerator(proofSkeleton : AGProofSkeleton, assumptionGeneratorType : As
           })
       })
       println("Generated:")
+      println(s"Minterm: ${currentAssignment}")
       println(s"Positive samples: ${positiveSamples}")
       println(s"Negative samples: ${negativeSamples}")
 
@@ -363,14 +372,16 @@ class LTLGenerator(proofSkeleton : AGProofSkeleton, assumptionGeneratorType : As
                 else {
                   learners(i).setPositiveSamples(posSamples(i))
                   learners(i).setNegativeSamples(negSamples(i))
-                  learners(i).getLTL() match {
+                  learners(i).getLTL(universal = true) match {
                     case None => 
                       // There is no LTL formula for separating these samples
                       // Block the current assignment, and try again with another assignment
                       println(s"No solution for ${i}. Blocking assignment ${currentAssignment}")
                       blockCurrentAssignment()
                       throw UnsatAssumption()
-                    case Some(ltl) => ltl
+                    case Some(ltl) => 
+                      println(s"Samples2LTL generated formula ${ltl} for ${i}")
+                      ltl
                   }
                 }
               )
