@@ -692,10 +692,10 @@ class LTLAGTests extends munit.FunSuite {
 
 
   test("sat-ltl-learner"){
-    val learner = ltl.SATLearner("a", Set("a","b","c"))
+    val learner = ltl.SATLearner("a", Set("a","b","c"), universal= true)
     learner.setPositiveSamples(Set((List("a","b"), List("c"))))
     learner.setNegativeSamples(Set((List("b","b"), List("b")), (List("a","a"), List("b","b"))))
-    learner.samples2LTL(true) match {
+    learner.samples2LTL() match {
       case None => assert(false)
       case Some(ltl) => assert(ltl.toString == "(G (F c))")
     }    
@@ -760,12 +760,12 @@ class A extends munit.FunSuite {
     checker.proofSkeleton.setProcessInstantaneousDependencies(0, Set(1))
     println(checker.learnAssumptions(proveGlobalProperty = true))
   }
-  // test("ltl learn assumptions: ltl-toy1 3 processes"){
-  //   val tas = Array(File("examples/ltl-toy1/a.ta"), File("examples/ltl-toy1/b.ta"), File("examples/ltl-toy1/c.ta"))
-  //   val checker = AutomaticLTLVerifier(tas, G(F(Atomic("a"))))
-  //   checker.proofSkeleton.setProcessInstantaneousDependencies(0, Set(1))
-  //   // The learned assumptions are: G (b -> (X a))) and (G (c U b)
-  //   // This corresponds to the only infinite execution in this product: abaac^omega
-  //   assert(checker.learnAssumptions(proveGlobalProperty = true) == LTLAGResult.Success)
-  // }  
+  test("a"){
+    val ta = TA.fromFile(new File("examples/ltl-toy1/a.ta"))
+    val f = LTL.fromString("(!(((G (F (a | b | c))) & (G (F (b | c | d)))) & 1 & (((((!(b | c | d)) U b))) U (((((!(b | c | d)) U b))) & (!((!(a | b | c)) U a))))))")
+    val lasso = (List("b","a", "a", "c"), List("c"))
+    val g = LTL.fromString("(((((!(b | c | d)) U b))) & (!((!(a | b | c)) U a)))")
+    // println(s"${ta.checkLTL(f)}")
+    println(s"${TA.fromLTS(DLTS.fromLasso(lasso,Some(Set("a","b", "c", "d")))).checkLTL(g)}")
+  }
 }

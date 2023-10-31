@@ -14,6 +14,8 @@ class BadProofSkeleton(msg : String) extends Exception(msg)
 /** Proof skeleton that stores the dependencies of the proof of the assumption
   * of each process, the alphabets of these assumptions and that of the
   * property, and whether each assumption's proof is circular.
+  * We do not distinguish connected components but assume that all processes that are in
+  * some cycle must be proven by a single induction.
   *
   * The skeleton can be used with the default policy: in this case, given assumption and property
   * alphabets, process i depends on all processes j whose alphabets share a symbol,

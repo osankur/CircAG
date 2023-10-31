@@ -46,20 +46,20 @@ import com.microsoft.z3
 import fr.irisa.circag.statistics
 import fr.irisa.circag.configuration
 import fr.irisa.circag.{Trace, Lasso, DLTS, Alphabet}
-import fr.irisa.circag.pruned
-import fr.irisa.circag.filter
-import fr.irisa.circag.semanticEquals
+import fr.irisa.circag.{pruned, filter, suffix, semanticEquals, size}
 
 enum AssumptionGeneratorType:
   case SAT
 
   /**
-  * Passive learning of LTL formulas.
+  * Passive learning of LTL formulas. If learning universal formulas of the form G(phi),
+  * all samples constraint phi.
   *
   * @param name name of the DLTS to be learned
   * @param alphabet alphabet of the DLTS
+  * @param universal whether a universal formula is to be learned.
   */
-trait LTLLearner(name : String, alphabet : Alphabet) {
+trait LTLLearner(name : String, alphabet : Alphabet, universal : Boolean) {
   def setPositiveSamples(samples : Set[Lasso]) = {
     if positiveSamples != samples then {
       positiveSamples = samples
@@ -72,7 +72,7 @@ trait LTLLearner(name : String, alphabet : Alphabet) {
       dlts = None
     }
   }
-  def getLTL(universal : Boolean) : Option[LTL]
+  def getLTL() : Option[LTL]
   protected var dlts : Option[LTL] = None
   protected var positiveSamples : Set[Lasso] = Set()
   protected var negativeSamples : Set[Lasso] = Set()
@@ -84,19 +84,19 @@ trait LTLLearner(name : String, alphabet : Alphabet) {
 * @param name name of the DLTS to be learned
 * @param alphabet alphabet of the DLTS
 */
-class SATLearner(name : String, alphabet : Alphabet) extends LTLLearner(name, alphabet) {
+class SATLearner(name : String, alphabet : Alphabet, universal : Boolean) extends LTLLearner(name, alphabet, universal) {
 
   protected val logger = LoggerFactory.getLogger("CircAG")
 
-  def samples2LTL(universal : Boolean) : Option[LTL] = {
-    println(s"Entering samples2LTL with samples ${positiveSamples} and ${negativeSamples}")
+  def samples2LTL() : Option[LTL] = {
+    println(s"Entering samples2LTL (universal=${universal}) samples ${positiveSamples} and ${negativeSamples}")
     // Take care of the corner case not handled by samples2LTL
     if positiveSamples.isEmpty && negativeSamples.isEmpty then
       if universal then return Some(G(LTLTrue()))
       else return Some(LTLTrue())
 
     // Map each symbol of alphabet to 1,0,0; 0,1,0; 0,0,1 etc.
-    val symbol2code = mutable.Map[String, String]()
+    val symbol2code = mutable.Map[String, String]()    
     // Backward substitution: x0 -> a, x1 -> b, x2 -> c etc
     val bwdSubst = mutable.Map[String, String]()
     val nAlphabet = alphabet.size
@@ -128,14 +128,16 @@ class SATLearner(name : String, alphabet : Alphabet) extends LTLLearner(name, al
     }
     pw.close()
 
-    val universalStr = if universal then "--universal" else ""
-    val cmd = s"python samples2ltl/samples2LTL.py --sat ${universalStr} --traces ${inputFile.toString}"
+    // val universalStr = if universal then "--universal" else ""
+    // val cmd = s"python samples2ltl/samples2LTL.py --sat ${universalStr} --traces ${inputFile.toString}"
+    val cmd = s"python samples2ltl/samples2LTL.py --sat --traces ${inputFile.toString}"
 
     println(s"${BLUE}${cmd}${RESET}")
     logger.debug(cmd)
 
     val stdout = StringBuilder()
     val stderr = StringBuilder()
+    val beginTime = System.nanoTime()
     val output =
       try{
        cmd !! ProcessLogger(stdout append _, stderr append _)
@@ -144,6 +146,7 @@ class SATLearner(name : String, alphabet : Alphabet) extends LTLLearner(name, al
           logger.error(s"Unexpected return value when executing: ${cmd}")
           throw e
       }
+    statistics.Timers.incrementTimer("samples2LTL", System.nanoTime() - beginTime)
     
     if output.contains("NO SOLUTION") then
       logger.debug(s"Samples2LTL returned NO SOLUTION")
@@ -152,8 +155,7 @@ class SATLearner(name : String, alphabet : Alphabet) extends LTLLearner(name, al
       val output_ = output.replaceAll("true","1").replaceAll("false","0")
       val ltl = LTL.fromString(output_)
       val substLtl = LTL.substitute(ltl, bwdSubst) match {
-        // even with option --universal, samples2LTL simplifies G(true) to true. Add the G back
-        case LTLTrue() if universal => G(LTLTrue()) 
+        case f if universal => G(f) 
         case f => f
       }      
       logger.debug(s"Samples2LTL returned ${substLtl}")
@@ -161,11 +163,11 @@ class SATLearner(name : String, alphabet : Alphabet) extends LTLLearner(name, al
     }
   }
 
-  override def getLTL(universal : Boolean) : Option[LTL] = {
+  override def getLTL() : Option[LTL] = {
     dlts match {
       case Some(dlts) => Some(dlts)
       case None => 
-        dlts = samples2LTL(universal)
+        dlts = samples2LTL()
         dlts
     }
   }
@@ -194,7 +196,7 @@ class LTLGenerator(proofSkeleton : AGProofSkeleton, assumptionGeneratorType : As
   protected var currentAssignment = z3ctx.mkFalse()
 
   protected val learners : Buffer[LTLLearner] = Buffer.tabulate(proofSkeleton.nbProcesses)
-    (i => SATLearner(s"assumption${i}", proofSkeleton.assumptionAlphabet(i)))
+    (i => SATLearner(s"assumption${i}", proofSkeleton.assumptionAlphabet(i), universal = proofSkeleton.isCircular(i)))
 
   /**
     * Reinitialize the solver. Resets the constraints but keeps those coming from incremental traces
@@ -275,9 +277,9 @@ class LTLGenerator(proofSkeleton : AGProofSkeleton, assumptionGeneratorType : As
       }
     }
 
-    println("Generating assignment for following constraints")
-    for ass <- solver.getAssertions() do
-      println(ass)
+    println("Generating assignment")
+    // for ass <- solver.getAssertions() do
+    //   println(ass)
 
     var beginTime = System.nanoTime()
     if(solver.check() == z3.Status.UNSATISFIABLE){
@@ -333,27 +335,71 @@ class LTLGenerator(proofSkeleton : AGProofSkeleton, assumptionGeneratorType : As
     * in order to extract the index k_0.
     * @param lasso counterexample lasso
     * @param query premise query whose failure gave lasso
-    * @param violationIndex
+    * @param violationIndex when the query concerns a circular process, the step where the RHS of the until formula of the premise query holds.
     */
   def refineConstraintsByPremiseQuery(lasso : Lasso, query : PremiseQuery, violationIndex : Int) : Unit = {
     query match {
       case CircularPremiseQuery(_processID, noncircularDeps, circularDeps, instantaneousDeps, mainAssumption, fairness) => 
-        // approximate constraint: if k0>0 then mainAssumption \/ \/_j ~ noncircdep_j \/ \/_j ~ circdep_j \/ \/_j ~ instantdep_j
-        // else mainAssumption
         val constraint =
-          if violationIndex == 0 then varOfIndexedTrace(_processID, lasso)
-          else z3ctx.mkOr(varOfIndexedTrace(_processID, lasso)::proofSkeleton.processDependencies(_processID).toList.map({ i => z3ctx.mkNot(varOfIndexedTrace(i, lasso))}) :_*)
+          // \/_{j in nc-deps} not(rho |= phi_j)
+          // val ncDeps = z3ctx.mkOr(noncircularDeps map { (i,_) => z3ctx.mkNot(getAssumptionAcceptsLassoFormula(i, lasso, violationIndex))} : _* )
+          val ncDeps = z3ctx.mkOr(noncircularDeps map { (i,_) => z3ctx.mkNot(varOfIndexedTrace(i, lasso))} : _* )
+
+          // \/_{j in c-deps} \/_{0<= k <= k0-1} not(rho, k |= phi_j')
+          val cDeps = z3ctx.mkOr(
+              (circularDeps map {(i,_) => 
+                (0 until violationIndex) map {
+                    k => z3ctx.mkNot(varOfIndexedTrace(i, lasso.suffix(k)))
+                }
+              }).flatten
+            : _*)
+
+          // \/_{j in inst-deps} not(rho, k0 |= phi_j')
+          val instDeps = z3ctx.mkOr(instantaneousDeps map { (i,_) => z3ctx.mkNot(varOfIndexedTrace(i, lasso.suffix(violationIndex)))} : _* )
+          // rho, k0 |= phi_i'
+          val main = varOfIndexedTrace(_processID, lasso.suffix(violationIndex))
+          z3ctx.mkOr(ncDeps, cDeps, instDeps, main)
         println(s"refineConstraintByQuery violationIndex=${violationIndex}: ${constraint}")
         solver.add(constraint)
-      case NonCircularPremiseQuery(_processID, noncircularDeps, mainAssumption, fairness) => 
-        // mainAssumption \/ \/_i ~ noncircdep_i
-        val constraint = z3ctx.mkOr(varOfIndexedTrace(_processID, lasso)::proofSkeleton.processDependencies(_processID).toList.map({ i => z3ctx.mkNot(varOfIndexedTrace(i, lasso))}) :_*)
+
+      case NonCircularPremiseQuery(_processID, dependencies, mainAssumption, fairness) => 
+        // mainAssumption 
+        val main = varOfIndexedTrace(_processID, lasso)
+        val deps = proofSkeleton.processDependencies(_processID).map(
+          { i => 
+            if !proofSkeleton.isCircular(i) then 
+              // not(rho |= phi_i)
+              z3ctx.mkNot(varOfIndexedTrace(i, lasso))
+            else {
+              // not( /\_{0<= k <= |rho|} rho,k |= phi_i' ) <=> not( rho |= G(phi_i') )
+              z3ctx.mkNot(z3ctx.mkAnd(
+                (0 until lasso.size) map {
+                    k => varOfIndexedTrace(i, lasso.suffix(k))
+                } : _*
+              ))
+            }
+          }).toList
+        val constraint = z3ctx.mkOr(main, z3ctx.mkOr(deps : _*))
         println(s"refineConstraintByQuery: ${constraint}")
         solver.add(constraint)
     }
   }
   def refineConstraintsByFinal(lasso : Lasso) : Unit = {
-    val constraint = z3ctx.mkOr((0 until nbProcesses).map({ i => z3ctx.mkNot(varOfIndexedTrace(i, lasso))}) :_*)
+    val constraint = z3ctx.mkOr(
+        (0 until nbProcesses).map(
+          { i => 
+            if !proofSkeleton.isCircular(i) then {
+              z3ctx.mkNot(varOfIndexedTrace(i, lasso))
+            } else {
+              // not( /\_{0<= k <= |rho|} rho,k |= phi_i' ) <=> not( rho |= G(phi_i') )
+              z3ctx.mkNot(z3ctx.mkAnd(
+                (0 until lasso.size) map {
+                    k => varOfIndexedTrace(i, lasso.suffix(k))
+                } : _*
+              ))
+            }
+          }) 
+      :_*)
     println(s"refineConstraintByFinal: ${constraint}")
     solver.add(constraint)
   }
@@ -381,7 +427,7 @@ class LTLGenerator(proofSkeleton : AGProofSkeleton, assumptionGeneratorType : As
                 else {
                   learners(i).setPositiveSamples(posSamples(i))
                   learners(i).setNegativeSamples(negSamples(i))
-                  learners(i).getLTL(universal = true) match {
+                  learners(i).getLTL() match {
                     case None => 
                       // There is no LTL formula for separating these samples
                       // Block the current assignment, and try again with another assignment

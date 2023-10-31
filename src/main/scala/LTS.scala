@@ -468,6 +468,24 @@ extension(lasso : Lasso){
     (lasso._1.filter(f), lasso._2.filter(f))
   }
   /**
+    * Suffix obtained from lasso by dropping the prefix of length k
+    *
+    * @param k
+    * @return
+    */
+  def suffix(k : Int) : Lasso = {
+    require(k>=0)
+    val (p,c) = lasso
+    if k <= p.size then {
+      (p.drop(k), c)
+    } else {
+      (List(), c.drop((k - p.size) % c.size))
+    }
+  }
+  def size : Int = {
+    lasso._1.size + lasso._2.size
+  }
+  /**
    * @brief Determine whether given two lassos represent the same omega-word 
    */
   def semanticEquals(lasso2 : Lasso) : Boolean = {

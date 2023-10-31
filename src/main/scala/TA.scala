@@ -150,6 +150,7 @@ class TA (
     * @return None if the formula is satisfied, and a counterexample lasso violating the formula otherwise.
     */
   def checkLTL(ltlFormula: LTL): Option[Lasso] = {
+    println(s"Checking LTL formula ${ltlFormula}")
     val accLabel = "_ltl_accept_"
     val fullAlphabet = this.alphabet | ltlFormula.getAlphabet
     val ta_ltl = TA.fromLTL(ltl.Not(ltlFormula).toString, Some(fullAlphabet), Some(accLabel))

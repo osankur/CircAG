@@ -61,7 +61,7 @@ case class CircularPremiseQuery (
   */
 case class NonCircularPremiseQuery(
   _processID : Int,
-  noncircularDeps : List[(Int, LTL)],
+  dependencies : List[(Int, LTL)],
   mainAssumption : LTL,
   fairness : LTL
 ) extends PremiseQuery(_processID)
@@ -101,20 +101,25 @@ class LTLVerifier(ltsFiles: Array[File], val property: LTL) {
   
   /**
     * Check the inductive premise for process processID:
-    * If processID is circular in the proof skeleton, then we require assumptions(processID)
-    * as well as all dependency formulas to be universal (i.e. G _ ). We check for a counterexample for the premise
+    * - If processID is circular in the proof skeleton, then we require assumptions(processID)
+    * to be universal (i.e. G _ ). This creates a circular premise query
     * according to McMillan's method: 
     *  
-    *  /\\_{d} psi_d /\\ (( /\\_{d} phi_d ) U ( ~phi /\\_{d'} phi_{d'} )) /\\ fairness
+    *   /\\_{d in non-circular-deps} psi_d /\\ (( /\\_{d in circular-deps} phi_d' ) U ( ~phi /\\_{d in inst-deps} phi_{d}' )) /\\ fairness
     * 
-    * where the G(phi_d) are the set of all dependencies of processID, transformed for the asynchronous composition,
-    * and the G(phi_{d'}) are the subset of those dependencies that are instantaneous.
-    * fairness is a formula ensuring that all processes make infinite numbers of steps, namely, 
+    * where non-circular-deps are dependencies which are not circular. circular-deps are dependencies which are circular processes.
+    * In this case, the assumption is phi_d = G(phi_d'). inst-deps are dependencies that are circular and instantaneous.
     * 
-    * fairness = /\\_{i} GF alpha_i
+    * Last, fairness is a formula ensuring that all processes make infinite numbers of steps, namely, 
+    * 
+    *   fairness = /\\_{i} GF alpha_i
     *
     * where alpha_i is the alphabet of assumption i. 
-    * The leftmost formulas psi_d are noncircular dependencies.
+    * 
+    * - If processID is not circular, then this creates a noncircular premise query which encodes the following check:
+    *
+    *   /\\_{d in dependencies} psi_d /\ ~phi /\ fairness
+    * 
     * 
     * @param processID id of the process for which the premise is to be checked
     * @param fairness whether fairness constraint is to be added to the cex check
@@ -215,15 +220,18 @@ class LTLVerifier(ltsFiles: Array[File], val property: LTL) {
   def getPremiseViolationIndex(lasso : Lasso, query : CircularPremiseQuery) : Int = {
     query match {
       case CircularPremiseQuery(_processID, noncircularDeps, circularDeps, instantaneousDeps, mainAssumption, fairness) => 
-        // val lhs = And(circularDeps.map(_._2))
         val processAlphabet = processes(_processID).alphabet 
         val rhs = And(Not(mainAssumption) :: instantaneousDeps.map(_._2))
+        val formulaAlphabet = rhs.getAlphabet
         val (p,c) = lasso
         val pc = p ++ c
         val k0 = boundary:
           for i <- 0 to pc.size do {
             val newp = pc.drop(i)
-            val alpha = newp.toSet ++ c.toSet ++ processAlphabet
+            // We make sure that the lasso and the LTL formula synchronizes every single letter
+            // by setting the alphabet of the lasso to its own letters + processAlphabet + letter appearing in the formula
+            val alpha = newp.toSet ++ c.toSet ++ processAlphabet ++ formulaAlphabet
+            println(s"alphabet for lasso is ${alpha}")
             val dlts = DLTS.fromLasso((newp, c), alphabet = Some(alpha))
             // add symbols of the process being checked in the premise query to the alphabet of the lasso
             val lassoTA = TA.fromLTS(dlts)
@@ -343,10 +351,9 @@ class AutomaticLTLVerifier(_ltsFiles: Array[File], _property: LTL) extends LTLVe
     * 
     * @param proveGlobalProperty whether the given global property is to be checked
     * @param fixedAssumptions list of process ids for which the assumptions are fixed; these will not be learned
-    * @param approximate whether to use approximate constraints for inductive premises
     * @return
     */
-  def learnAssumptions(proveGlobalProperty : Boolean = true, fixedAssumptions : List[Int] = List(), approximate : Boolean = true): LTLAGResult = {
+  def learnAssumptions(proveGlobalProperty : Boolean = true, fixedAssumptions : List[Int] = List()): LTLAGResult = {
     var count = 0
     val fixedAssumptionsMap = HashMap[Int, LTL]()
     fixedAssumptions.foreach(i => 
@@ -354,7 +361,7 @@ class AutomaticLTLVerifier(_ltsFiles: Array[File], _property: LTL) extends LTLVe
     )
     var doneVerification = false
     var currentState = LTLAGResult.Success
-    while (!doneVerification && count < 12) {
+    while (!doneVerification && count < 15) {
       count += 1
       ltlGenerator.generateAssumptions(fixedAssumptionsMap) match {
         case Some(newAss) => this.assumptions = newAss
@@ -362,7 +369,7 @@ class AutomaticLTLVerifier(_ltsFiles: Array[File], _property: LTL) extends LTLVe
           println(s"${RED}Unsat${RESET}")
           throw LTLUnsatisfiableConstraints()
       }
-      println(s"${MAGENTA}Assumptions: ${assumptions}${RESET}")
+      println(s"${MAGENTA}Assumptions at attempt #${count}: ${assumptions}${RESET}")
       currentState = this.applyAG(proveGlobalProperty) 
       currentState match {
         case LTLAGResult.Success => 
