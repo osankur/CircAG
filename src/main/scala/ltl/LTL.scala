@@ -188,8 +188,12 @@ object LTL {
                     (Implies(left, right),tail_)
                 case atomPattern(atom) => 
                     (Atomic(atom), tokens.tail)
+                case "t" => 
+                    (LTLTrue(),tokens.tail)
+                case "f" => 
+                    (LTLFalse(), tokens.tail)
                 case unknownToken => 
-                    throw MalformedLTL(s"Token ${unknownToken} inside ${lbtString}")
+                    throw MalformedLTL(s"Unknown token ``${unknownToken}'' inside following LBT string: ${lbtString}")
             }
         }
         val tokens = lbtString.trim().split("\\s+").map(_.trim)

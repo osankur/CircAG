@@ -148,9 +148,14 @@ class SATLearner(name : String, alphabet : Alphabet) extends LTLLearner(name, al
     if output.contains("NO SOLUTION") then
       logger.debug(s"Samples2LTL returned NO SOLUTION")
       None
-    else {
-      val ltl = LTL.fromString(output)
-      val substLtl = LTL.substitute(ltl, bwdSubst)
+    else {      
+      val output_ = output.replaceAll("true","1").replaceAll("false","0")
+      val ltl = LTL.fromString(output_)
+      val substLtl = LTL.substitute(ltl, bwdSubst) match {
+        // even with option --universal, samples2LTL simplifies G(true) to true. Add the G back
+        case LTLTrue() if universal => G(LTLTrue()) 
+        case f => f
+      }      
       logger.debug(s"Samples2LTL returned ${substLtl}")
       Some(substLtl)
     }
@@ -328,13 +333,17 @@ class LTLGenerator(proofSkeleton : AGProofSkeleton, assumptionGeneratorType : As
     * in order to extract the index k_0.
     * @param lasso counterexample lasso
     * @param query premise query whose failure gave lasso
+    * @param violationIndex
     */
-  def refineConstraintsByPremiseQuery(lasso : Lasso, query : PremiseQuery) : Unit = {
+  def refineConstraintsByPremiseQuery(lasso : Lasso, query : PremiseQuery, violationIndex : Int) : Unit = {
     query match {
       case CircularPremiseQuery(_processID, noncircularDeps, circularDeps, instantaneousDeps, mainAssumption, fairness) => 
-        // approximate constraint: mainAssumption \/ \/_j ~ noncircdep_j \/ \/_j ~ circdep_j \/ \/_j ~ instantdep_j
-        val constraint = z3ctx.mkOr(varOfIndexedTrace(_processID, lasso)::proofSkeleton.processDependencies(_processID).toList.map({ i => z3ctx.mkNot(varOfIndexedTrace(i, lasso))}) :_*)
-        println(s"refineConstraintByQuery: ${constraint}")
+        // approximate constraint: if k0>0 then mainAssumption \/ \/_j ~ noncircdep_j \/ \/_j ~ circdep_j \/ \/_j ~ instantdep_j
+        // else mainAssumption
+        val constraint =
+          if violationIndex == 0 then varOfIndexedTrace(_processID, lasso)
+          else z3ctx.mkOr(varOfIndexedTrace(_processID, lasso)::proofSkeleton.processDependencies(_processID).toList.map({ i => z3ctx.mkNot(varOfIndexedTrace(i, lasso))}) :_*)
+        println(s"refineConstraintByQuery violationIndex=${violationIndex}: ${constraint}")
         solver.add(constraint)
       case NonCircularPremiseQuery(_processID, noncircularDeps, mainAssumption, fairness) => 
         // mainAssumption \/ \/_i ~ noncircdep_i

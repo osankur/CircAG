@@ -141,6 +141,7 @@ class LTLVerifier(ltsFiles: Array[File], val property: LTL) {
           LTL.asynchronousTransform(matrix, proofSkeleton.assumptionAlphabet(processID))
         case _ => throw Exception(s"Guarantee formula for circular process ${processID} must be universal: ${guarantee}")
       }
+      println(s"Checking inductive premise for ${processID}")
       println(s"Guarantee matrix: ${guarantee_matrix}")
       
       // Check for CEX with an LTL formula of the form: /\_i noncircular-assumptions(i) /\ (/\_i circular-assumptions(i) U !guarantee)
@@ -215,13 +216,17 @@ class LTLVerifier(ltsFiles: Array[File], val property: LTL) {
     query match {
       case CircularPremiseQuery(_processID, noncircularDeps, circularDeps, instantaneousDeps, mainAssumption, fairness) => 
         // val lhs = And(circularDeps.map(_._2))
+        val processAlphabet = processes(_processID).alphabet 
         val rhs = And(Not(mainAssumption) :: instantaneousDeps.map(_._2))
         val (p,c) = lasso
         val pc = p ++ c
         val k0 = boundary:
           for i <- 0 to pc.size do {
             val newp = pc.drop(i)
-            val lassoTA = TA.fromLTS(DLTS.fromLasso((newp, c)))            
+            val alpha = newp.toSet ++ c.toSet ++ processAlphabet
+            val dlts = DLTS.fromLasso((newp, c), alphabet = Some(alpha))
+            // add symbols of the process being checked in the premise query to the alphabet of the lasso
+            val lassoTA = TA.fromLTS(dlts)
             if lassoTA.checkLTL(rhs) == None then 
               break(i)
           }
@@ -349,11 +354,13 @@ class AutomaticLTLVerifier(_ltsFiles: Array[File], _property: LTL) extends LTLVe
     )
     var doneVerification = false
     var currentState = LTLAGResult.Success
-    while (!doneVerification && count < 10) {
+    while (!doneVerification && count < 12) {
       count += 1
       ltlGenerator.generateAssumptions(fixedAssumptionsMap) match {
         case Some(newAss) => this.assumptions = newAss
-        case None         => throw LTLUnsatisfiableConstraints()
+        case None         => 
+          println(s"${RED}Unsat${RESET}")
+          throw LTLUnsatisfiableConstraints()
       }
       println(s"${MAGENTA}Assumptions: ${assumptions}${RESET}")
       currentState = this.applyAG(proveGlobalProperty) 
@@ -371,12 +378,12 @@ class AutomaticLTLVerifier(_ltsFiles: Array[File], _property: LTL) extends LTLVe
           println(s"PremiseFail ${processID} ${cex}")
           query match {
             case q : NonCircularPremiseQuery => 
-              ltlGenerator.refineConstraintsByPremiseQuery(cex, q)
+              ltlGenerator.refineConstraintsByPremiseQuery(cex, q, 0)
             case q : CircularPremiseQuery => 
               val k0 = getPremiseViolationIndex(cex, q)
-              ltlGenerator.refineConstraintsByPremiseQuery(cex, q)
+              ltlGenerator.refineConstraintsByPremiseQuery(cex, q, k0)
           }
-          ltlGenerator.refineConstraintsByPremiseQuery(cex, query)
+          // ltlGenerator.refineConstraintsByPremiseQuery(cex, query)
         case LTLAGResult.GlobalPropertyProofFail(cex) => 
           println(s"Global Proof fail ${cex}")
           ltlGenerator.refineConstraintsByFinal(cex)

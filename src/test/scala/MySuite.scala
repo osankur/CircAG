@@ -612,6 +612,16 @@ class LTLAGTests extends munit.FunSuite {
     assert(nlts.dfa.accepts(List("a","a")))
     assert(!nlts.dfa.accepts(List("a","a","b")))
   }
+  test("violation index"){
+    val tas = Array(File("examples/ltl-toy1/a.ta"), File("examples/ltl-toy1/b.ta"))
+    val checker = AutomaticLTLVerifier(tas, G(F(Atomic("a"))))
+    val query = CircularPremiseQuery(1, List(), List((0,(Atomic("b")))), List(), Atomic("d"), LTLTrue())
+    val lasso = (List("a","a","c"), List("c"))
+    assert(checker.getPremiseViolationIndex(lasso, query) == 0)
+
+    val lasso2 = (List("d","d","d"), List("d", "a"))
+    assert(checker.getPremiseViolationIndex(lasso2, query) == 4)
+  }  
 
   test("ltl inductive check: ltl-toy1 a b"){
     // val ass = List("G ((a -> X !a) & !c)", "G F b")
@@ -680,29 +690,6 @@ class LTLAGTests extends munit.FunSuite {
     assert(ta.checkBuchi("4") == None)
   }
 
-  test("ltl inductive check: ltl-toy1 a b - Benjamin"){
-    val tas = Array(File("examples/ltl-toy1/a.ta"), File("examples/ltl-toy1/b.ta"))
-    val checker = LTLVerifier(tas, G(F(Atomic("a"))))
-    checker.setAssumption(0, G(LTLTrue()))
-    checker.setAssumption(1, G(LTLTrue()))
-    checker.proofSkeleton.setProcessInstantaneousDependencies(0, Set(1))
-    // assert(checker.checkFinalPremise() != None)
-
-    val ass0 = "G (( b-> X a) & (c -> !(F b)))"
-    val ass1 = "G (( d-> X b) & F(c | d) & (c -> ! F c))"
-    checker.setAssumption(0, LTL.fromString(ass0))
-    checker.setAssumption(1, LTL.fromString(ass1))
-
-    val ta0 = TA.fromFile(File("examples/ltl-toy1/a.ta"))
-    System.out.println(LTL.fromString(ass0))
-    // The property of ta0 actually holds without any assumption
-    assert(ta0.checkLTL(LTL.fromString(ass0)) == None)
-    // The proof of the inductive premise fails presumably due to asynchronous transformation requiring fairness
-    assert(checker.checkInductivePremise(0, false) != None)
-    // This passes with fairness
-    assert(checker.checkInductivePremise(0, true) == None)
-    assert(checker.checkFinalPremise() == None)
-  }
 
   test("sat-ltl-learner"){
     val learner = ltl.SATLearner("a", Set("a","b","c"))
@@ -728,31 +715,57 @@ class LTLAGTests extends munit.FunSuite {
     assert(checker.checkInductivePremise(0) == None)
     assert(checker.checkFinalPremise() != None)
   } 
+
 }
 
 
 class Single extends munit.FunSuite {
-  test("violation index"){
+
+  test("ltl learn assumptions: ltl-toy1 2 processes"){
     val tas = Array(File("examples/ltl-toy1/a.ta"), File("examples/ltl-toy1/b.ta"))
     val checker = AutomaticLTLVerifier(tas, G(F(Atomic("a"))))
-    val query = CircularPremiseQuery(0, List(), List((1,(Atomic("b")))), List(), Atomic("d"), LTLTrue())
-    val lasso = (List("a","a","c"), List("c"))
-    assert(checker.getPremiseViolationIndex(lasso, query) == 0)
-
-    val lasso2 = (List("d","d","d"), List("d", "a"))
-    assert(checker.getPremiseViolationIndex(lasso2, query) == 4)
+    checker.proofSkeleton.setProcessInstantaneousDependencies(0, Set(1))
+    assert(checker.learnAssumptions(proveGlobalProperty = true) == LTLAGResult.Success)
   }
-
+  test("ltl learn assumptions: ltl-toy1 3 processes"){
+    val tas = Array(File("examples/ltl-toy1/a.ta"), File("examples/ltl-toy1/b.ta"), File("examples/ltl-toy1/c.ta"))
+    val checker = AutomaticLTLVerifier(tas, G(F(Atomic("a"))))
+    checker.proofSkeleton.setProcessInstantaneousDependencies(0, Set(1))
+    // The learned assumptions are: G (b -> (X a))) and (G (c U b)
+    // This corresponds to the only infinite execution in this product: abaac^omega
+    assert(checker.learnAssumptions(proveGlobalProperty = true) == LTLAGResult.Success)
+  }  
   test("ltl inductive check: ltl-toy1 applyAG"){
     val tas = Array(File("examples/ltl-toy1/a.ta"), File("examples/ltl-toy1/b.ta"))
     val checker = LTLVerifier(tas, G(F(Atomic("a"))))
     checker.setAssumption(0, G(LTLTrue()))
     checker.setAssumption(1, G(LTLTrue()))
     checker.proofSkeleton.setProcessInstantaneousDependencies(0, Set(1))
-    val ass0 = "G (( b-> X a) & (c -> !(F b)))"
-    val ass1 = "G (( d-> X b) & F(c | d) & (c -> ! F c))"
-    checker.setAssumption(0, LTL.fromString(ass0))
-    checker.setAssumption(1, LTL.fromString(ass1))
-    // println(checker.applyAG(proveGlobalproperty = false)) // == LTLAGResult.Success
+    val ass0 = LTL.fromString("G (( b-> X a) & (c -> !(F b)))")
+    val ass1 = LTL.fromString("G (( d-> X b) & (c -> !X(F c)))")
+    val ass1_ = LTL.fromString("G (( d-> X b) & F(c | d) & (c -> ! F c))")
+    checker.setAssumption(0, (ass0))
+    checker.setAssumption(1, (ass1))
+    assert(TA.fromFile(tas(0)).checkLTL(ass0) == None)
+    assert(TA.fromFile(tas(1)).checkLTL(ass1) == None)
+    assert(checker.applyAG(proveGlobalproperty = false) == LTLAGResult.Success)
+    assert(checker.applyAG(proveGlobalproperty = true) == LTLAGResult.Success)
+  }  
+}
+
+class A extends munit.FunSuite {
+  test("ltl learn assumptions: ltl-toy1 2 processes"){
+    val tas = Array(File("examples/ltl-toy1/a.ta"), File("examples/ltl-toy1/b.ta"))
+    val checker = AutomaticLTLVerifier(tas, G(F(Atomic("a"))))
+    checker.proofSkeleton.setProcessInstantaneousDependencies(0, Set(1))
+    println(checker.learnAssumptions(proveGlobalProperty = true))
   }
+  // test("ltl learn assumptions: ltl-toy1 3 processes"){
+  //   val tas = Array(File("examples/ltl-toy1/a.ta"), File("examples/ltl-toy1/b.ta"), File("examples/ltl-toy1/c.ta"))
+  //   val checker = AutomaticLTLVerifier(tas, G(F(Atomic("a"))))
+  //   checker.proofSkeleton.setProcessInstantaneousDependencies(0, Set(1))
+  //   // The learned assumptions are: G (b -> (X a))) and (G (c U b)
+  //   // This corresponds to the only infinite execution in this product: abaac^omega
+  //   assert(checker.learnAssumptions(proveGlobalProperty = true) == LTLAGResult.Success)
+  // }  
 }

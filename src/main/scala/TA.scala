@@ -153,9 +153,10 @@ class TA (
     val accLabel = "_ltl_accept_"
     val fullAlphabet = this.alphabet | ltlFormula.getAlphabet
     val ta_ltl = TA.fromLTL(ltl.Not(ltlFormula).toString, Some(fullAlphabet), Some(accLabel))
-    // extend the alphabet of this to fullAlphabet so that the LTL part cannot move alone
-    val ta_ext_alphabet = TA(systemName, fullAlphabet, internalAlphabet, core, eventsOfProcesses, syncs)
-    val productTA = TA.synchronousProduct(List(ta_ext_alphabet, ta_ltl))
+    // extend the alphabet of this to fullAlphabet so that the LTL part cannot move alone outside of the process' alphabet
+    // val ta_ext_alphabet = TA(systemName, fullAlphabet, internalAlphabet, core, eventsOfProcesses, syncs)
+    // val productTA = TA.synchronousProduct(List(ta_ext_alphabet, ta_ltl))
+    val productTA = TA.synchronousProduct(List(this, ta_ltl))
     val r = productTA.checkBuchi(s"${ta_ltl.systemName}${accLabel}")
     // println(r)
     r
@@ -366,7 +367,6 @@ object TA{
     this.fromLTS[FastNFAState](nlts, acceptingLabel)
   }
 
-  
   /**
     * @param ta timed automaton
     * @param dlts list of DLTSs with which sync product is to be computed
@@ -518,11 +518,14 @@ object TA{
       var beginCycle = -1
       indegree.foreachEntry({
         (s,ind) => if ind == 0 then root = s
-        else if ind == 2 then beginCycle =s 
+        else if ind == 2 then beginCycle = s 
         else if ind != 1 then throw Exception("Some node has indegree 3 or more")
       })
-      assert(root >= 0)
-      assert(beginCycle >= 0)
+      // If there is no node with indegree 0, then the lasso is a cycle without a stem
+      if root == -1 then {        
+        root = indegree.keys().nextElement()
+        beginCycle = root
+      }
       var node = root
       var atPrefix = true
       // Iterate forward from root, stop at beginCycle unless this is the first time we are seeing it (atPrefix)
