@@ -343,8 +343,9 @@ class LTLVerifier(ltsFiles: Array[File], val property: LTL) {
 }
 
 
-class AutomaticLTLVerifier(_ltsFiles: Array[File], _property: LTL) extends LTLVerifier(_ltsFiles, _property){
-  private val ltlGenerator = LTLGenerator(proofSkeleton)
+class AutomaticLTLVerifier(_ltsFiles: Array[File], _property: LTL, ltlLearningAlgorithm : LTLLearningAlgorithm = LTLLearningAlgorithm.Samples2LTL)
+  extends LTLVerifier(_ltsFiles, _property){
+  private val ltlGenerator = LTLGenerator(proofSkeleton, ltlLearningAlgorithm)
 
   /**
     * @brief Prove or disprove the fixed assumptions and the global property by learning nonfixed assumptions
@@ -361,7 +362,7 @@ class AutomaticLTLVerifier(_ltsFiles: Array[File], _property: LTL) extends LTLVe
     )
     var doneVerification = false
     var currentState = LTLAGResult.Success
-    while (!doneVerification && count < 15) {
+    while (!doneVerification && count < 20) {
       count += 1
       ltlGenerator.generateAssumptions(fixedAssumptionsMap) match {
         case Some(newAss) => this.assumptions = newAss

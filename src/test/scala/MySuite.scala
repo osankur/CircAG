@@ -692,13 +692,22 @@ class LTLAGTests extends munit.FunSuite {
 
 
   test("sat-ltl-learner"){
-    val learner = ltl.SATLearner("a", Set("a","b","c"), universal= true)
+    val learner = ltl.SATLearner("a", Set("a","b","c"), universal= true, ltl.LTLLearningAlgorithm.Samples2LTL)
     learner.setPositiveSamples(Set((List("a","b"), List("c"))))
     learner.setNegativeSamples(Set((List("b","b"), List("b")), (List("a","a"), List("b","b"))))
-    learner.samples2LTL() match {
+    learner.getLTL() match {
       case None => assert(false)
       case Some(ltl) => assert(ltl.toString == "(G (F c))")
-    }    
+    }
+
+    val learner2 = ltl.SATLearner("a", Set("a","b","c"), universal= true, ltl.LTLLearningAlgorithm.Scarlet)
+    learner2.setPositiveSamples(Set((List("a","b"), List("c"))))
+    learner2.setNegativeSamples(Set((List("b","b"), List("b")), (List("a","a"), List("b","b"))))
+    learner2.getLTL() match {
+      case None => assert(false)
+      case Some(ltl) => assert(ltl.toString == "(G (F c))")
+    }
+
   }
   test("ltl inductive check: ltl-toy1 a b"){
     // val ass = List("G ((a -> X !a) & !c)", "G F b")
@@ -756,7 +765,7 @@ class Single extends munit.FunSuite {
 class A extends munit.FunSuite {
   test("ltl learn assumptions: ltl-toy1 2 processes"){
     val tas = Array(File("examples/ltl-toy1/a.ta"), File("examples/ltl-toy1/b.ta"))
-    val checker = AutomaticLTLVerifier(tas, G(F(Atomic("a"))))
+    val checker = AutomaticLTLVerifier(tas, G(F(Atomic("a"))), LTLLearningAlgorithm.Samples2LTL)
     checker.proofSkeleton.setProcessInstantaneousDependencies(0, Set(1))
     println(checker.learnAssumptions(proveGlobalProperty = true))
   }
@@ -766,6 +775,6 @@ class A extends munit.FunSuite {
     val lasso = (List("b","a", "a", "c"), List("c"))
     val g = LTL.fromString("(((((!(b | c | d)) U b))) & (!((!(a | b | c)) U a)))")
     // println(s"${ta.checkLTL(f)}")
-    println(s"${TA.fromLTS(DLTS.fromLasso(lasso,Some(Set("a","b", "c", "d")))).checkLTL(g)}")
+    // println(s"${TA.fromLTS(DLTS.fromLasso(lasso,Some(Set("a","b", "c", "d")))).checkLTL(g)}")
   }
 }

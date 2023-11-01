@@ -9,6 +9,9 @@ import collection.JavaConverters._
 import collection.convert.ImplicitConversions._
 import scala.sys.process._
 import scala.io
+import java.nio.file.StandardCopyOption.REPLACE_EXISTING
+import java.nio.file.Files.copy
+import java.nio.file.Paths.get
 import java.io.File
 import java.io.InputStream
 import java.nio.file._
@@ -48,8 +51,8 @@ import fr.irisa.circag.configuration
 import fr.irisa.circag.{Trace, Lasso, DLTS, Alphabet}
 import fr.irisa.circag.{pruned, filter, suffix, semanticEquals, size}
 
-enum AssumptionGeneratorType:
-  case SAT
+enum LTLLearningAlgorithm:
+  case Samples2LTL, Scarlet
 
   /**
   * Passive learning of LTL formulas. If learning universal formulas of the form G(phi),
@@ -79,21 +82,26 @@ trait LTLLearner(name : String, alphabet : Alphabet, universal : Boolean) {
 }
 
 /**
-* Interface to Iran Gavran's samples2LTL tool.
+* Interface to Iran Gavran's samples2LTL, and Ritam et al. Scarlet tools.
 *
 * @param name name of the DLTS to be learned
 * @param alphabet alphabet of the DLTS
 */
-class SATLearner(name : String, alphabet : Alphabet, universal : Boolean) extends LTLLearner(name, alphabet, universal) {
+class SATLearner(name : String, alphabet : Alphabet, universal : Boolean, solver : LTLLearningAlgorithm) 
+  extends LTLLearner(name, alphabet, universal) {
 
   protected val logger = LoggerFactory.getLogger("CircAG")
 
-  def samples2LTL() : Option[LTL] = {
-    println(s"Entering samples2LTL (universal=${universal}) samples ${positiveSamples} and ${negativeSamples}")
+  def learn() : Option[LTL] = {
+    println(s"Entering learn(${solver}) (universal=${universal}) samples ${positiveSamples} and ${negativeSamples}")
     // Take care of the corner case not handled by samples2LTL
-    if positiveSamples.isEmpty && negativeSamples.isEmpty then
+    if negativeSamples.isEmpty then
       if universal then return Some(G(LTLTrue()))
       else return Some(LTLTrue())
+    else if positiveSamples.isEmpty then {
+      if universal then return Some(G(LTLFalse()))
+      else return Some(LTLFalse())
+    }
 
     // Map each symbol of alphabet to 1,0,0; 0,1,0; 0,0,1 etc.
     val symbol2code = mutable.Map[String, String]()    
@@ -126,40 +134,103 @@ class SATLearner(name : String, alphabet : Alphabet, universal : Boolean) extend
       pw.write(samples)  
       pw.write("\n")
     }
+    // pw.write("---\n")
+    // pw.write("G,F,!,|,&\n")
     pw.close()
 
-    // val universalStr = if universal then "--universal" else ""
-    // val cmd = s"python samples2ltl/samples2LTL.py --sat ${universalStr} --traces ${inputFile.toString}"
-    val cmd = s"python samples2ltl/samples2LTL.py --sat --traces ${inputFile.toString}"
+    solver match {
+      case LTLLearningAlgorithm.Samples2LTL => 
+        val cmd = s"python samples2ltl/samples2LTL.py --sat --traces ${inputFile.toString}"
 
-    println(s"${BLUE}${cmd}${RESET}")
-    logger.debug(cmd)
+        println(s"${BLUE}${cmd}${RESET}")
+        logger.debug(cmd)
 
-    val stdout = StringBuilder()
-    val stderr = StringBuilder()
-    val beginTime = System.nanoTime()
-    val output =
-      try{
-       cmd !! ProcessLogger(stdout append _, stderr append _)
-      } catch {        
-        case e => 
-          logger.error(s"Unexpected return value when executing: ${cmd}")
-          throw e
-      }
-    statistics.Timers.incrementTimer("samples2LTL", System.nanoTime() - beginTime)
-    
-    if output.contains("NO SOLUTION") then
-      logger.debug(s"Samples2LTL returned NO SOLUTION")
-      None
-    else {      
-      val output_ = output.replaceAll("true","1").replaceAll("false","0")
-      val ltl = LTL.fromString(output_)
-      val substLtl = LTL.substitute(ltl, bwdSubst) match {
-        case f if universal => G(f) 
-        case f => f
-      }      
-      logger.debug(s"Samples2LTL returned ${substLtl}")
-      Some(substLtl)
+        val stdout = StringBuilder()
+        val stderr = StringBuilder()
+        val beginTime = System.nanoTime()
+        val output =
+          try{
+          cmd !! ProcessLogger(stdout append _, stderr append _)
+          } catch {        
+            case e => 
+              logger.error(s"Unexpected return value when executing: ${cmd}")
+              throw e
+          }
+        statistics.Timers.incrementTimer("ltl-learner", System.nanoTime() - beginTime)
+        
+        if output.contains("NO SOLUTION") then
+          logger.debug(s"Samples2LTL returned NO SOLUTION")
+          None
+        else {      
+          val output_ = output.replaceAll("true","1").replaceAll("false","0")
+          val ltl = LTL.fromString(output_)
+          val substLtl = LTL.substitute(ltl, bwdSubst) match {
+            case f if universal => G(f) 
+            case f => f
+          }      
+          logger.debug(s"Samples2LTL returned ${substLtl}")
+          Some(substLtl)
+        }
+      case LTLLearningAlgorithm.Scarlet =>        
+        Files.copy(inputFile.toPath(), Paths.get("Scarlet/_input_.trace"), REPLACE_EXISTING)
+        val cmd = s"python -m Scarlet.ltllearner --i _input_.trace --timeout 120 --verbose --outputcsv _output_.csv"
+        val stdout = StringBuilder()
+        val stderr = StringBuilder()
+        val beginTime = System.nanoTime()
+        val output =
+          try{
+          cmd !! ProcessLogger(stdout append _, stderr append _)
+          } catch {        
+            case e => 
+              logger.error(s"Unexpected return value when executing: ${cmd}")
+              throw e
+          }
+        statistics.Timers.incrementTimer("ltl-learner", System.nanoTime() - beginTime)
+        
+        val solutions = io.Source.fromFile("Scarlet/_output_.csv").getLines().toSeq.tail
+        if solutions.isEmpty then {
+          None
+        } else {
+          // Parse alphabet
+          val alphabetString = 
+            val l = stderr.toString().split("\n").filter(_.contains("Alphabet: "))
+            if (l.size != 1) then throw Exception(s"Cannot parse alphabet from the following output of Scarlet:\n${stderr}")
+            l.head
+          val rAlphabet = ".*\\[(.*)\\].*".r
+          val rLetter1 = "'(.*)'".r
+          val rLetter2 = "\"(.*)\"".r
+          val letters = 
+            alphabetString match {
+              case rAlphabet(letters) => 
+                letters.split(",").map({
+                    sigma =>  sigma.strip() match {
+                      case rLetter1(a) => a
+                      case rLetter2(a) => a
+                      case _ => throw Exception(s"Cannot parse letter ${sigma} in the alphabet description ${alphabetString} of Scarlet")
+                    }
+                  })
+              case _ => throw Exception(s"Could not parse alphabet from the following line: ${alphabetString}")
+            }
+          // println(s"Parsed alphabet: ${letters.toList}")
+          // Parse solution
+          val lastSolution = solutions.last
+          // println(s"Last solution is: ${lastSolution}")
+          val csvTerms = lastSolution.split(",")
+          if (csvTerms.size < 3) then throw Exception(s"Output file Scarlet/_output_.csv does not contain a solution")
+          val ltlFormula = LTL.fromString(csvTerms(2)) match {
+            case f if universal => G(f)
+            case f => f
+          }
+          // Double substitute p -> x0 -> bwdSubst(x0)
+          val subst = HashMap[String,String]()
+          letters
+          .zipWithIndex
+          .foreach({
+            (p, i) => subst.put(p, bwdSubst(s"x${i}"))
+          })
+          // println(s"Substitution is ${subst}")
+          Some(LTL.substitute(ltlFormula, subst))
+        }
     }
   }
 
@@ -167,13 +238,14 @@ class SATLearner(name : String, alphabet : Alphabet, universal : Boolean) extend
     dlts match {
       case Some(dlts) => Some(dlts)
       case None => 
-        dlts = samples2LTL()
+        dlts = learn()
         dlts
     }
   }
 }
 
-class LTLGenerator(proofSkeleton : AGProofSkeleton, assumptionGeneratorType : AssumptionGeneratorType = AssumptionGeneratorType.SAT) {
+
+class LTLGenerator(proofSkeleton : AGProofSkeleton, ltlLearningAlgorithm : LTLLearningAlgorithm) {
   protected val z3ctx = {
     val cfg = HashMap[String, String]()
     cfg.put("model", "true")
@@ -196,7 +268,7 @@ class LTLGenerator(proofSkeleton : AGProofSkeleton, assumptionGeneratorType : As
   protected var currentAssignment = z3ctx.mkFalse()
 
   protected val learners : Buffer[LTLLearner] = Buffer.tabulate(proofSkeleton.nbProcesses)
-    (i => SATLearner(s"assumption${i}", proofSkeleton.assumptionAlphabet(i), universal = proofSkeleton.isCircular(i)))
+    (i => SATLearner(s"assumption${i}", proofSkeleton.assumptionAlphabet(i), universal = proofSkeleton.isCircular(i), ltlLearningAlgorithm))
 
   /**
     * Reinitialize the solver. Resets the constraints but keeps those coming from incremental traces

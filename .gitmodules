@@ -1,3 +1,6 @@
 [submodule "samples2ltl"]
 	path = samples2ltl
 	url = https://gitlab.inria.fr/osankur/samples2ltl
+[submodule "Scarlet"]
+	path = Scarlet
+	url = https://github.com/rajarshi008/Scarlet.git
