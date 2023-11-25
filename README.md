@@ -26,14 +26,18 @@ Then run the following in the main directory
 
 This will create a fat executable jar target/scala-3*/CircAG.jar.
 
-### Samples2LTL
-To check out the samples2LTL submodule, and test it, run:
+### Submodules: Samples2LTL and Scarlet
+To check out and test the samples2LTL and Scarlet submodules, run:
 
     git submodule init
     git submodule update
     cd samples2ltl
     pip3 install -r requirements.txt
     python3 samples2LTL.py --sat --traces traces/alt.trace
+    cd ../Scarlet
+    pip3 install -r requirements.txt
+    cd ..
+    python3 -m Scarlet.ltllearner
 
 ## DFA-based N-way Assume-Guarantee Reasoning with Learning
 The algorithm of the CAV16 paper is currently implemented with and without alphabet refinement. This can be tried as follows.

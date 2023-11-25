@@ -191,7 +191,8 @@ class TA (
           ".cert"
         )
         .toFile()
-    val cmd = "tck-liveness -a ndfs %s -C symbolic -l %s -o %s"
+    // val cmd = "tck-liveness -a ndfs %s -C symbolic -l %s -o %s"
+    val cmd = "tck-liveness -a couvscc %s -C symbolic -l %s -o %s"
       .format(modelFile.toString, label, certFile.toString)
     System.out.println(s"${BLUE}${cmd}${RESET}")
     TA.logger.debug(cmd)

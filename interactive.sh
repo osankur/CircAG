@@ -1,1 +1,1 @@
-scala3 -cp target/scala-3.1.2/CircAG.jar -Dfile.encoding=UTF-8
+scala -cp target/scala-3.3.1/CircAG.jar -Dfile.encoding=UTF-8

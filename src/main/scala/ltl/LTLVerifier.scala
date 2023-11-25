@@ -72,7 +72,7 @@ enum LTLAGResult extends Exception:
   case GlobalPropertyProofFail(cex : Lasso) // Global property proof fails, but lasso not realizable
   case GlobalPropertyViolation(cex : Lasso) // Global property proof fails, and lasso realizable
   case PremiseFail(processID : Int, cex : Lasso, query : PremiseQuery) // Premise proof fails, but lasso not realizable
-  case AssumptionViolation(processID : Int, cex : Lasso) // Premise proof fails, and lasso realizable
+  case AssumptionViolation(processID : Int, cex : Lasso, query : PremiseQuery) // Premise proof fails, and lasso realizable
 
 class LTLUnsatisfiableConstraints extends Exception
 
@@ -315,7 +315,7 @@ class LTLVerifier(ltsFiles: Array[File], val property: LTL) {
           case Some(lasso) => 
             println(s"${RED}Check fails with lasso: ${lasso}${RESET}")
             if checkCounterExample(lasso) then {
-              throw LTLAGResult.AssumptionViolation(i, lasso)
+              throw LTLAGResult.AssumptionViolation(i, lasso, query)
             } else 
               throw LTLAGResult.PremiseFail(i, lasso, query)
         }
@@ -376,8 +376,15 @@ class AutomaticLTLVerifier(_ltsFiles: Array[File], _property: LTL, ltlLearningAl
         case LTLAGResult.Success => 
           println("Success")
           doneVerification = true
-        case LTLAGResult.AssumptionViolation(processID, cex) => 
+        case LTLAGResult.AssumptionViolation(processID, cex, query) => 
           println(s"AssumptionViolation ${processID} ${cex}")
+          query match {
+            case q : NonCircularPremiseQuery => 
+              ltlGenerator.refineConstraintsByPremiseQuery(cex, q, 0)
+            case q : CircularPremiseQuery => 
+              val k0 = getPremiseViolationIndex(cex, q)
+              ltlGenerator.refineConstraintsByPremiseQuery(cex, q, k0)
+          }
           doneVerification = fixedAssumptions.contains(processID)
         case LTLAGResult.GlobalPropertyViolation(cex) => 
           println(s"Gobalproperty violation ${cex}")
