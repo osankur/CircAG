@@ -5,7 +5,8 @@ import java.io.File
 import java.nio.file._
 import collection.mutable.Buffer
 import fr.irisa.circag.Trace
-import fr.irisa.circag.dfa.DFALearnerAlgorithm
+import fr.irisa.circag.dfa.DFALearningAlgorithm
+import fr.irisa.circag.dfa.ConstraintStrategy
 case class ParseError(msg: String) extends Exception(msg)
 
 object FSM {
@@ -29,7 +30,8 @@ case class Configuration(
     tmpDirName: String = "/tmp/circag",
     visualizeDFA : Boolean = false,
     alphabetRefinement : Boolean = false,
-    learnerType : DFALearnerAlgorithm = DFALearnerAlgorithm.RPNI,
+    dfaLearningAlgorithm : DFALearningAlgorithm = DFALearningAlgorithm.RPNI,
+    constraintStrategy : ConstraintStrategy = ConstraintStrategy.Eager,
     randomSeed : Int = 0
 ) {
   private var tmpDirPath: Option[Path] = None

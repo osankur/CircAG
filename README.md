@@ -50,7 +50,7 @@ The --err option is used to pass the label that defines the safety property: AG!
 
 The difference with CAV16 is that a SAT solver is used to compute a satisfying valuation to the constraints but then a separate passive learning algorithm (RPNI) is used to learn each assumption DFA separately.
 
-You can specify the passive DFA learning algorithm using the option `--learnerType RPNI` or `--learnerType SAT`.
+You can specify the passive DFA learning algorithm using the option `--dfaLearningAlgorithm RPNI` or `--dfaLearningAlgorithm SAT`.
 
 You can add the option `--visualizeDFA true` to see the assumption DFAs that were learned.
 

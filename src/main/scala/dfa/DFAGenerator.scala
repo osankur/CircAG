@@ -16,7 +16,6 @@ import fr.irisa.circag.statistics
 import fr.irisa.circag.configuration
 import fr.irisa.circag.{Trace, DLTS, Alphabet}
 
-
 /** Strategy to add constraints on assumptions.
   *
   *   - Disjunctive follows the CAV16 paper; it often adds a disjunctive formula. *
@@ -40,8 +39,8 @@ enum ConstraintStrategy:
 class DFAGenerator(
     system : SystemSpec,
     proofSkeleton: DFAProofSkeleton,
-    dfaLearnerAlgorithm: DFALearnerAlgorithm =
-      DFALearnerAlgorithm.RPNI,
+    dfaLearnerAlgorithm: DFALearningAlgorithm =
+      DFALearningAlgorithm.RPNI,
     constraintStrategy: ConstraintStrategy = 
       ConstraintStrategy.Disjunctive
 ) {
@@ -78,14 +77,14 @@ class DFAGenerator(
     proofSkeleton.nbProcesses
   )(i =>
     dfaLearnerAlgorithm match {
-      case DFALearnerAlgorithm.RPNI =>
+      case DFALearningAlgorithm.RPNI =>
         new RPNILearner(
           s"assumption_${i}",
           proofSkeleton.assumptionAlphabets(i)
         )
-      case DFALearnerAlgorithm.SAT =>
+      case DFALearningAlgorithm.SAT =>
         new SATLearner(s"assumption_${i}", proofSkeleton.assumptionAlphabets(i))
-      case DFALearnerAlgorithm.UFSAT =>
+      case DFALearningAlgorithm.UFSAT =>
         new UFSATLearner(
           s"assumption_${i}",
           proofSkeleton.assumptionAlphabets(i)
@@ -275,14 +274,14 @@ class DFAGenerator(
           proofSkeleton.processDependencies(processID).foreach {
             j => 
               val prefixCexTrace = cexTrace.dropRight(1)
-              println(s"Checking if proj of ${prefixCexTrace} to j-th ass alphabet is accepted by process ${j}")
+              logger.debug(s"Checking if proj of ${prefixCexTrace} to j-th ass alphabet is accepted by process ${j}")
               if system.processes(j).checkTraceMembership(prefixCexTrace, Some(proofSkeleton.assumptionAlphabets(j))) == None then {
-                println(s"Process ${j} rejects ${prefixCexTrace}: adding negative constraint for its assumption")
+                logger.debug(s"Process ${j} rejects ${prefixCexTrace}: adding negative constraint for its assumption")
                 solver.add(z3ctx.mkNot(varOfIndexedTrace(j, prefixCexTrace)))
                 break
               }
           }
-          println(s"None of the processes have rejected prefix of ${cexTrace}. Adding positive constraint for assumption ${processID}")
+          logger.debug(s"None of the processes have rejected prefix of ${cexTrace}. Adding positive constraint for assumption ${processID}")
           solver.add(varOfIndexedTrace(processID, cexTrace))
         }
     }
@@ -372,9 +371,7 @@ class DFAGenerator(
           .toSeq: _*
       )
     )
-    if configuration.get().verbose then {
-      System.out.println(s"Adding constraint ${newConstraint}")
-    }
+    logger.debug(s"Adding constraint ${newConstraint}")
     solver.add(newConstraint)
   }
 

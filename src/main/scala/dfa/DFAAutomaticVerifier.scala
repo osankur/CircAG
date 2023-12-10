@@ -34,7 +34,7 @@ import fr.irisa.circag.statistics
   */
 class DFAAutomaticVerifier(
     _system: SystemSpec,
-    dfaLearnerAlgorithm: DFALearnerAlgorithm,
+    dfaLearnerAlgorithm: DFALearningAlgorithm,
     constraintStrategy : ConstraintStrategy
 ) extends DFAVerifier(_system) {
 
@@ -49,7 +49,7 @@ class DFAAutomaticVerifier(
   def this(
       ltsFiles: Array[File],
       property: Option[DLTS],
-      dfaLearnerAlgorithm: DFALearnerAlgorithm = DFALearnerAlgorithm.RPNI,
+      dfaLearnerAlgorithm: DFALearningAlgorithm = DFALearningAlgorithm.RPNI,
       constraintStrategy : ConstraintStrategy = ConstraintStrategy.Eager
   ) = {
     this(SystemSpec(ltsFiles, property), dfaLearnerAlgorithm, constraintStrategy)

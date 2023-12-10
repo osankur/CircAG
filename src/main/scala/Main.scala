@@ -17,7 +17,7 @@ import net.automatalib.util.automata.builders.AutomatonBuilders;
 import fr.irisa.circag.configuration.Configuration
 import fr.irisa.circag.configuration.FSM
 import fr.irisa.circag.TA
-import fr.irisa.circag.dfa.DFALearnerAlgorithm
+import fr.irisa.circag.dfa.DFALearningAlgorithm
 import scala.collection.mutable
 import scala.collection.immutable
 import collection.JavaConverters._
@@ -68,13 +68,19 @@ object Main {
           .action((x, c) => c.copy(visualizeDFA = x))
           .valueName("(true|false)")
           .text("Visualize the DFAs that were learned"),
-        opt[String]("learnerType")
+        opt[String]("dfaLearningAlgorithm")
           .action({(x, c) => x match {
-            case "SAT" => c.copy(learnerType = DFALearnerAlgorithm.SAT)
-            case "UFSAT" => c.copy(learnerType = DFALearnerAlgorithm.UFSAT)
-            case _ => c.copy(learnerType = DFALearnerAlgorithm.RPNI)
+            case "SAT" => c.copy(dfaLearningAlgorithm = DFALearningAlgorithm.SAT)
+            case "UFSAT" => c.copy(dfaLearningAlgorithm = DFALearningAlgorithm.UFSAT)
+            case _ => c.copy(dfaLearningAlgorithm = DFALearningAlgorithm.RPNI)
           }})
-          .text("Learner algorithm (RPNI|SAT)"),
+          .text("DFA Learning algorithm (RPNI|SAT|UFSAT)"),
+        opt[String]("constraintStrategy")
+          .action({(x, c) => x match {
+            case "Disjunctive" => c.copy(constraintStrategy = dfa.ConstraintStrategy.Disjunctive)
+            case _ => c.copy(constraintStrategy = dfa.ConstraintStrategy.Eager)
+          }})
+          .text("DFA Learning algorithm (RPNI|SAT|UFSAT)"),
         cmd("product")
           .action((_, c) => c.copy(cmd = "product")),
         cmd("dfa-aag")
@@ -105,8 +111,8 @@ object Main {
             case "dfa-aag" =>
                 dfa.DFAAutomaticVerifier(configuration.get().ltsFiles, 
                     Some(DLTS.fromErrorSymbol(configuration.get().err)), 
-                    configuration.get().learnerType,
-                    dfa.ConstraintStrategy.Eager
+                    configuration.get().dfaLearningAlgorithm,
+                    configuration.get().constraintStrategy
                   ).learnAssumptions()
             case _ => 
               logger.error("Unknown command")

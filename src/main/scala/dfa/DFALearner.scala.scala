@@ -35,7 +35,7 @@ import fr.irisa.circag.statistics
 
 /** Algorithm to be used to learn DFA.
   */
-enum DFALearnerAlgorithm:
+enum DFALearningAlgorithm:
   case RPNI
   case SAT
   case UFSAT
