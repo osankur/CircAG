@@ -17,7 +17,7 @@ import net.automatalib.util.automata.builders.AutomatonBuilders;
 import fr.irisa.circag.configuration.Configuration
 import fr.irisa.circag.configuration.FSM
 import fr.irisa.circag.TA
-import fr.irisa.circag.dfa.AssumptionGeneratorType
+import fr.irisa.circag.dfa.DFALearnerAlgorithm
 import scala.collection.mutable
 import scala.collection.immutable
 import collection.JavaConverters._
@@ -56,13 +56,6 @@ object Main {
               c.copy(err = x)
             )
           .text("err is the label indicating an error; so that the property to be checked is 'G not err'."),
-        // opt[Boolean]("ar")
-        //   .valueName("<ar>")
-        //   .optional()
-        //   .action((x, c) => 
-        //       c.copy(alphabetRefinement = x)
-        //     )
-        //   .text("Use automatic alphabet refinement."),
         opt[Boolean]("verbose")
           .action((x, c) => c.copy(verbose = x))
           .valueName("(true|false)"),
@@ -77,8 +70,9 @@ object Main {
           .text("Visualize the DFAs that were learned"),
         opt[String]("learnerType")
           .action({(x, c) => x match {
-            case "SAT" => c.copy(learnerType = AssumptionGeneratorType.SAT)
-            case _ => c.copy(learnerType = AssumptionGeneratorType.RPNI)
+            case "SAT" => c.copy(learnerType = DFALearnerAlgorithm.SAT)
+            case "UFSAT" => c.copy(learnerType = DFALearnerAlgorithm.UFSAT)
+            case _ => c.copy(learnerType = DFALearnerAlgorithm.RPNI)
           }})
           .text("Learner algorithm (RPNI|SAT)"),
         cmd("product")
@@ -112,7 +106,8 @@ object Main {
               System.out.println(
                 dfa.DFAAutomaticVerifier(configuration.get().ltsFiles, 
                     Some(DLTS.fromErrorSymbol(configuration.get().err)), 
-                    configuration.get().learnerType
+                    configuration.get().learnerType,
+                    dfa.ConstraintStrategy.Disjunctive
                   ).learnAssumptions())
             case _ => 
               logger.error("Unknown command")

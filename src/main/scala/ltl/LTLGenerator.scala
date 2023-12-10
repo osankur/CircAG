@@ -247,12 +247,12 @@ class SATLearner(name : String, alphabet : Alphabet, universal : Boolean, solver
 
 class LTLGenerator(proofSkeleton : AGProofSkeleton, ltlLearningAlgorithm : LTLLearningAlgorithm) {
   protected val z3ctx = {
-    val cfg = HashMap[String, String]()
+    val cfg = mutable.HashMap[String, String]()
     cfg.put("model", "true")
     z3.Context(cfg);
   }
 
-  protected val nbProcesses = proofSkeleton.nbProcesses
+  protected val nbProcesses: Int = proofSkeleton.nbProcesses
   // Set of all samples added so far for each process
   protected val samples = Buffer.tabulate(nbProcesses)({_ => Buffer[(Lasso,z3.BoolExpr)]()})
   // Boolean variable corresponding to each pair (process,trace)

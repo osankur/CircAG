@@ -34,6 +34,8 @@ lazy val root = project
   	)
 cancelable in Global := true
 
+
+envVars += ("org.slf4j.simpleLogger.defaultLogLevel" -> "debug")
 ThisBuild / assemblyMergeStrategy := {
   case PathList("META-INF", x, xs @ _*) if x.toLowerCase == "services" => MergeStrategy.filterDistinctLines
   case PathList("META-INF", xs @ _*) => MergeStrategy.discard

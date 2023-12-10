@@ -238,15 +238,12 @@ class DFAAAG extends munit.FunSuite {
 
     val dltss = List(DLTS("ass1p", dfa1, dfa1.getInputAlphabet().toSet), DLTS("ass2", dfa2, dfa2.getInputAlphabet().toSet))
     val dltsssB = dltss.toBuffer
-    val agv = dfa.DFAAutomaticVerifier(Array(File("examples/lts1.ta"), File("examples/lts1.ta")), Some(DLTS.fromErrorSymbol(err)))
+    val agv = dfa.DFAAutomaticVerifier(Array(File("examples/lts1.ta"), File("examples/lts1.ta")), Some(DLTS.fromErrorSymbol(err)), dfa.DFALearnerAlgorithm.RPNI)
     agv.setAssumption(0, dltsssB(0))
 
-    assert(None == agv.processes(0).checkTraceMembership(List[String]("c", "c", "err", "err"), Some(Set[String]("c", "err"))))
-    assert(None != agv.processes(0).checkTraceMembership(List[String]("c", "c", "err"), Some(Set[String]("c", "err"))))
-    assert(None != agv.processes(0).checkTraceMembership(List[String]("c", "b", "err"), Some(Set[String]("c", "err"))))
-    val cex4 = DFAAutomaticVerifierAlphabetRefinement.extendTrace(agv.processes(0), List[String]("c", "c", "err"), None)
-    assert(cex4
-      == Some(List("c","a","c", "err")))
+    assert(None == agv.system.processes(0).checkTraceMembership(List[String]("c", "c", "err", "err"), Some(Set[String]("c", "err"))))
+    assert(None != agv.system.processes(0).checkTraceMembership(List[String]("c", "c", "err"), Some(Set[String]("c", "err"))))
+    assert(None != agv.system.processes(0).checkTraceMembership(List[String]("c", "b", "err"), Some(Set[String]("c", "err"))))
   }
   test("mus-inline"){
     val inputs1: Alphabet[String] = Alphabets.fromList(List("req1","req2", "rel1", "rel2"))
@@ -312,7 +309,7 @@ class DFAAAG extends munit.FunSuite {
         .withAccepting("q0")
         .create();
 
-    val ver = dfa.DFAAutomaticVerifier(Array(File("examples/ums/user.ta"), File("examples/ums/scheduler.ta"), File("examples/ums/machine.ta")), Some(DLTS.fromErrorSymbol("err")))
+    val ver = dfa.DFAAutomaticVerifier(Array(File("examples/ums/user.ta"), File("examples/ums/scheduler.ta"), File("examples/ums/machine.ta")), Some(DLTS.fromErrorSymbol("err")),dfa.DFALearnerAlgorithm.RPNI)
     ver.setAssumption(0, DLTS("user", gUser, gUser.getInputAlphabet().toSet))
     ver.setAssumption(1, DLTS("sched", gSched, gSched.getInputAlphabet().toSet))
     ver.setAssumption(2, DLTS("machine", gMachine, gMachine.getInputAlphabet().toSet))
@@ -448,7 +445,7 @@ class DFAAAG extends munit.FunSuite {
     assert(errDFA.pruned.isPrunedSafety)
     assert(gUser.isPrunedSafety)
     assert(gUser.isSafety)
-    val ver = dfa.DFAAutomaticVerifier(Array(File("examples/ums/user.ta"), File("examples/ums/scheduler.ta"), File("examples/ums/machine.ta")), Some(DLTS.fromErrorSymbol("err")))
+    val ver = dfa.DFAAutomaticVerifier(Array(File("examples/ums/user.ta"), File("examples/ums/scheduler.ta"), File("examples/ums/machine.ta")), Some(DLTS.fromErrorSymbol("err")), dfa.DFALearnerAlgorithm.RPNI)
     ver.setAssumption(0, DLTS("user", gUser, gUser.getInputAlphabet().toSet))
     ver.setAssumption(1, DLTS("sched", gSched, gSched.getInputAlphabet().toSet))
     ver.setAssumption(2, DLTS("machine", gMachine, gMachine.getInputAlphabet().toSet))
@@ -462,9 +459,9 @@ class DFAAAG extends munit.FunSuite {
 
   test("toy: with SAT, UFSAT, RPNI"){
     val files = Array(File("examples/toy/lts1.ta"),File("examples/toy/lts2.ta"),File("examples/toy/lts3.ta"))
-    val verSAT = dfa.DFAAutomaticVerifier(files, Some(DLTS.fromErrorSymbol("err")), dfa.AssumptionGeneratorType.SAT)
-    val verUFSAT = dfa.DFAAutomaticVerifier(files, Some(DLTS.fromErrorSymbol("err")), dfa.AssumptionGeneratorType.UFSAT)
-    val verRPNI = dfa.DFAAutomaticVerifier(files, Some(DLTS.fromErrorSymbol("err")), dfa.AssumptionGeneratorType.RPNI)
+    val verSAT = dfa.DFAAutomaticVerifier(files, Some(DLTS.fromErrorSymbol("err")), dfa.DFALearnerAlgorithm.SAT)
+    val verUFSAT = dfa.DFAAutomaticVerifier(files, Some(DLTS.fromErrorSymbol("err")), dfa.DFALearnerAlgorithm.UFSAT)
+    val verRPNI = dfa.DFAAutomaticVerifier(files, Some(DLTS.fromErrorSymbol("err")), dfa.DFALearnerAlgorithm.RPNI)
     assert(verUFSAT.learnAssumptions() == AGResult.Success)
     assert(verSAT.learnAssumptions() == AGResult.Success)
     assert(verRPNI.learnAssumptions() == AGResult.Success)
@@ -472,19 +469,19 @@ class DFAAAG extends munit.FunSuite {
 
   test("seq-toy"){
     val files = Array(File("examples/seq-toy/lts0.ta"),File("examples/seq-toy/lts1.ta"),File("examples/seq-toy/lts2.ta"))
-    val verUFSAT =  dfa.DFAAutomaticVerifier(files, Some(DLTS.fromErrorSymbol("err")), dfa.AssumptionGeneratorType.SAT)
-    val verSAT =  dfa.DFAAutomaticVerifier(files, Some(DLTS.fromErrorSymbol("err")), dfa.AssumptionGeneratorType.SAT)
-    val verRPNI = dfa.DFAAutomaticVerifier(files, Some(DLTS.fromErrorSymbol("err")), dfa.AssumptionGeneratorType.RPNI)
+    val verUFSAT =  dfa.DFAAutomaticVerifier(files, Some(DLTS.fromErrorSymbol("err")), dfa.DFALearnerAlgorithm.SAT)
+    val verSAT =  dfa.DFAAutomaticVerifier(files, Some(DLTS.fromErrorSymbol("err")), dfa.DFALearnerAlgorithm.SAT)
+    val verRPNI = dfa.DFAAutomaticVerifier(files, Some(DLTS.fromErrorSymbol("err")), dfa.DFALearnerAlgorithm.RPNI)
     assert(verRPNI.learnAssumptions() != AGResult.Success)
     assert(verSAT.learnAssumptions() != AGResult.Success)
     assert(verUFSAT.learnAssumptions() != AGResult.Success)
 
     val files2 = Array(File("examples/seq-toy/lts0.ta"),File("examples/seq-toy/lts1.ta"),File("examples/seq-toy/lts2.ta"),File("examples/seq-toy/lts3.ta"))
-    val ver2SAT = dfa.DFAAutomaticVerifier(files2, Some(DLTS.fromErrorSymbol("err")), dfa.AssumptionGeneratorType.SAT)
+    val ver2SAT = dfa.DFAAutomaticVerifier(files2, Some(DLTS.fromErrorSymbol("err")), dfa.DFALearnerAlgorithm.SAT)
     assert(ver2SAT.learnAssumptions() == AGResult.Success)
-    val ver2UFSAT = dfa.DFAAutomaticVerifier(files2, Some(DLTS.fromErrorSymbol("err")), dfa.AssumptionGeneratorType.SAT)
+    val ver2UFSAT = dfa.DFAAutomaticVerifier(files2, Some(DLTS.fromErrorSymbol("err")), dfa.DFALearnerAlgorithm.SAT)
     assert(ver2UFSAT.learnAssumptions() == AGResult.Success)
-    val ver2RPNI = dfa.DFAAutomaticVerifier(files2, Some(DLTS.fromErrorSymbol("err")), dfa.AssumptionGeneratorType.RPNI)
+    val ver2RPNI = dfa.DFAAutomaticVerifier(files2, Some(DLTS.fromErrorSymbol("err")), dfa.DFALearnerAlgorithm.RPNI)
     assert(ver2RPNI.learnAssumptions() == AGResult.Success)
   }
 
@@ -763,18 +760,5 @@ class Single extends munit.FunSuite {
 }
 
 class A extends munit.FunSuite {
-  test("ltl learn assumptions: ltl-toy1 2 processes"){
-    val tas = Array(File("examples/ltl-toy1/a.ta"), File("examples/ltl-toy1/b.ta"))
-    val checker = AutomaticLTLVerifier(tas, G(F(Atomic("a"))), LTLLearningAlgorithm.Samples2LTL)
-    checker.proofSkeleton.setProcessInstantaneousDependencies(0, Set(1))
-    println(checker.learnAssumptions(proveGlobalProperty = true))
-  }
-  test("a"){
-    val ta = TA.fromFile(new File("examples/ltl-toy1/a.ta"))
-    val f = LTL.fromString("(!(((G (F (a | b | c))) & (G (F (b | c | d)))) & 1 & (((((!(b | c | d)) U b))) U (((((!(b | c | d)) U b))) & (!((!(a | b | c)) U a))))))")
-    val lasso = (List("b","a", "a", "c"), List("c"))
-    val g = LTL.fromString("(((((!(b | c | d)) U b))) & (!((!(a | b | c)) U a)))")
-    // println(s"${ta.checkLTL(f)}")
-    // println(s"${TA.fromLTS(DLTS.fromLasso(lasso,Some(Set("a","b", "c", "d")))).checkLTL(g)}")
-  }
+
 }

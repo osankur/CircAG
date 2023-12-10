@@ -48,7 +48,7 @@ class Interactive(
     val files = filenames.map(s => java.io.File(s))
     val nbProcesses = files.size
     files.foreach(f=> if !f.exists() then throw Exception(s"File ${f} could not be read"))
-    var dfaVerifier = DFAAutomaticVerifier(files.toArray, dfaProperty)
+    var dfaVerifier = DFAAutomaticVerifier(files.toArray, dfaProperty, DFALearnerAlgorithm.RPNI)
     var ltlVerifier = LTLVerifier(files.toArray, ltlProperty)
 
     private var dfaProofStates = Buffer.fill(nbProcesses)(DFAProofState.Unknown)
@@ -185,22 +185,22 @@ class Interactive(
         dfaVerifier.setAssumption(processID, dlts)
         invalidateDFAProofState(processID)
     }
-    def setDFAAssumptionDependencies(processID : Int, deps : Set[Int]) : Unit = {
-        dfaVerifier.proofSkeleton.setProcessDependencies(processID, deps)
-    }
+    // def setDFAAssumptionDependencies(processID : Int, deps : Set[Int]) : Unit = {
+    //     dfaVerifier.proofSkeleton.setProcessDependencies(processID, deps)
+    // }
     def setDFAGlobalProperty(dlts : DLTS) : Unit = {
         dfaPropertyProofState = DFAProofState.Unknown
         dfaVerifier.setGlobalProperty(dlts)
     }
-    def setDFAGlobalPropertyDependencies(deps : Set[Int]) : Unit = {
-        dfaVerifier.proofSkeleton.setPropertyDependencies(deps)
-    }
+    // def setDFAGlobalPropertyDependencies(deps : Set[Int]) : Unit = {
+    //     dfaVerifier.proofSkeleton.setPropertyDependencies(deps)
+    // }
     /**
       * Show the state of the proof
       */
     def show() : String = {
         val nbProcesses = filenames.size
-        val processes = dfaVerifier.processes
+        val processes = dfaVerifier.system.processes
         val sb = StringBuilder()        
         sb.append(s"System with ${nbProcesses} processes\n\n")
         for i <- 0 until nbProcesses do {

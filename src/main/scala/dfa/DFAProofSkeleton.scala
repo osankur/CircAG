@@ -3,68 +3,122 @@ package fr.irisa.circag.dfa
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import collection.mutable.Buffer
+import collection.mutable
 import collection.immutable.Set
 
 import fr.irisa.circag.configuration
+import fr.irisa.circag._
 import scala.collection.mutable.Stack
+
 /**
-  * AG Proof skeleton specifies the dependencies for each premise of the N-way AG rule,
-  * and the alphabets to be used for the assumption DFA of each TA.
+  * AG Proof skeleton stores process and property alphabets, and keeps the dependencies for each premise of the N-way AG rule.
   *
-  * There are several modes. 
+  * A process can have an assumption over an alphabet that is smaller than its own alphabet. The alphabet of each process
+  * can be set by the setAssumptionAlphabet method. One can also set all alphabets at once by setAssumptionAlphabetsByCommonAlphabet
+  * by providing a common alphabet alpha, which will set each alphabet to the intersection of the common alphabet and the alphabet of the process.
+  * The interface alphabet is the set of symbols that appear at least in two processes.
   * 
-  * 1) In the manual mode, the sets of dependencies for each proof are set manually.
-  * 2) updateByCone sets the dependencies of each process to all those processes
-  * with which it shares a common sync label, either directly or indirectly. The dependencies of the property
-  * are also computed similarly.
-  * 3) A common way is to use setAssumptionAlphabetsByCommonAlphabet which sets each assumption's alphabets to
-  *    the interface alphabet intersected with the given common alphabet, and applies updateByCone.
+  * This class maintains the set of process and property proof dependencies in a sound manner.
+  * A topological order of these dependencies is also generated: In this order, the proofs must be done left to right.
+  * In fact, the proof of a process at a cluster at index i only depends on those further left. This means that
+  * if one changes the assumption i, the proofs of assumptions 0...i-1 are not affected.
   * 
-  * In short, manual proofs will mostly use 2, but the user can refine these using 1 if things get slow.
-  * Automatic learning uses 2. Automatic learning with alphabet refinement uses 3.
-  * 
-  * In all cases, a topological order is generated. In this order, the proofs must be done left to right.
-  * In fact, the proof of a process at a cluster at index i only depends on those further left.
-  * 
-  * @param processAlphabets
-  * @param propertyAlphabet
-  * @param commonAssumptionAlphabet
   */
-class DFAProofSkeleton(processAlphabets : Buffer[Set[String]], private var _propertyAlphabet : Set[String], commonAssumptionAlphabet : Set[String]) {
+class DFAProofSkeleton(val system : SystemSpec) {  
   private val logger = LoggerFactory.getLogger("CircAG")
 
-  val nbProcesses = processAlphabets.size
+  private val _processAlphabets : Buffer[Set[String]] = system.processes.map(_.alphabet).toBuffer
+  private var _propertyAlphabet = system.property match{
+    case None => Set[String]()
+    case Some(p) => p.alphabet
+  }
+  val nbProcesses = _processAlphabets.size
+ 
+  // Set of symbols that appear in the property alphabet, or in at least two processes
+  private var _interfaceAlphabet = Set[String]()
 
+  /** Intersection of local alphabets with the interface alphabet: when all
+   * assumptions use these alphabets, the AG procedure is complete.
+   * i.e. alpha_F = alphaM_i /\ alphaP cup J_i
+   */
+  protected var _completeAlphabets = Buffer.tabulate(nbProcesses)(_ => Set[String]())
+
+  // Set of processes on which given process' proof depends
   private var _processDependencies = Buffer[Set[Int]]()
+  // Set of processes on which the property's proof depends
   private var _propertyDependencies = Set[Int]()
+  // Alphabet of the assumption of each process
   private var _assumptionAlphabets = Buffer[Set[String]]()
 
+  // Clusters in the SCC decomposition of processes for the relation of "proof depends on"
   private var _clusters = Buffer[Set[Int]]()
 
-  setAssumptionAlphabetsByCommonAlphabet(commonAssumptionAlphabet)
+  updateInterfaceAndCompleteAlphabets()
+  setAssumptionAlphabetsByCommonAlphabet(_interfaceAlphabet)
+  updateDependenciesByCone()
+  updateTopologicalOrder()
 
-  def processDependencies(processID : Int) : Set[Int] = {
-    _processDependencies(processID)
-  }
-  def propertyDependencies() : Set[Int] = {
-    _propertyDependencies
-  }
+  /**
+    * Update _interfaceAlphabet and _completeAlphabets
+    */
+  private def updateInterfaceAndCompleteAlphabets() : Unit ={
+    // Consider only symbols that appear at least in two processes (union of J_i's in CAV16)
+    val symbolCount = mutable.HashMap[String, Int]()
+    system.processes.foreach { p =>
+      p.alphabet.foreach { sigma =>
+        symbolCount.put(sigma, symbolCount.getOrElse(sigma, 0) + 1)
+      }
+    }
+    symbolCount.filterInPlace((sigma, count) => count >= 2)
+    _interfaceAlphabet = _propertyAlphabet | symbolCount.map({ (sigma, _) => sigma }).toSet
 
-  def assumptionAlphabets(processID : Int) : Set[String] = {
-    _assumptionAlphabets(processID)
+    _completeAlphabets = system.processes
+      .map({ pr =>
+        _interfaceAlphabet.intersect(pr.alphabet)
+      })
+      .toBuffer
   }
+  
+  def getPropertyAlphabet() : Set[String] = _propertyAlphabet
+  def getInterfaceAlphabet(): Set[String] = _interfaceAlphabet
+  def getCompleteAlphabet(processID : Int): Set[String] = _completeAlphabets(processID)
+  def processDependencies(processID : Int) : Set[Int] = _processDependencies(processID)
+  def propertyDependencies() : Set[Int] = _propertyDependencies
+  def assumptionAlphabets(processID : Int) : Set[String] = _assumptionAlphabets(processID)
   /**
     * Return topologically ordered connected components: a process' assumption depends on assumptions on the left
     *
-    * @return
+    * @return sequence of clusters of processes that is topologically ordered
     */
-  def getTopologicalOrder() : Buffer[Set[Int]] = {
-    _clusters
+  def getTopologicalOrder() : Buffer[Set[Int]] = _clusters
+
+  def setAssumptionAlphabet(i : Int, alpha : Set[String]) : Unit = {
+    _assumptionAlphabets(i) = alpha
+    update()
   }
+  def setPropertyAlphabet(alpha : Set[String]) : Unit = {
+    _propertyAlphabet = alpha
+    update()
+  }
+  // Update each assumption's alphabet as alpha /\ their alphabet
+  def setAssumptionAlphabetsByCommonAlphabet(alpha : Set[String]) : Unit = {
+    _assumptionAlphabets = _processAlphabets.map(_.intersect(alpha))
+    update()
+  }
+
+  /**
+    * Update interface and complete alphabets, process and property dependencies, and the topological order.
+    */
+  private def update() : Unit = {
+    updateInterfaceAndCompleteAlphabets()
+    updateDependenciesByCone()
+    updateTopologicalOrder()
+  }
+
   /**
     * Run Tarjan's algorithm to find SCCs in the topological order
     */
-  def updateTopologicalOrder() : Unit = {
+  private def updateTopologicalOrder() : Unit = {
     _clusters = Buffer[Set[Int]]()
     var time = 0
     val disc = Buffer.fill(nbProcesses)(-1)
@@ -116,35 +170,11 @@ class DFAProofSkeleton(processAlphabets : Buffer[Set[String]], private var _prop
     )
   }
 
-  def setProcessDependencies(i : Int, deps : Set[Int]) : Unit = {
-    require(!deps.contains(i))
-    _processDependencies(i) = deps
-    updateTopologicalOrder()
-  }
-  def setPropertyDependencies(deps : Set[Int]) : Unit = {
-    _propertyDependencies = deps
-  }
-
-  def setAssumptionAlphabet(i : Int, alpha : Set[String]) : Unit = {
-    _assumptionAlphabets(i) = alpha
-    updateTopologicalOrder()    
-  }
-  def setPropertyAlphabet(alpha : Set[String]) : Unit = {
-    _propertyAlphabet = alpha
-  }
-  def getPropertyAlphabet() : Set[String] = _propertyAlphabet
-
-  def setAssumptionAlphabetsByCommonAlphabet(alpha : Set[String]) : Unit = {
-    _assumptionAlphabets = processAlphabets.map(_.intersect(alpha))
-    updateByCone()
-  }
-
   /**
-    * Update the fields from the given assumption alphabet: the dependencies of a process (or a property) are those assumptions that
-    * share a common label, and those that share a common label with other dependencies.
-    *
+    * Update processDependencies: the dependencies of a process (or a property) are those assumptions that
+    * share a common label, and those that share a common label with other dependencies, and so on.
     */
-  def updateByCone() = {
+  def updateDependenciesByCone() = {
     _processDependencies = Buffer.tabulate(nbProcesses)({_ => Set[Int]()})
     val adj = getCones()
     for i <- 0 until nbProcesses do {
@@ -161,12 +191,11 @@ class DFAProofSkeleton(processAlphabets : Buffer[Set[String]], private var _prop
     logger.debug(s"Process deps: $_processDependencies")
   }
 
-  def updatePropertyDependenciesByCone() : Unit = {
-    val adj = getCones()
-    _propertyDependencies = adj(nbProcesses).zipWithIndex.filter({(b,i) => b}).map(_._2).toSet - nbProcesses
-    logger.debug(s"Prop dependencies: $_propertyDependencies")
-  }
-
+  /**
+    * Return symmetric Boolean adjacency matrix adj where adj[i][j] iff i=j or i's proof must depend on j.
+    *
+    * @return adjacency matrix
+    */
   private def getCones() : Buffer[Buffer[Boolean]] ={
     _processDependencies = Buffer.tabulate(nbProcesses)({_ => Set[Int]()})
     // Compute simplified sets of assumptions for the new alphabet
@@ -176,13 +205,13 @@ class DFAProofSkeleton(processAlphabets : Buffer[Set[String]], private var _prop
     for i <- 0 until nbProcesses do {
       adj(i)(i) = true
       for j <- 0 until i do {
-        adj(i)(j) = !processAlphabets(i).intersect(processAlphabets(j)).isEmpty
+        adj(i)(j) = !_processAlphabets(i).intersect(_processAlphabets(j)).isEmpty
         adj(j)(i) = adj(i)(j)
       }
     }
     adj(nbProcesses)(nbProcesses) = true
     for j <- 0 until nbProcesses do {
-        adj(nbProcesses)(j) = !_propertyAlphabet.intersect(processAlphabets(j)).isEmpty
+        adj(nbProcesses)(j) = !_propertyAlphabet.intersect(_processAlphabets(j)).isEmpty
         adj(j)(nbProcesses) = adj(nbProcesses)(j)
     }
     for k <- 0 until nbProcesses+1 do {
