@@ -103,12 +103,11 @@ object Main {
               val product = TA.synchronousProduct(tas.toList)
               System.out.println(product.toString())
             case "dfa-aag" =>
-              System.out.println(
                 dfa.DFAAutomaticVerifier(configuration.get().ltsFiles, 
                     Some(DLTS.fromErrorSymbol(configuration.get().err)), 
                     configuration.get().learnerType,
-                    dfa.ConstraintStrategy.Disjunctive
-                  ).learnAssumptions())
+                    dfa.ConstraintStrategy.Eager
+                  ).learnAssumptions()
             case _ => 
               logger.error("Unknown command")
           }

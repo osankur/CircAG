@@ -38,6 +38,14 @@ class DFAAutomaticVerifier(
     constraintStrategy : ConstraintStrategy
 ) extends DFAVerifier(_system) {
 
+  private val cexHistory = Buffer.tabulate(nbProcesses)({_ => Set[Trace]()})
+  private def resetCexHistory() : Unit = {
+    for i <- 0 until cexHistory.size do {
+      cexHistory(i) = Set[Trace]()
+    }
+  }
+
+
   def this(
       ltsFiles: Array[File],
       property: Option[DLTS],
@@ -72,25 +80,8 @@ class DFAAutomaticVerifier(
   }
 
   /** Check the AG rule once for the current assumption alphabet and DFAs
-    */
+   */
   override def applyAG(proveGlobalproperty: Boolean = true): AGResult = {
-    // val concreteVal = processes.zipWithIndex.map({
-    //   (p,i) =>
-    //       val valFori =
-    //         this.dfaGenerator.samples(i).map({
-    //         (trace,v) =>
-    //           TCheckerAssumeGuaranteeOracles.checkTraceMembership(p,trace, Some(p.alphabet)) match {
-    //             case None => dfaGenerator.z3ctx.mkNot(v)
-    //           case Some(_) => v
-    //           }
-    //         })
-    //       dfaGenerator.z3ctx.mkAnd(valFori.toSeq : _*)
-    // })
-    // System.out.println("Displaying concrete val:")
-    // for (p,exp) <- processes.zip(concreteVal) do {
-    //   System.out.println(s"${p.systemName}: ${exp}")
-    // }
-    // dfaGenerator.checkValuation(dfaGenerator.z3ctx.mkAnd(concreteVal.toSeq : _*))
 
     // A proof for a process must not depend on itself
     logger.debug(s"applyAG with alphabets: ${assumptions.map(_.alphabet)}")
@@ -105,20 +96,20 @@ class DFAAutomaticVerifier(
             System.out.println(
               s"${RED}Premise ${i} failed with cex: ${cexTrace}${RESET}"
             )
-            if (configuration.cex(i).contains(cexTrace)) then {
-              // for j <- proofSkeleton.processDependencies(i) do {
-              //   System.out.println(
-              //     s"Dependency: Assumption ${assumptions(j).name} for ${processes(j).systemName}"
-              //   )
-              //   assumptions(j).visualize()
-              // }
-              // System.out.println(
-              //   s"Assumption for this process ${processes(i).systemName}"
-              // )
-              // assumptions(i).visualize()
+            if (this.cexHistory(i).contains(cexTrace)) then {
+              for j <- proofSkeleton.processDependencies(i) do {
+                System.out.println(
+                  s"Dependency: Assumption ${assumptions(j).name} for ${system.processes(j).systemName}"
+                )
+                assumptions(j).visualize()
+              }
+              System.out.println(
+                s"Assumption for this process ${system.processes(i).systemName}"
+              )
+              assumptions(i).visualize()
               throw Exception(s"Repeated CEX: ${cexTrace}")
             } else {
-              configuration.cex(i) = configuration.cex(i) + cexTrace
+              this.cexHistory(i) = this.cexHistory(i) + cexTrace
             }
             val prefixInP = system.property match {
               case None => false
@@ -190,7 +181,7 @@ class DFAAutomaticVerifier(
       proveGlobalProperty: Boolean = true,
       fixedAssumptions: List[Int] = List()
   ): AGResult = {
-    configuration.resetCEX()
+    this.resetCexHistory()
     val fixedAssumptionsMap = HashMap[Int, DLTS]()
     fixedAssumptions.foreach(i => fixedAssumptionsMap.put(i, assumptions(i)))
     var doneVerification = false

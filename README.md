@@ -57,14 +57,9 @@ You can add the option `--visualizeDFA true` to see the assumption DFAs that wer
 ### Other examples
 Two toy examples easy to understand:
 
-    java -jar target/scala-3.3/CircAG.jar dfa-aag --lts "examples/toy/lts1.ta,examples/toy/lts2.ta,examples/toy/lts3.ta" --err "err" --verbose false
-    java -jar target/scala-3.3/CircAG.jar dfa-aag --lts "examples/seq-toy/lts0.ta,examples/seq-toy/lts1.ta,examples/seq-toy/lts2.ta,examples/seq-toy/lts3.ta" --err "err"
-
-A small but less trivial example that does not currently terminate :(
-
-    java -jar target/scala-3.3/CircAG.jar dfa-aag --lts "examples/ums/machine.ta,examples/ums/scheduler.ta,examples/ums/user.ta" --err "err"
-
-Alphabet refinement is also implemented by not accessible for now on the command line.
+    java -jar target/scala-3.3.1/CircAG.jar dfa-aag --lts "examples/toy/lts1.ta,examples/toy/lts2.ta,examples/toy/lts3.ta" --err "err" --verbose false
+    java -jar target/scala-3.3.1/CircAG.jar dfa-aag --lts "examples/seq-toy/lts0.ta,examples/seq-toy/lts1.ta,examples/seq-toy/lts2.ta,examples/seq-toy/lts3.ta" --err "err"
+    java -jar target/scala-3.3.1/CircAG.jar dfa-aag --lts "examples/ums/machine.ta,examples/ums/scheduler.ta,examples/ums/user.ta" --err "err"
 
 ## Utilities
 The synchronized product of the processes can be output to stdout as a single TChecker file using

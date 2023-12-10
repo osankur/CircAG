@@ -5,7 +5,7 @@ import scala.collection.mutable
 import scala.collection.immutable.Set
 import collection.JavaConverters._
 import collection.convert.ImplicitConversions._
-
+import scala.util.control.Breaks.{break,breakable}
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
@@ -147,6 +147,9 @@ class DFAGenerator(
     var beginTime = System.nanoTime()
     if (solver.check() == z3.Status.UNSATISFIABLE) {
       statistics.Timers.incrementTimer("z3", (System.nanoTime() - beginTime))
+      for ass <- solver.getAssertions() do {
+        println(ass)
+      }
       solver.pop()
       None
     } else {
@@ -196,6 +199,7 @@ class DFAGenerator(
       process: Int,
       sampleIndex: Int = 0
   ): Unit = {
+    println(s"updateTheoryConstraints(process = $process). Process alphabet: ${system.processes(process).alphabet} Ass alphabet: ${proofSkeleton.assumptionAlphabets(process)}")
     for i <- sampleIndex until samples(process).size do {
       val projTrace_i = this
         .samples(process)(i)
@@ -208,12 +212,16 @@ class DFAGenerator(
           ._1
           .filter(proofSkeleton.assumptionAlphabets(process).contains(_))
         val vj = this.samples(process)(j)._2
+        // System.out.println(s"Comparing ${samples(process)(i)._1} - ${samples(process)(j)._1}")
+        // System.out.println(s"Whose projections are: ${projTrace_i} - ${projTrace_j}")
 
         if projTrace_i.startsWith(projTrace_j) then {
           solver.add(z3ctx.mkImplies(vi, vj))
+          // System.out.println(s"\t $vi -> $vj (theory)")
         }
         if projTrace_j.startsWith(projTrace_i) then {
           solver.add(z3ctx.mkImplies(vj, vi))
+          // System.out.println(s"\t   $vi <- $vj (theory)")
         }
       }
     }
@@ -235,7 +243,7 @@ class DFAGenerator(
     }): _*))
   }
 
-  def addConstraint(process : Int, cexTrace : Trace) : Unit = {
+  def addConstraint(processID : Int, cexTrace : Trace) : Unit = {
     constraintStrategy match {
       case ConstraintStrategy.Disjunctive => 
         val prefixInP = system.property match{
@@ -251,14 +259,32 @@ class DFAGenerator(
             propertyDLTS.dfa.accepts(cexTrace.filter(propertyDLTS.alphabet.contains(_)))
         }
         if (prefixInP && !traceInP) then {
-          addDisjunctiveConstraint(process, cexTrace, 22)
+          addDisjunctiveConstraint(processID, cexTrace, 22)
         } else if (cexTrace.size > 0 && !prefixInP && !traceInP) then {
-          addDisjunctiveConstraint(process, cexTrace, 29)
+          addDisjunctiveConstraint(processID, cexTrace, 29)
         } else {
-          addDisjunctiveConstraint(process, cexTrace, 34)
+          addDisjunctiveConstraint(processID, cexTrace, 34)
         }
       case ConstraintStrategy.Eager => 
-        throw Exception("Not implemented")
+        // Let i = processID.
+        // We are here because cexTrace |= processes(i), cexTrace /|= assumption(i), forall j in Gamma_i, prefix(cexTrace) |= assumption(j).
+        // If exists j in dependencies(i) such that prefix(cexTrace) /|= process(j),
+        //    then add prefix(cexTrace) /|= assumption(j)
+        // else add cexTrace |= assumption(i).
+        breakable{
+          proofSkeleton.processDependencies(processID).foreach {
+            j => 
+              val prefixCexTrace = cexTrace.dropRight(1)
+              println(s"Checking if proj of ${prefixCexTrace} to j-th ass alphabet is accepted by process ${j}")
+              if system.processes(j).checkTraceMembership(prefixCexTrace, Some(proofSkeleton.assumptionAlphabets(j))) == None then {
+                println(s"Process ${j} rejects ${prefixCexTrace}: adding negative constraint for its assumption")
+                solver.add(z3ctx.mkNot(varOfIndexedTrace(j, prefixCexTrace)))
+                break
+              }
+          }
+          println(s"None of the processes have rejected prefix of ${cexTrace}. Adding positive constraint for assumption ${processID}")
+          solver.add(varOfIndexedTrace(processID, cexTrace))
+        }
     }
   }
 

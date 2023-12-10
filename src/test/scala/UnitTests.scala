@@ -760,5 +760,14 @@ class Single extends munit.FunSuite {
 }
 
 class A extends munit.FunSuite {
-
+  test("toy: with SAT, UFSAT, RPNI"){
+    val files = Array(File("examples/toy/lts1.ta"),File("examples/toy/lts2.ta"),File("examples/toy/lts3.ta"))
+    val verRPNI = dfa.DFAAutomaticVerifier(files, Some(DLTS.fromErrorSymbol("err")), dfa.DFALearnerAlgorithm.RPNI)
+    assert(verRPNI.learnAssumptions() == AGResult.Success)
+  }
+  test("seq-toy"){
+    val files = Array(File("examples/seq-toy/lts0.ta"),File("examples/seq-toy/lts1.ta"),File("examples/seq-toy/lts2.ta"))
+    val verRPNI = dfa.DFAAutomaticVerifier(files, Some(DLTS.fromErrorSymbol("err")), dfa.DFALearnerAlgorithm.RPNI)
+    assert(verRPNI.learnAssumptions() != AGResult.Success)
+  }
 }
