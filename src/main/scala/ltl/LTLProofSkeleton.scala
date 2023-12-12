@@ -27,7 +27,7 @@ class BadProofSkeleton(msg : String) extends Exception(msg)
   * @param nbProcesses
   *   Number of processes
   */
-class AGProofSkeleton(val nbProcesses: Int) {
+class LTLProofSkeleton(val nbProcesses: Int) {
   private val logger = LoggerFactory.getLogger("CircAG")
 
   /** For each process, the set of process indices on which the proof inductively depends
