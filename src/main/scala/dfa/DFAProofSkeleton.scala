@@ -2,13 +2,10 @@ package fr.irisa.circag.dfa
 
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import collection.mutable.Buffer
-import collection.mutable
-import collection.immutable.Set
+import collection.mutable.{Buffer, Stack, HashMap}
 
 import fr.irisa.circag.configuration
 import fr.irisa.circag._
-import scala.collection.mutable.Stack
 
 /**
   * AG Proof skeleton stores process and property alphabets, and keeps the dependencies for each premise of the N-way AG rule.
@@ -63,7 +60,7 @@ class DFAProofSkeleton(val system : SystemSpec) {
     */
   private def updateInterfaceAndCompleteAlphabets() : Unit ={
     // Consider only symbols that appear at least in two processes (union of J_i's in CAV16)
-    val symbolCount = mutable.HashMap[String, Int]()
+    val symbolCount = HashMap[String, Int]()
     system.processes.foreach { p =>
       p.alphabet.foreach { sigma =>
         symbolCount.put(sigma, symbolCount.getOrElse(sigma, 0) + 1)

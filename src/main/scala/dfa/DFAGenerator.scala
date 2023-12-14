@@ -1,8 +1,6 @@
 package fr.irisa.circag.dfa
 
-import scala.collection.mutable.{HashMap, Buffer}
-import scala.collection.mutable
-import scala.collection.immutable.Set
+import scala.collection.mutable.{HashMap, Buffer, Map}
 import collection.JavaConverters._
 import collection.convert.ImplicitConversions._
 import scala.util.control.Breaks.{break,breakable}
@@ -28,41 +26,20 @@ enum ConstraintStrategy:
   case Disjunctive
   case Eager
 
-
 /** Stores constraints on assumptions, and generates them by first solving these constraints. 
   *
   * @param system
   * @param proofSkeleton
   * @param dfaLearnerAlgorithm
-  * @param constraintStrategy 
   */
-class DFAGenerator(
-    system : SystemSpec,
-    proofSkeleton: DFAProofSkeleton,
-    dfaLearnerAlgorithm: DFALearningAlgorithm =
-      DFALearningAlgorithm.RPNI,
-    constraintStrategy: ConstraintStrategy = 
-      ConstraintStrategy.Disjunctive
+trait DFAGenerator(
+    val system : SystemSpec,
+    val proofSkeleton: DFAProofSkeleton,
+    val dfaLearnerAlgorithm: DFALearningAlgorithm =
+      DFALearningAlgorithm.RPNI
 ) {
-  val logger = LoggerFactory.getLogger("CircAG")
-  protected val z3ctx = {
-    val cfg = HashMap[String, String]()
-    cfg.put("model", "true")
-    z3.Context(cfg);
-  }
 
   protected val nbProcesses = proofSkeleton.nbProcesses
-
-  // Set of all samples added so far
-  protected val samples = Buffer.tabulate(nbProcesses)({ _ =>
-    Buffer[(Trace, z3.BoolExpr)]()
-  })
-
-  // Boolean variable corresponding to each pair (pr,trace)
-  protected val toVars = HashMap[(Int, Trace), z3.BoolExpr]()
-  protected val toIndexedTraces = HashMap[z3.BoolExpr, (Int, Trace)]()
-
-  protected var solver = z3ctx.mkSolver()
 
   // Samples that were used to compute assumptions the last time. Here the prefix closure of the positive samples were added
   protected var positiveSamples = Buffer.tabulate(nbProcesses)({ _ =>
@@ -93,6 +70,169 @@ class DFAGenerator(
     }
   )
 
+  /** Reinitialize the solver and samples.
+    */
+  def reset(): Unit
+
+  /**
+    * Given a trace that violates the final premise, update the constraints
+    *
+    * @param trace that violates the final premise
+    */
+  def refineByFinalPremiseCounterexample(trace: Trace): Unit
+
+  /**
+    * Update constraints given a process id and a trace that violates its inductive premise
+    *
+    * @param processID process id
+    * @param cexTrace a trace that violates the inductive premise of processID
+    */
+  def refineByInductivePremiseCounterexample(processID : Int, cexTrace : Trace) : Unit
+
+  /** Generate assumptions satisfying the constraints, except that those
+    * processes whose DLTSs are given as argument. Note that fixing some of the
+    * assumptions can make the constraints unsatisfiable.
+    *
+    * @param fixedAssumptions
+    *   process indices and their fixed assumptions
+    * @return
+    *   None if the constraints are unsat, and an assumption for each process
+    *   otherwise.
+    */
+  def generateAssumptions(
+      fixedAssumptions: Map[Int, DLTS] = Map()
+  ): Option[Buffer[DLTS]]
+}
+
+
+object DFAGenerator {
+  def getGenerator(
+      system : SystemSpec,
+      proofSkeleton: DFAProofSkeleton,
+      dfaLearnerAlgorithm: DFALearningAlgorithm =
+        DFALearningAlgorithm.RPNI,
+      constraintStrategy : ConstraintStrategy
+    ) : DFAGenerator = {
+    constraintStrategy match {
+      case ConstraintStrategy.Disjunctive => DFADisjunctiveGenerator(system, proofSkeleton, dfaLearnerAlgorithm)
+      case _ => DFAEagerGenerator(system, proofSkeleton, dfaLearnerAlgorithm)
+    }
+  }
+}
+
+
+class DFAEagerGenerator(
+    _system : SystemSpec,
+    _proofSkeleton: DFAProofSkeleton,
+    _dfaLearnerAlgorithm: DFALearningAlgorithm =
+      DFALearningAlgorithm.RPNI
+) extends DFAGenerator(_system, _proofSkeleton, _dfaLearnerAlgorithm) {
+  val logger = LoggerFactory.getLogger("CircAG")
+  val samples = Buffer.tabulate(nbProcesses)(_ => Buffer[Trace]())
+  this.reset()
+
+  /** Reinitialize the solver and samples.
+    */
+  def reset(): Unit = {
+    this.samples.foreach(_.clear())
+    this.positiveSamples = Buffer.tabulate(nbProcesses)({ _ => Set[Trace](List[String]()) })
+    this.negativeSamples = Buffer.tabulate(nbProcesses)({ _ => Set[Trace]() })
+  }
+
+  override def refineByInductivePremiseCounterexample(processID : Int, cexTrace : Trace) : Unit = {
+        // Let i = processID.
+        // We are here because cexTrace |= processes(i), cexTrace /|= assumption(i), forall j in Gamma_i, prefix(cexTrace) |= assumption(j).
+        // If exists j in dependencies(i) such that prefix(cexTrace) /|= process(j),
+        //    then add prefix(cexTrace) /|= assumption(j)
+        // else add cexTrace |= assumption(i).
+        breakable{
+          proofSkeleton.processDependencies(processID).foreach {
+            j => 
+              val prefixCexTrace = cexTrace.dropRight(1)
+              logger.debug(s"Checking if proj of ${prefixCexTrace} to j-th ass alphabet is accepted by process ${j}")
+              if system.processes(j).checkTraceMembership(prefixCexTrace, Some(proofSkeleton.assumptionAlphabets(j))) == None then {
+                logger.debug(s"Process ${j} rejects ${prefixCexTrace}: adding negative constraint for its assumption")
+                negativeSamples(j) = negativeSamples(j).incl(prefixCexTrace.filter(proofSkeleton.assumptionAlphabets(j).contains(_)))
+                break
+              }
+          }
+          logger.debug(s"None of the processes have rejected prefix of ${cexTrace}. Adding positive constraint for assumption ${processID}")
+          val projCexTrace = cexTrace.filter(proofSkeleton.assumptionAlphabets(processID).contains(_))          
+          for i <- 0 until projCexTrace.size do {
+            positiveSamples(processID) = positiveSamples(processID).incl(projCexTrace.dropRight(i))
+          }
+    }
+  }
+
+  override def refineByFinalPremiseCounterexample(trace: Trace): Unit = {
+    breakable{
+      for j <- 0 until nbProcesses do {
+          logger.debug(s"Checking if proj of ${trace} to j-th ass alphabet is accepted by process ${j}")
+          if system.processes(j).checkTraceMembership(trace, Some(proofSkeleton.assumptionAlphabets(j))) == None then {
+            logger.debug(s"Process ${j} rejects ${trace}: adding negative constraint for its assumption")
+            negativeSamples(j) = negativeSamples(j).incl(trace.filter(proofSkeleton.assumptionAlphabets(j).contains(_)))
+            break
+          }
+      }
+      throw Exception(s"refineByFinalPremiseCounterexample: None of the processes have rejected prefix of ${trace}.")
+    }
+  }
+
+
+  /** Generate assumptions satisfying the constraints, except that those
+    * processes whose DLTSs are given as argument. Note that fixing some of the
+    * assumptions can make the constraints unsatisfiable.
+    *
+    * @param fixedAssumptions
+    *   process indices and their fixed assumptions
+    * @return
+    *   None if the constraints are unsat, and an assumption for each process
+    *   otherwise.
+    */
+  override def generateAssumptions(
+      fixedAssumptions: Map[Int, DLTS] = Map()
+  ): Option[Buffer[DLTS]] = {
+    None
+      Some(
+        Buffer.tabulate(proofSkeleton.nbProcesses)(i =>
+          if fixedAssumptions.contains(i) then fixedAssumptions(i)
+          else {
+            learners(i).setPositiveSamples(positiveSamples(i))
+            learners(i).setNegativeSamples(negativeSamples(i))
+            learners(i).getDLTS()
+          }
+        )
+      )
+    }
+}
+
+
+class DFADisjunctiveGenerator(
+    _system : SystemSpec,
+    _proofSkeleton: DFAProofSkeleton,
+    _dfaLearnerAlgorithm: DFALearningAlgorithm =
+      DFALearningAlgorithm.RPNI,
+    constraintStrategy: ConstraintStrategy = 
+      ConstraintStrategy.Disjunctive
+) extends DFAGenerator(_system, _proofSkeleton, _dfaLearnerAlgorithm) {
+  val logger = LoggerFactory.getLogger("CircAG")
+  protected val z3ctx = {
+    val cfg = HashMap[String, String]()
+    cfg.put("model", "true")
+    z3.Context(cfg);
+  }
+
+  // Boolean variable corresponding to each pair (pr,trace)
+  protected val toVars = HashMap[(Int, Trace), z3.BoolExpr]()
+  protected val toIndexedTraces = HashMap[z3.BoolExpr, (Int, Trace)]()
+
+  protected var solver = z3ctx.mkSolver()
+
+  // Set of all samples added so far
+  protected val samples = Buffer.tabulate(nbProcesses)({ _ =>
+    Buffer[(Trace, z3.BoolExpr)]()
+  })
+
 
   this.reset()
 
@@ -121,11 +261,9 @@ class DFAGenerator(
     * respects these existing assumptions.
     */
   private def generateSamples(
-      fixedAssumptions: mutable.Map[Int, DLTS] = mutable.Map()
+      fixedAssumptions: Map[Int, DLTS] = Map()
   ): Option[(Buffer[Set[Trace]], Buffer[Set[Trace]])] = {
-    var positiveSamples = Buffer.tabulate(nbProcesses)({ _ =>
-      collection.immutable.Set[Trace]()
-    })
+    var positiveSamples = Buffer.tabulate(nbProcesses)({ _ => Set[Trace]() })
     var negativeSamples = Buffer.tabulate(nbProcesses)({ _ => Set[Trace]() })
 
     solver.push()
@@ -162,19 +300,17 @@ class DFAGenerator(
               val sample = trace.filter(proofSkeleton.assumptionAlphabets(i))
               // Add all prefixes
               for k <- 0 to sample.size do {
-                positiveSamples(i) =
-                  positiveSamples(i).incl(sample.dropRight(k))
+                positiveSamples(i).add(sample.dropRight(k))
               }
             case z3.enumerations.Z3_lbool.Z3_L_FALSE =>
-              negativeSamples(i) = negativeSamples(i).incl(
+              negativeSamples(i).add(
                 trace.filter(proofSkeleton.assumptionAlphabets(i))
               )
             case _ =>
               val sample = trace.filter(proofSkeleton.assumptionAlphabets(i))
               // Add all prefixes
               for k <- 0 to sample.size do {
-                positiveSamples(i) =
-                  positiveSamples(i).incl(sample.dropRight(k))
+                positiveSamples(i).add(sample.dropRight(k))
               }
           }
         })
@@ -242,7 +378,7 @@ class DFAGenerator(
     }): _*))
   }
 
-  def addConstraint(processID : Int, cexTrace : Trace) : Unit = {
+  override def refineByInductivePremiseCounterexample(processID : Int, cexTrace : Trace) : Unit = {
     constraintStrategy match {
       case ConstraintStrategy.Disjunctive => 
         val prefixInP = system.property match{
@@ -362,7 +498,7 @@ class DFAGenerator(
     }
   }
 
-  def addFinalPremiseConstraint(trace: Trace): Unit = {
+  override def refineByFinalPremiseCounterexample(trace: Trace): Unit = {
     val newConstraint = z3ctx.mkOr(
       z3ctx.mkOr(
         proofSkeleton
@@ -385,8 +521,8 @@ class DFAGenerator(
     *   None if the constraints are unsat, and an assumption for each process
     *   otherwise.
     */
-  def generateAssumptions(
-      fixedAssumptions: mutable.Map[Int, DLTS] = mutable.Map()
+  override def generateAssumptions(
+      fixedAssumptions: Map[Int, DLTS] = Map()
   ): Option[Buffer[DLTS]] = {
     generateSamples(fixedAssumptions) match {
       case None => None // Unsat
@@ -404,3 +540,5 @@ class DFAGenerator(
     }
   }
 }
+
+

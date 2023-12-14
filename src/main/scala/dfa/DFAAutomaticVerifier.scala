@@ -57,7 +57,7 @@ class DFAAutomaticVerifier(
 
   protected val logger = LoggerFactory.getLogger("CircAG")
   protected var dfaGenerator =
-    DFAGenerator(
+    DFAGenerator.getGenerator(
       system,
       proofSkeleton,
       dfaLearnerAlgorithm,
@@ -136,7 +136,7 @@ class DFAAutomaticVerifier(
               throw AGResult.GlobalPropertyViolation(cexTrace)
             }
             // updateConstraints(i, cexTrace)
-            dfaGenerator.addConstraint(i, cexTrace)
+            dfaGenerator.refineByInductivePremiseCounterexample(i, cexTrace)
             if cexAccepted then {
               throw AGResult.AssumptionViolation(i, cexTrace)
             } else {
@@ -162,7 +162,7 @@ class DFAAutomaticVerifier(
               System.out.println(s"\tCex confirmed: ${cexTrace}")
             throw AGResult.GlobalPropertyViolation(cexTrace)
           } else {
-            dfaGenerator.addFinalPremiseConstraint(cexTrace)
+            dfaGenerator.refineByFinalPremiseCounterexample(cexTrace)
             throw AGResult.GlobalPropertyProofFail(cexTrace)
           }
       }

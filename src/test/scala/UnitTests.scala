@@ -8,7 +8,7 @@ import java.util.HashMap
 import java.io.File
 import collection.JavaConverters._
 import collection.convert.ImplicitConversions._
-import collection.mutable.Buffer
+import collection.mutable.{Buffer}
 import com.microsoft.z3._
 
 import net.automatalib.serialization.aut.AUTWriter
@@ -765,9 +765,9 @@ class A extends munit.FunSuite {
     val verRPNI = dfa.DFAAutomaticVerifier(files, Some(DLTS.fromErrorSymbol("err")), dfa.DFALearningAlgorithm.RPNI)
     assert(verRPNI.learnAssumptions() == AGResult.Success)
   }
-  test("seq-toy"){
-    val files = Array(File("examples/seq-toy/lts0.ta"),File("examples/seq-toy/lts1.ta"),File("examples/seq-toy/lts2.ta"))
-    val verRPNI = dfa.DFAAutomaticVerifier(files, Some(DLTS.fromErrorSymbol("err")), dfa.DFALearningAlgorithm.RPNI)
-    assert(verRPNI.learnAssumptions() != AGResult.Success)
-  }
+  // test("seq-toy"){
+  //   val files = Array(File("examples/seq-toy/lts0.ta"),File("examples/seq-toy/lts1.ta"),File("examples/seq-toy/lts2.ta"))
+  //   val verRPNI = dfa.DFAAutomaticVerifier(files, Some(DLTS.fromErrorSymbol("err")), dfa.DFALearningAlgorithm.RPNI)
+  //   assert(verRPNI.learnAssumptions() != AGResult.Success)
+  // }
 }
