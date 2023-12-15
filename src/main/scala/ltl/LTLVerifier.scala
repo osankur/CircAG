@@ -31,6 +31,11 @@ import fr.irisa.circag.statistics
 import fr.irisa.circag.configuration
 import fr.irisa.circag._
 
+class SystemSpec(val ltsFiles: Array[File], var property: LTL):
+  val processes = ltsFiles.map(TA.fromFile(_))
+  val nbProcesses = processes.size
+
+
 abstract class PremiseQuery(val processID : Int)
 /**
   * @brief Content of the premise query
@@ -76,13 +81,18 @@ enum LTLAGResult extends Exception:
 
 class LTLUnsatisfiableConstraints extends Exception
 
-class LTLVerifier(ltsFiles: Array[File], val property: LTL) {
+class LTLVerifier(val system : SystemSpec) {
+
+  def this(ltsFiles: Array[File], property: LTL) = {
+    this(SystemSpec(ltsFiles, property))
+  }
+
   protected val logger = LoggerFactory.getLogger("CircAG")
 
-  val nbProcesses = ltsFiles.size
-  val propertyAlphabet = property.getAlphabet
-  protected val processes = ltsFiles.map(TA.fromFile(_)).toBuffer
-  val proofSkeleton = LTLProofSkeleton(processes, property)
+  val nbProcesses = system.ltsFiles.size
+  val propertyAlphabet = system.property.getAlphabet
+  protected val processes = system.ltsFiles.map(TA.fromFile(_)).toBuffer
+  val proofSkeleton = LTLProofSkeleton(processes, system.property)
 
   // Initial assumptions: True or G(True) for circular processes
   protected var assumptions : Buffer[LTL] = Buffer.tabulate(nbProcesses){
@@ -270,7 +280,7 @@ class LTLVerifier(ltsFiles: Array[File], val property: LTL) {
           ).toList
       )
     // val cexFormula = And(List(assFormulas, LTL.asynchronousTransform(Not(property), property.alphabet)))
-    val cexFormula = And(List(assFormulas, Not(property)))
+    val cexFormula = And(List(assFormulas, Not(system.property)))
     System.out.println(cexFormula)
     val ta = TA.fromLTL(cexFormula.toString, None, Some("_ltl_acc_"))
     ta.checkBuchi(s"${ta.systemName}_ltl_acc_")
@@ -287,13 +297,13 @@ class LTLVerifier(ltsFiles: Array[File], val property: LTL) {
     try {
       for (ta, i) <- processes.zipWithIndex do {
         // val projLasso = lasso.filter(x => assumptions(i).getAlphabet.contains(x))
-        println(s"Checking if ${lasso} is accepted by process ${i} (${ta.systemName})")
+        logger.debug(s"Checking if ${lasso} is accepted by process ${i} (${ta.systemName})")
         ta.checkLassoMembership(lasso, Some(ta.alphabet)) match {
           case None => // ta rejects
-            println("No")
+            logger.debug("No")
             throw Break()
           case _ => // ta accepts
-            println("Yes")
+            logger.debug("Yes")
             ()
         }
       }

@@ -55,7 +55,7 @@ You can specify the passive DFA learning algorithm using the option `--dfaLearni
 You can add the option `--visualizeDFA true` to see the assumption DFAs that were learned.
 
 ### Other examples
-Two toy examples easy to understand:
+Two toy examples easy to understand and another example with slightly larger automata and alphabets:
 
     java -jar target/scala-3.3.1/CircAG.jar dfa-aag --lts "examples/toy/lts1.ta,examples/toy/lts2.ta,examples/toy/lts3.ta" --err "err" --verbose false
     java -jar target/scala-3.3.1/CircAG.jar dfa-aag --lts "examples/seq-toy/lts0.ta,examples/seq-toy/lts1.ta,examples/seq-toy/lts2.ta,examples/seq-toy/lts3.ta" --err "err"

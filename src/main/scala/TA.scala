@@ -142,6 +142,24 @@ class TA (
     result
   }
 
+    /**
+    * Check whether lasso|_alph is accepted by ta|_alph where alph is syncAlphabet (default is lasso.toSet)
+    * @param lasso a lasso
+    * @param syncAlphabet synchronization alphabet for the synchronous product. Default is lasso.toSet.
+    * @pre the projection of lasso to syncAlphabet is infinite
+    * @return None if no such execution exists, and Some(lasso) otherwise.
+    */
+  def checkLassoSuffixMembership(lasso : Lasso, syncAlphabet : Option[Set[String]] = None) : Option[Lasso] = {  
+    statistics.Counters.incrementCounter("lasso-suffix-membership")
+    println(s"Checking membership of ${lasso} in ${systemName} *as a suffix* with sync alphabet ${syncAlphabet}")
+    throw Exception("Not implemented")
+    // val lassoAlphabet = syncAlphabet.getOrElse(lasso._1.toSet ++ lasso._2.toSet)
+    // val projLasso = lasso.filter(lassoAlphabet.contains(_))
+    // val lassoProcess = DLTS.fromLasso(projLasso, Some(lassoAlphabet))
+    // val productTA = TA.synchronousProduct(this, List(lassoProcess), Some("_accept_"))
+    // val result = productTA.checkBuchi(s"${lassoProcess.name}_accept_")
+    // result
+  }
 
   /**
     * Check whether all infinite runs of the TA satisfy the LTL formula.

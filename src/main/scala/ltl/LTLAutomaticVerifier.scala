@@ -31,9 +31,10 @@ import fr.irisa.circag.statistics
 import fr.irisa.circag.configuration
 import fr.irisa.circag._
 
-class LTLAutomaticVerifier(_ltsFiles: Array[File], _property: LTL, ltlLearningAlgorithm : LTLLearningAlgorithm = LTLLearningAlgorithm.Samples2LTL)
-  extends LTLVerifier(_ltsFiles, _property){
-  private val ltlGenerator = LTLGenerator(proofSkeleton, ltlLearningAlgorithm)
+class LTLAutomaticVerifier(_system : SystemSpec, ltlLearningAlgorithm : LTLLearningAlgorithm = LTLLearningAlgorithm.Samples2LTL, constraintStrategy : ConstraintStrategy = ConstraintStrategy.Eager)
+  extends LTLVerifier(_system){
+
+  private val ltlGenerator = LTLGenerator.getGenerator(system, proofSkeleton, ltlLearningAlgorithm, constraintStrategy)
 
   /**
     * @brief Prove or disprove the fixed assumptions and the global property by learning nonfixed assumptions
@@ -44,7 +45,7 @@ class LTLAutomaticVerifier(_ltsFiles: Array[File], _property: LTL, ltlLearningAl
     */
   def learnAssumptions(proveGlobalProperty : Boolean = true, fixedAssumptions : List[Int] = List()): LTLAGResult = {
     var count = 0
-    val fixedAssumptionsMap = HashMap[Int, LTL]()
+    val fixedAssumptionsMap = Map[Int, LTL]()
     fixedAssumptions.foreach(i => 
       fixedAssumptionsMap.put(i, assumptions(i))      
     )
@@ -68,10 +69,10 @@ class LTLAutomaticVerifier(_ltsFiles: Array[File], _property: LTL, ltlLearningAl
           println(s"AssumptionViolation ${processID} ${cex}")
           query match {
             case q : NonCircularPremiseQuery => 
-              ltlGenerator.refineConstraintsByPremiseQuery(cex, q, 0)
+              ltlGenerator.refineByInductivePremiseCounterexample(cex, q, 0)
             case q : CircularPremiseQuery => 
               val k0 = getPremiseViolationIndex(cex, q)
-              ltlGenerator.refineConstraintsByPremiseQuery(cex, q, k0)
+              ltlGenerator.refineByInductivePremiseCounterexample(cex, q, k0)
           }
           doneVerification = fixedAssumptions.contains(processID)
         case LTLAGResult.GlobalPropertyViolation(cex) => 
@@ -81,15 +82,15 @@ class LTLAutomaticVerifier(_ltsFiles: Array[File], _property: LTL, ltlLearningAl
           println(s"PremiseFail ${processID} ${cex}")
           query match {
             case q : NonCircularPremiseQuery => 
-              ltlGenerator.refineConstraintsByPremiseQuery(cex, q, 0)
+              ltlGenerator.refineByInductivePremiseCounterexample(cex, q, 0)
             case q : CircularPremiseQuery => 
               val k0 = getPremiseViolationIndex(cex, q)
-              ltlGenerator.refineConstraintsByPremiseQuery(cex, q, k0)
+              ltlGenerator.refineByInductivePremiseCounterexample(cex, q, k0)
           }
           // ltlGenerator.refineConstraintsByPremiseQuery(cex, query)
         case LTLAGResult.GlobalPropertyProofFail(cex) => 
           println(s"Global Proof fail ${cex}")
-          ltlGenerator.refineConstraintsByFinal(cex)
+          ltlGenerator.refineByFinalPremiseCounterexample(cex)
       }
     }
     currentState

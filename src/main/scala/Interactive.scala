@@ -49,7 +49,7 @@ class Interactive(
     val nbProcesses = files.size
     files.foreach(f=> if !f.exists() then throw Exception(s"File ${f} could not be read"))
     var dfaVerifier = DFAAutomaticVerifier(files.toArray, dfaProperty, DFALearningAlgorithm.RPNI)
-    var ltlVerifier = LTLVerifier(files.toArray, ltlProperty)
+    var ltlVerifier = LTLVerifier(ltl.SystemSpec(files.toArray, ltlProperty))
 
     private var dfaProofStates = Buffer.fill(nbProcesses)(DFAProofState.Unknown)
     private var dfaPropertyProofState = DFAProofState.Unknown
@@ -67,7 +67,7 @@ class Interactive(
 
     def setLTLProperty(ltlProperty : LTL) : Unit = {
         this.ltlProperty = ltlProperty
-        var ltlVerifier = LTLVerifier(files.toArray, ltlProperty)
+        var ltlVerifier = LTLVerifier(ltl.SystemSpec(files.toArray, ltlProperty))
     }
 
     /**

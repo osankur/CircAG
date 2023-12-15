@@ -152,9 +152,6 @@ class DFAAutomaticVerifier(
           AGResult.Success
         case Some(cexTrace) =>
           latestCex = cexTrace
-          // System.out.println(
-          //   s"${RED}Final premise failed with cex: ${cexTrace}${RESET}"
-          // )
           // If all processes contain proj(cexTrace), then return false, otherwise continue
           dfaGenerator.refineByFinalPremiseCounterexample(cexTrace)
           throw AGResult.GlobalPropertyProofFail(cexTrace)

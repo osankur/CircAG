@@ -122,7 +122,6 @@ object DFAGenerator {
   }
 }
 
-
 class DFAEagerGenerator(
     _system : SystemSpec,
     _proofSkeleton: DFAProofSkeleton,

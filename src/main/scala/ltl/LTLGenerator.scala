@@ -9,6 +9,8 @@ import scala.collection.immutable.Set
 import collection.JavaConverters._
 import collection.convert.ImplicitConversions._
 
+import scala.util.control.Breaks.{break,breakable}
+
 import io.AnsiColor._
 
 import com.microsoft.z3
@@ -18,16 +20,232 @@ import fr.irisa.circag.configuration
 import fr.irisa.circag.{Trace, Lasso, DLTS, Alphabet}
 import fr.irisa.circag.{pruned, filter, suffix, semanticEquals, size}
 
+enum ConstraintStrategy:
+  case Disjunctive
+  case Eager
 
-class LTLGenerator(proofSkeleton : LTLProofSkeleton, ltlLearningAlgorithm : LTLLearningAlgorithm) {
+/** Stores constraints on assumptions, and generates them by first solving these constraints. 
+  *
+  * @param system
+  * @param proofSkeleton
+  * @param dfaLearnerAlgorithm
+  */
+trait LTLGenerator(
+    val system : SystemSpec,
+    val proofSkeleton: LTLProofSkeleton,
+    val ltlLearningAlgorithm: LTLLearningAlgorithm =
+      LTLLearningAlgorithm.Samples2LTL
+) {
+
+  protected val nbProcesses = proofSkeleton.nbProcesses
+
+  // Samples that were used to compute assumptions the last time. Here the prefix closure of the positive samples were added
+  protected var positiveSamples = Buffer.tabulate(nbProcesses)({ _ =>
+    Set[Lasso]()
+  })
+  protected var negativeSamples = Buffer.tabulate(nbProcesses)({ _ =>
+    Set[Lasso]()
+  })
+
+  protected val learners : Buffer[LTLLearner] = Buffer.tabulate(proofSkeleton.nbProcesses)
+    (i => SATLearner(s"assumption${i}", proofSkeleton.assumptionAlphabet(i), universal = proofSkeleton.isCircular(i), ltlLearningAlgorithm))
+
+  /** Reinitialize the solver and samples.
+    */
+  def reset(): Unit
+
+  /**
+    * Given a lasso that violates the final premise, check the counterexample: if realizable, 
+    * throw AGResult.GlobalPropertyViolation(lasso), otherwise update the constraints
+    *
+    * @param lasso that violates the final premise
+    * @throws AGResult.GlobalPropertyViolation
+    */
+  def refineByFinalPremiseCounterexample(lasso : Lasso) : Unit
+
+  /**
+    * Update constraints given a process id and a trace that violates its inductive premise
+    *
+    * @param processID process id
+    * @param cexTrace a trace that violates the inductive premise of processID
+    */
+  def refineByInductivePremiseCounterexample(lasso : Lasso, query : PremiseQuery, violationIndex : Int) : Unit
+
+  /** Generate assumptions satisfying the constraints, except that those
+    * processes whose assumptions are given as argument. Note that fixing some of the
+    * assumptions can make the constraints unsatisfiable.
+    *
+    * @param fixedAssumptions
+    *   process indices and their fixed assumptions
+    * @return
+    *   None if the constraints are unsat, and an assumption for each process
+    *   otherwise.
+    */
+  def generateAssumptions(
+      fixedAssumptions: Map[Int, LTL] = Map()
+  ): Option[Buffer[LTL]]
+}
+
+
+object LTLGenerator {
+  def getGenerator(
+      system : SystemSpec,
+      proofSkeleton: LTLProofSkeleton,
+      ltlLearningAlgorithm: LTLLearningAlgorithm =
+        LTLLearningAlgorithm.Samples2LTL,
+      constraintStrategy : ConstraintStrategy
+    ) : LTLGenerator = {
+    constraintStrategy match {
+      case ConstraintStrategy.Disjunctive => LTLDisjunctiveGenerator(system, proofSkeleton, ltlLearningAlgorithm)
+      case ConstraintStrategy.Eager => LTLEagerGenerator(system, proofSkeleton, ltlLearningAlgorithm)
+    }
+  }
+}
+
+class LTLEagerGenerator(_system : SystemSpec, _proofSkeleton : LTLProofSkeleton, _ltlLearningAlgorithm : LTLLearningAlgorithm) 
+  extends LTLGenerator(_system, _proofSkeleton, _ltlLearningAlgorithm){
+
+  private val logger = LoggerFactory.getLogger("CircAG")
+  protected val samples = Buffer.tabulate(nbProcesses)({_ => Buffer[Lasso]()})
+  // Boolean variable corresponding to each pair (process,trace)
+
+  /**
+    * Reinitialize the solver. Resets the constraints but keeps those coming from incremental traces
+    */
+  def reset() : Unit = {
+    this.samples.foreach(_.clear())
+    this.positiveSamples = Buffer.tabulate(nbProcesses)({_ => Set[Lasso]()})
+    this.negativeSamples = Buffer.tabulate(nbProcesses)({_ => Set[Lasso]()})
+  }
+
+  /**
+    * Generate assumptions satisfying the constraints, except that those processes 
+    * whose LTL formulas are given in fixedAssumptions. Note that fixing 
+    * some of the assumptions can make the constraints unsatisfiable.
+    *
+    * @param fixedAssumptions partial map from process indices to their fixed assumptions
+    * @return None if the constraints are unsat, and an assumption for each process otherwise.
+    */
+  override def generateAssumptions(fixedAssumptions : Map[Int,LTL] = Map[Int,LTL]()) : Option[Buffer[LTL]] = {
+    class UnsatAssumption extends Exception
+    def findAssumptions() : Option[Buffer[LTL]] = {
+      try {
+            Some(Buffer.tabulate(proofSkeleton.nbProcesses)
+              (i => 
+                if fixedAssumptions.contains(i) then 
+                  fixedAssumptions(i)
+                else {
+                  learners(i).setPositiveSamples(positiveSamples(i))
+                  learners(i).setNegativeSamples(negativeSamples(i))
+                  learners(i).getLTL() match {
+                    case None => 
+                      throw UnsatAssumption()
+                    case Some(ltl) => 
+                      logger.debug(s"Samples2LTL generated formula ${ltl} for ${i}")
+                      ltl
+                  }
+                }
+              )
+            )
+      } catch {
+        case _ : UnsatAssumption => findAssumptions()
+        case e => throw e
+      }
+    }
+    findAssumptions()
+  }
+
+  override def refineByFinalPremiseCounterexample(lasso : Lasso) = {
+    breakable{
+      for j <- 0 until nbProcesses do {
+        if system.processes(j).checkLassoMembership(lasso, Some(proofSkeleton.assumptionAlphabet(j))) == None then {
+          negativeSamples(j) = negativeSamples(j).incl(lasso)
+          break
+        }
+        // If we reached here, than this is confirmed counterexample
+        throw LTLAGResult.GlobalPropertyViolation(lasso)        
+      }  
+    }
+  }
+
+  /**
+    * Attempt to add only one new sample: break and return whenever a sample is added
+    *
+    * @param lasso cex lasso violatijg the given query
+    * @param query the violated query
+    * @param violationIndex the k0
+    */
+  override def refineByInductivePremiseCounterexample(lasso : Lasso, query : PremiseQuery, violationIndex : Int) = {
+    query match {
+      case CircularPremiseQuery(_processID, noncircularDeps, circularDeps, instantaneousDeps, mainAssumption, fairness) => 
+        breakable {
+        // 1. Check non-circular dependencies
+          proofSkeleton.processDependencies(_processID)
+          .filter(!proofSkeleton.isCircular(_))
+          .foreach(
+            j => 
+              if system.processes(j).checkLassoMembership(lasso, Some(proofSkeleton.assumptionAlphabet(j))) == None then {                
+                negativeSamples(j) = negativeSamples(j).incl(lasso)
+                logger.debug(s"refineByInductivePremiseCounterexample. Circular case; item 1. j=${j}")
+                break
+              }
+          )
+        // 2. Check circular dependencies j, at each 0 <= k <= violationIndex-1
+          proofSkeleton.processDependencies(_processID)
+          .filter(proofSkeleton.isCircular(_))
+          .foreach(
+            j => 
+              (0 until violationIndex) foreach {
+                k => 
+                  if system.processes(j).checkLassoSuffixMembership(lasso.suffix(k), Some(proofSkeleton.assumptionAlphabet(j))) == None then {
+                    negativeSamples(j) = negativeSamples(j).incl(lasso.suffix(k))
+                    logger.debug(s"refineByInductivePremiseCounterexample. Circular case; item 2. k=${k}, j=${j}")
+                    break
+                  }
+              }
+          )
+          // 3. Instantaneous dependency at violationIndex
+          proofSkeleton.processInstantaneousDependencies(_processID)
+          .foreach(
+            j => 
+              if system.processes(j).checkLassoSuffixMembership(lasso.suffix(violationIndex), Some(proofSkeleton.assumptionAlphabet(j))) == None then {
+                negativeSamples(j) = negativeSamples(j).incl(lasso.suffix(violationIndex))
+                logger.debug(s"refineByInductivePremiseCounterexample. Circular case; item 3. k0=${violationIndex}, j=${j}")
+                break
+              }
+          )
+          // 4. Otherwise we add the positive sample
+          positiveSamples(_processID) = positiveSamples(_processID).incl(lasso)
+          logger.debug(s"refineByInductivePremiseCounterexample. Circular case; item 4. Added positive sample")
+        }
+      case NonCircularPremiseQuery(_processID, dependencies, mainAssumption, fairness) => 
+        breakable {
+          // 1. Check all non-circular dependencies
+          proofSkeleton.processDependencies(_processID)
+          .foreach(
+            j => 
+              if system.processes(j).checkLassoMembership(lasso, Some(proofSkeleton.assumptionAlphabet(j))) == None then {                
+                negativeSamples(j) = negativeSamples(j).incl(lasso)
+                logger.debug(s"refineByInductivePremiseCounterexample. Non-Circular case; j=${j}")
+                break
+              }
+          )
+          // 2. Otherwise add the positive sample
+          positiveSamples(_processID) = positiveSamples(_processID).incl(lasso)
+          logger.debug(s"refineByInductivePremiseCounterexample. Non-Circular case; Added positive sample")
+        }
+      }
+  }
+}
+
+class LTLDisjunctiveGenerator(_system : SystemSpec, _proofSkeleton : LTLProofSkeleton, _ltlLearningAlgorithm : LTLLearningAlgorithm) 
+  extends LTLGenerator(_system, _proofSkeleton, _ltlLearningAlgorithm){
   protected val z3ctx = {
     val cfg = mutable.HashMap[String, String]()
     cfg.put("model", "true")
     z3.Context(cfg);
   }
 
-  protected val nbProcesses: Int = proofSkeleton.nbProcesses
-  // Set of all samples added so far for each process
   protected val samples = Buffer.tabulate(nbProcesses)({_ => Buffer[(Lasso,z3.BoolExpr)]()})
   // Boolean variable corresponding to each pair (process,trace)
   protected val toVars = HashMap[(Int,Lasso), z3.BoolExpr]()
@@ -35,14 +253,8 @@ class LTLGenerator(proofSkeleton : LTLProofSkeleton, ltlLearningAlgorithm : LTLL
 
   protected var solver = z3ctx.mkSolver()
 
-  protected var positiveSamples = Buffer.tabulate(nbProcesses)({_ => Set[Lasso]()})
-  protected var negativeSamples = Buffer.tabulate(nbProcesses)({_ => Set[Lasso]()})
-
   // The minterm corresponding to the current assignment of the constraints
   protected var currentAssignment = z3ctx.mkFalse()
-
-  protected val learners : Buffer[LTLLearner] = Buffer.tabulate(proofSkeleton.nbProcesses)
-    (i => SATLearner(s"assumption${i}", proofSkeleton.assumptionAlphabet(i), universal = proofSkeleton.isCircular(i), ltlLearningAlgorithm))
 
   /**
     * Reinitialize the solver. Resets the constraints but keeps those coming from incremental traces
@@ -106,7 +318,7 @@ class LTLGenerator(proofSkeleton : LTLProofSkeleton, ltlLearningAlgorithm : LTLL
    * All process index - DLTS pairs given as arguments are assumed to be fixed, 
    * so we update the constraints (temporarily) so that the solution respects these existing assumptions.
    */
-  private def generateSamples(fixedAssumptions : mutable.Map[Int,LTL] = mutable.Map()) : Option[(Buffer[Set[Lasso]], Buffer[Set[Lasso]])] = {
+  private def generateSamples(fixedAssumptions : Map[Int,LTL] = Map()) : Option[(Buffer[Set[Lasso]], Buffer[Set[Lasso]])] = {
     var positiveSamples = Buffer.tabulate(nbProcesses)({_ => collection.immutable.Set[Lasso]()})
     var negativeSamples = Buffer.tabulate(nbProcesses)({_ => Set[Lasso]()})
 
@@ -123,7 +335,7 @@ class LTLGenerator(proofSkeleton : LTLProofSkeleton, ltlLearningAlgorithm : LTLL
       }
     }
 
-    println("Generating assignment")
+    // println("Generating assignment")
     // for ass <- solver.getAssertions() do
     //   println(ass)
 
@@ -131,7 +343,7 @@ class LTLGenerator(proofSkeleton : LTLProofSkeleton, ltlLearningAlgorithm : LTLL
     if(solver.check() == z3.Status.UNSATISFIABLE){
       statistics.Timers.incrementTimer("z3", (System.nanoTime() - beginTime))
       solver.pop()
-      println("Constraints are unsat")
+      // println("Constraints are unsat")
       None
     } else {
       val m = solver.getModel()
@@ -156,10 +368,10 @@ class LTLGenerator(proofSkeleton : LTLProofSkeleton, ltlLearningAlgorithm : LTLL
               }
           })
       })
-      println("Generated:")
-      println(s"Minterm: ${currentAssignment}")
-      println(s"Positive samples: ${positiveSamples}")
-      println(s"Negative samples: ${negativeSamples}")
+      // println("Generated:")
+      // println(s"Minterm: ${currentAssignment}")
+      // println(s"Positive samples: ${positiveSamples}")
+      // println(s"Negative samples: ${negativeSamples}")
 
       statistics.Timers.incrementTimer("z3", (System.nanoTime() - beginTime))
       solver.pop()
@@ -183,7 +395,7 @@ class LTLGenerator(proofSkeleton : LTLProofSkeleton, ltlLearningAlgorithm : LTLL
     * @param query premise query whose failure gave lasso
     * @param violationIndex when the query concerns a circular process, the step where the RHS of the until formula of the premise query holds.
     */
-  def refineConstraintsByPremiseQuery(lasso : Lasso, query : PremiseQuery, violationIndex : Int) : Unit = {
+  override def refineByInductivePremiseCounterexample(lasso : Lasso, query : PremiseQuery, violationIndex : Int) : Unit = {
     query match {
       case CircularPremiseQuery(_processID, noncircularDeps, circularDeps, instantaneousDeps, mainAssumption, fairness) => 
         val constraint =
@@ -226,11 +438,11 @@ class LTLGenerator(proofSkeleton : LTLProofSkeleton, ltlLearningAlgorithm : LTLL
             }
           }).toList
         val constraint = z3ctx.mkOr(main, z3ctx.mkOr(deps : _*))
-        println(s"refineConstraintByQuery: ${constraint}")
+        // println(s"refineConstraintByQuery: ${constraint}")
         solver.add(constraint)
     }
   }
-  def refineConstraintsByFinal(lasso : Lasso) : Unit = {
+  override def refineByFinalPremiseCounterexample(lasso : Lasso) : Unit = {
     val constraint = z3ctx.mkOr(
         (0 until nbProcesses).map(
           { i => 
@@ -246,7 +458,7 @@ class LTLGenerator(proofSkeleton : LTLProofSkeleton, ltlLearningAlgorithm : LTLL
             }
           }) 
       :_*)
-    println(s"refineConstraintByFinal: ${constraint}")
+    // println(s"refineConstraintByFinal: ${constraint}")
     solver.add(constraint)
   }
 
@@ -259,7 +471,7 @@ class LTLGenerator(proofSkeleton : LTLProofSkeleton, ltlLearningAlgorithm : LTLL
     * @param fixedAssumptions partial map from process indices to their fixed assumptions
     * @return None if the constraints are unsat, and an assumption for each process otherwise.
     */
-  def generateAssumptions(fixedAssumptions : mutable.Map[Int,LTL] = mutable.Map()) : Option[Buffer[LTL]] = {
+  override def generateAssumptions(fixedAssumptions : Map[Int,LTL] = Map[Int,LTL]()) : Option[Buffer[LTL]] = {
     class UnsatAssumption extends Exception
     def findAssumptions() : Option[Buffer[LTL]] = {
       try {
