@@ -89,10 +89,6 @@ class RPNILearner(name: String, alphabet: Alphabet)
           alphabet = alphabet
         )
         this.dlts = Some(dlts)
-        // System.out.println(s"Alphabet: ${dlts.alphabet}")
-        // System.out.println(s"Pos:${positiveSamples}")
-        // System.out.println(s"Neg:${negativeSamples}")
-        // dlts.visualize()
         dlts
     }
 

@@ -89,8 +89,8 @@ class DFAAutomaticVerifier(
       for (ta, i) <- system.processes.zipWithIndex do {
         // DFAAssumeGuaranteeVerifier.checkInductivePremise(ta, proofSkeleton.processDependencies(i).map(assumptions(_)).toList, assumptions(i))
         this.checkInductivePremise(i) match {
-          case None =>
-            System.out.println(s"${GREEN}Premise ${i} passed${RESET}")
+          case None => ()
+            // System.out.println(s"${GREEN}Premise ${i} passed${RESET}")
           case Some(cexTrace) =>
             latestCex = cexTrace
             System.out.println(
@@ -148,23 +148,16 @@ class DFAAutomaticVerifier(
       if system.property == None || !proveGlobalproperty then
         throw AGResult.Success
       this.checkFinalPremise() match {
-        case None =>
-          System.out.println(s"${GREEN}Final premise succeeded${RESET}")
+        case None =>          
           AGResult.Success
         case Some(cexTrace) =>
           latestCex = cexTrace
-          System.out.println(
-            s"${RED}Final premise failed with cex: ${cexTrace}${RESET}"
-          )
+          // System.out.println(
+          //   s"${RED}Final premise failed with cex: ${cexTrace}${RESET}"
+          // )
           // If all processes contain proj(cexTrace), then return false, otherwise continue
-          if checkCounterExample(cexTrace) then {
-            if configuration.get().verbose then
-              System.out.println(s"\tCex confirmed: ${cexTrace}")
-            throw AGResult.GlobalPropertyViolation(cexTrace)
-          } else {
-            dfaGenerator.refineByFinalPremiseCounterexample(cexTrace)
-            throw AGResult.GlobalPropertyProofFail(cexTrace)
-          }
+          dfaGenerator.refineByFinalPremiseCounterexample(cexTrace)
+          throw AGResult.GlobalPropertyProofFail(cexTrace)
       }
     } catch {
       case ex: AGResult => ex
@@ -194,15 +187,18 @@ class DFAAutomaticVerifier(
       }
       currentState = this.applyAG(proveGlobalProperty)
       currentState match {
-        case AGResult.Success => doneVerification = true
+        case AGResult.Success => 
+          logger.info(s"${GREEN}${BOLD}Property holds${RESET}")
+          doneVerification = true
         case AGResult.AssumptionViolation(processID, cex) =>
           doneVerification = fixedAssumptions.contains(processID)
-        case AGResult.GlobalPropertyViolation(cex) => doneVerification = true
+        case AGResult.GlobalPropertyViolation(cex) => 
+          logger.info(s"${RED}${BOLD}Property fails with counterexample ${cex}${RESET}")
+          doneVerification = true
         case AGResult.PremiseFail(processID, cex)  => ()
         case AGResult.GlobalPropertyProofFail(cex) => ()
       }
     }
     currentState
   }
-
 }

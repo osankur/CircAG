@@ -16,7 +16,7 @@ import fr.irisa.circag.{Trace, DLTS, Alphabet}
 
 /** Strategy to add constraints on assumptions.
   *
-  *   - Disjunctive follows the CAV16 paper; it often adds a disjunctive formula. *
+  *   - Disjunctive follows the CAV16 paper; it often adds a disjunctive formula.
   *   - Eager does the following: given a counterexample trace w for A_i |=
   *     Gamma_i |> g_i, check if for some j in Gamma_i, w|_{alpha_j} not in
   *     L(A_j), if yes then add the single constraint not(w|_{alpha_j} |=
@@ -75,9 +75,11 @@ trait DFAGenerator(
   def reset(): Unit
 
   /**
-    * Given a trace that violates the final premise, update the constraints
+    * Given a trace that violates the final premise, check the counterexample: if realizable, 
+    * throw AGResult.GlobalPropertyViolation(trace), otherwise update the constraints
     *
     * @param trace that violates the final premise
+    * @throws AGResult.GlobalPropertyViolation
     */
   def refineByFinalPremiseCounterexample(trace: Trace): Unit
 
@@ -174,7 +176,7 @@ class DFAEagerGenerator(
             break
           }
       }
-      throw Exception(s"refineByFinalPremiseCounterexample: None of the processes have rejected prefix of ${trace}.")
+      throw AGResult.GlobalPropertyViolation(trace)
     }
   }
 
@@ -499,6 +501,15 @@ class DFADisjunctiveGenerator(
   }
 
   override def refineByFinalPremiseCounterexample(trace: Trace): Unit = {
+    breakable{
+      for j <- 0 until nbProcesses do {
+          logger.debug(s"Checking if proj of ${trace} to j-th ass alphabet is accepted by process ${j}")
+          if system.processes(j).checkTraceMembership(trace, Some(proofSkeleton.assumptionAlphabets(j))) == None then {
+            break
+          }
+      }
+      throw AGResult.GlobalPropertyViolation(trace)
+    }
     val newConstraint = z3ctx.mkOr(
       z3ctx.mkOr(
         proofSkeleton
