@@ -174,6 +174,7 @@ object DLTS {
     * @return
     */
   def fromTrace(trace: Trace, traceAlphabet : Option[Alphabet] = None): DLTS = {
+    require(trace.forall(p => p != ""))
     val alph = traceAlphabet.getOrElse(trace.toSet) | trace.toSet
     val dfa = FastDFA(Alphabets.fromList(alph.toList))
     val newStates = Buffer[FastDFAState]()
@@ -194,9 +195,19 @@ object DLTS {
     DLTS("_trace_", dfa, alph)
   }
 
+  /**
+    * Make a DLTS that reads a given lasso; and make the first state of the cycle accepting.
+    *
+    * @param lasso lasso
+    * @param alphabet alphabet of the resulting automaton
+    * @pre alphabet contains all symbols of lasso
+    * @return
+    */
   def fromLasso(lasso : Lasso, alphabet : Option[Alphabet] = None) : DLTS = {
     val prefix = lasso._1
     val cycle = lasso._2
+    require(prefix.forall(p => p != ""))
+    require(cycle.forall(p => p != ""))
     val occurringSymbols = prefix.toSet ++ cycle.toSet
     val givenAlphabet = alphabet.getOrElse(occurringSymbols)
     require(occurringSymbols.subsetOf(givenAlphabet))
@@ -204,6 +215,7 @@ object DLTS {
     val newDFA =
      new FastDFA(Alphabets.fromList(givenAlphabet.toList))
     val states = Buffer.tabulate(n){i => newDFA.addState(i == prefix.size)}
+    newDFA.setAccepting(states(prefix.size), true)
     newDFA.setInitial(states(0), true)
     for (sigma, i) <- prefix.zipWithIndex do {
       newDFA.addTransition(states(i), sigma, states(i+1))
@@ -220,6 +232,7 @@ object DLTS {
 
 
   def fromErrorSymbol(symbol : Symbol, dltsName : String = "") : DLTS = {
+    require(symbol != "")
     val alph = Alphabets.fromList(List(symbol))
     val errDFA = AutomatonBuilders
       .forDFA(FastDFA(alph))
@@ -443,7 +456,7 @@ extension(dfa : CompactDFA[String]){
         // System.out.println(newstate)
         statesMap.put(state, newstate)
       })
-    newDFA.setInitial(statesMap(dfa.getInitialState()), dfa.isAccepting(dfa.getInitialState()))
+    newDFA.setInitial(statesMap(dfa.getInitialState()), true)
     dfa
       .getStates()
       .foreach(
@@ -632,6 +645,36 @@ extension(dfa : FastDFA[String]){
 
 object NLTS {
 
+  def fromDLTS(dlts : DLTS) : NLTS = {
+    val dfa = dlts.dfa
+    val statesMap = HashMap((dfa.getInitialState(), FastNFAState(0,false)))
+    val alphabet = dfa.getInputAlphabet()
+    val newNFA = new FastNFA(alphabet)
+    dfa
+      .getStates()
+      .foreach({ state =>
+        val newstate = newNFA.addState(dfa.isAccepting(state))
+        statesMap.put(state, newstate)
+      })
+    newNFA.setInitial(statesMap(dfa.getInitialState()), true)
+    dfa
+      .getStates()
+      .foreach(
+        { s =>
+          for a <- alphabet do {
+            dfa
+              .getSuccessors(s, a)
+              .foreach(
+                { snext =>
+                  newNFA.addTransition(statesMap(s), a, statesMap(snext))
+                }
+              )
+          }
+        }
+      )
+    NLTS(dlts.name, newNFA, dlts.alphabet)
+  }
+
   def fromLTL(ltlString : String, fullAlphabet : Option[Alphabet]) : NLTS = {
     def printToFile(f: java.io.File)(op: java.io.PrintWriter => Unit) = {
       val p = new java.io.PrintWriter(f)
@@ -790,6 +833,34 @@ object NLTS {
     val nlts = NLTS("_hoa_", nfa, nfa.getInputAlphabet().toSet)
     if header.getName() != null then 
       nlts.comments = header.getName()
+    nlts
+  }
+
+  /**
+    * Build a NLTS which recognizes traces that start with an arbitrary prefix, and then reads the given lasso.
+    * The NFA is defined as the union of two parts. Either the lasso DFA, or another initial state with self-loops which can go to the initial state of the lasso dfa.
+    * @param lasso
+    * @param alphabet
+    * @return
+    */
+  def fromLassoAsSuffix(lasso : Lasso, alphabet : Option[Alphabet] = None) : NLTS = {
+    val nlts = NLTS.fromDLTS(DLTS.fromLasso(lasso, alphabet))
+    assert(nlts.dfa.getInitialStates().size == 1)
+    val lassoInit = nlts.dfa.getInitialStates().head // init state of the lasso. this remains initial
+    val initState = nlts.dfa.addState(false) // new init state
+    nlts.dfa.setInitial(initState, true)
+    for sigma <- nlts.alphabet do {
+      nlts.dfa.addTransition(
+          initState,
+          sigma, 
+          initState
+        )
+      nlts.dfa.addTransition(
+          initState,
+          sigma, 
+          lassoInit
+        )
+    }
     nlts
   }
 

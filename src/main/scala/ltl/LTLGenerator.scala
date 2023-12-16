@@ -54,6 +54,10 @@ trait LTLGenerator(
     */
   def reset(): Unit
 
+  def getSamples() : (Buffer[Set[Lasso]], Buffer[Set[Lasso]]) = {
+    (positiveSamples, negativeSamples)
+  }
+
   /**
     * Given a lasso that violates the final premise, check the counterexample: if realizable, 
     * throw AGResult.GlobalPropertyViolation(lasso), otherwise update the constraints
@@ -105,6 +109,8 @@ object LTLGenerator {
 class LTLEagerGenerator(_system : SystemSpec, _proofSkeleton : LTLProofSkeleton, _ltlLearningAlgorithm : LTLLearningAlgorithm) 
   extends LTLGenerator(_system, _proofSkeleton, _ltlLearningAlgorithm){
 
+  // Whether to add a single sample at each refinement, or all possible refinements
+  val lazyConstraints = false
   private val logger = LoggerFactory.getLogger("CircAG")
   protected val samples = Buffer.tabulate(nbProcesses)({_ => Buffer[Lasso]()})
   // Boolean variable corresponding to each pair (process,trace)
@@ -155,15 +161,30 @@ class LTLEagerGenerator(_system : SystemSpec, _proofSkeleton : LTLProofSkeleton,
     findAssumptions()
   }
 
+  private def addNegativeSample(j : Int, lasso : Lasso) = {
+    if (negativeSamples(j).contains(lasso)) then {
+      throw Exception(s"Repeated negative lasso: ${lasso} for process ${j}")
+    }
+    negativeSamples(j) = negativeSamples(j).incl(lasso)
+  }
+  private def addPositiveSample(j : Int, lasso : Lasso) = {
+    if (positiveSamples(j).contains(lasso)) then {
+      throw Exception(s"Repeated positive lasso: ${lasso} for process ${j}")
+    }
+    positiveSamples(j) = positiveSamples(j).incl(lasso)
+  }
+
   override def refineByFinalPremiseCounterexample(lasso : Lasso) = {
+    var refined = false
     breakable{
       for j <- 0 until nbProcesses do {
         if system.processes(j).checkLassoMembership(lasso, Some(proofSkeleton.assumptionAlphabet(j))) == None then {
-          negativeSamples(j) = negativeSamples(j).incl(lasso)
-          break
+          addNegativeSample(j, lasso)
+          refined = true
+          if lazyConstraints then break
         }
         // If we reached here, than this is confirmed counterexample
-        throw LTLAGResult.GlobalPropertyViolation(lasso)        
+        if !refined then throw LTLAGResult.GlobalPropertyViolation(lasso)        
       }  
     }
   }
@@ -175,7 +196,8 @@ class LTLEagerGenerator(_system : SystemSpec, _proofSkeleton : LTLProofSkeleton,
     * @param query the violated query
     * @param violationIndex the k0
     */
-  override def refineByInductivePremiseCounterexample(lasso : Lasso, query : PremiseQuery, violationIndex : Int) = {
+  override def refineByInductivePremiseCounterexample(lasso : Lasso, query : PremiseQuery, violationIndex : Int) : Unit = {
+    var refined = false
     query match {
       case CircularPremiseQuery(_processID, noncircularDeps, circularDeps, instantaneousDeps, mainAssumption, fairness) => 
         breakable {
@@ -185,9 +207,10 @@ class LTLEagerGenerator(_system : SystemSpec, _proofSkeleton : LTLProofSkeleton,
           .foreach(
             j => 
               if system.processes(j).checkLassoMembership(lasso, Some(proofSkeleton.assumptionAlphabet(j))) == None then {                
-                negativeSamples(j) = negativeSamples(j).incl(lasso)
+                addNegativeSample(j, lasso.filter(proofSkeleton.assumptionAlphabet(j).contains(_)))
                 logger.debug(s"refineByInductivePremiseCounterexample. Circular case; item 1. j=${j}")
-                break
+                refined = true
+                if lazyConstraints then break
               }
           )
         // 2. Check circular dependencies j, at each 0 <= k <= violationIndex-1
@@ -198,9 +221,10 @@ class LTLEagerGenerator(_system : SystemSpec, _proofSkeleton : LTLProofSkeleton,
               (0 until violationIndex) foreach {
                 k => 
                   if system.processes(j).checkLassoSuffixMembership(lasso.suffix(k), Some(proofSkeleton.assumptionAlphabet(j))) == None then {
-                    negativeSamples(j) = negativeSamples(j).incl(lasso.suffix(k))
+                    addNegativeSample(j, lasso.suffix(k).filter(proofSkeleton.assumptionAlphabet(j).contains(_)))
                     logger.debug(s"refineByInductivePremiseCounterexample. Circular case; item 2. k=${k}, j=${j}")
-                    break
+                    refined = true
+                    if lazyConstraints then break
                   }
               }
           )
@@ -209,14 +233,17 @@ class LTLEagerGenerator(_system : SystemSpec, _proofSkeleton : LTLProofSkeleton,
           .foreach(
             j => 
               if system.processes(j).checkLassoSuffixMembership(lasso.suffix(violationIndex), Some(proofSkeleton.assumptionAlphabet(j))) == None then {
-                negativeSamples(j) = negativeSamples(j).incl(lasso.suffix(violationIndex))
+                addNegativeSample(j, lasso.suffix(violationIndex).filter(proofSkeleton.assumptionAlphabet(j).contains(_)))
                 logger.debug(s"refineByInductivePremiseCounterexample. Circular case; item 3. k0=${violationIndex}, j=${j}")
-                break
+                refined = true
+                if lazyConstraints then break
               }
           )
           // 4. Otherwise we add the positive sample
-          positiveSamples(_processID) = positiveSamples(_processID).incl(lasso)
-          logger.debug(s"refineByInductivePremiseCounterexample. Circular case; item 4. Added positive sample")
+          if !refined then {
+            addPositiveSample(_processID, lasso.filter(proofSkeleton.assumptionAlphabet(_processID).contains(_)))
+            logger.debug(s"refineByInductivePremiseCounterexample. Circular case; item 4. Added positive sample")
+          }
         }
       case NonCircularPremiseQuery(_processID, dependencies, mainAssumption, fairness) => 
         breakable {
@@ -225,14 +252,17 @@ class LTLEagerGenerator(_system : SystemSpec, _proofSkeleton : LTLProofSkeleton,
           .foreach(
             j => 
               if system.processes(j).checkLassoMembership(lasso, Some(proofSkeleton.assumptionAlphabet(j))) == None then {                
-                negativeSamples(j) = negativeSamples(j).incl(lasso)
+                addNegativeSample(j, lasso.filter(proofSkeleton.assumptionAlphabet(j).contains(_)))
                 logger.debug(s"refineByInductivePremiseCounterexample. Non-Circular case; j=${j}")
-                break
+                refined = true
+                if lazyConstraints then break
               }
           )
           // 2. Otherwise add the positive sample
-          positiveSamples(_processID) = positiveSamples(_processID).incl(lasso)
-          logger.debug(s"refineByInductivePremiseCounterexample. Non-Circular case; Added positive sample")
+          if !refined then {
+            addPositiveSample(_processID, lasso.filter(proofSkeleton.assumptionAlphabet(_processID).contains(_)))
+            logger.debug(s"refineByInductivePremiseCounterexample. Non-Circular case; Added positive sample")
+          }
         }
       }
   }

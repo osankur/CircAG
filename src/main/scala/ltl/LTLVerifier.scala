@@ -73,7 +73,10 @@ case class NonCircularPremiseQuery(
 
 
 enum LTLAGResult extends Exception:
-  case Success // Assumptions and global property proven
+  override def toString(): String = 
+    s"${this.getClass.getName()}"
+  // Assumptions and global property proven
+  case Success
   case GlobalPropertyProofFail(cex : Lasso) // Global property proof fails, but lasso not realizable
   case GlobalPropertyViolation(cex : Lasso) // Global property proof fails, and lasso realizable
   case PremiseFail(processID : Int, cex : Lasso, query : PremiseQuery) // Premise proof fails, but lasso not realizable
@@ -241,7 +244,6 @@ class LTLVerifier(val system : SystemSpec) {
             // We make sure that the lasso and the LTL formula synchronizes every single letter
             // by setting the alphabet of the lasso to its own letters + processAlphabet + letter appearing in the formula
             val alpha = newp.toSet ++ c.toSet ++ processAlphabet ++ formulaAlphabet
-            println(s"alphabet for lasso is ${alpha}")
             val dlts = DLTS.fromLasso((newp, c), alphabet = Some(alpha))
             // add symbols of the process being checked in the premise query to the alphabet of the lasso
             val lassoTA = TA.fromLTS(dlts)
@@ -249,6 +251,7 @@ class LTLVerifier(val system : SystemSpec) {
               break(i)
           }
           throw Exception(s"Failed to find the violation index of lasso ${lasso} and query ${query}")        
+        logger.debug(s"Computing violation index: ${k0}")
         return k0
     }
   }

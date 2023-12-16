@@ -133,7 +133,7 @@ class TA (
     */
   def checkLassoMembership(lasso : Lasso, syncAlphabet : Option[Set[String]] = None) : Option[Lasso] = {  
     statistics.Counters.incrementCounter("lasso-membership")
-    println(s"Checking membership of ${lasso} in ${systemName} with sync alphabet ${syncAlphabet}")
+    // println(s"Checking membership of ${lasso} in ${systemName} with sync alphabet ${syncAlphabet}")
     val lassoAlphabet = syncAlphabet.getOrElse(lasso._1.toSet ++ lasso._2.toSet)
     val projLasso = lasso.filter(lassoAlphabet.contains(_))
     val lassoProcess = DLTS.fromLasso(projLasso, Some(lassoAlphabet))
@@ -142,23 +142,22 @@ class TA (
     result
   }
 
-    /**
-    * Check whether lasso|_alph is accepted by ta|_alph where alph is syncAlphabet (default is lasso.toSet)
-    * @param lasso a lasso
-    * @param syncAlphabet synchronization alphabet for the synchronous product. Default is lasso.toSet.
-    * @pre the projection of lasso to syncAlphabet is infinite
-    * @return None if no such execution exists, and Some(lasso) otherwise.
-    */
+  /**
+  * Check whether alpha*.(lasso|_alph) has non-empty intersection with ta|_alph where alph is syncAlphabet (default is lasso.toSet)
+  * @param lasso a lasso
+  * @param syncAlphabet synchronization alphabet for the synchronous product. Default is lasso.toSet.
+  * @pre the projection of lasso to syncAlphabet is infinite
+  * @return None if no such execution exists, and Some(lasso) otherwise.
+  */
   def checkLassoSuffixMembership(lasso : Lasso, syncAlphabet : Option[Set[String]] = None) : Option[Lasso] = {  
     statistics.Counters.incrementCounter("lasso-suffix-membership")
-    println(s"Checking membership of ${lasso} in ${systemName} *as a suffix* with sync alphabet ${syncAlphabet}")
-    throw Exception("Not implemented")
-    // val lassoAlphabet = syncAlphabet.getOrElse(lasso._1.toSet ++ lasso._2.toSet)
-    // val projLasso = lasso.filter(lassoAlphabet.contains(_))
-    // val lassoProcess = DLTS.fromLasso(projLasso, Some(lassoAlphabet))
-    // val productTA = TA.synchronousProduct(this, List(lassoProcess), Some("_accept_"))
-    // val result = productTA.checkBuchi(s"${lassoProcess.name}_accept_")
-    // result
+    val lassoAlphabet = syncAlphabet.getOrElse(lasso._1.toSet ++ lasso._2.toSet)
+    println(s"Checking membership of ${lasso} in process ${systemName} *as a suffix* with sync alphabet ${lassoAlphabet}")
+    val projLasso = lasso.filter(lassoAlphabet.contains(_))
+    val lassoProcess = NLTS.fromLassoAsSuffix(projLasso, Some(lassoAlphabet))
+    val productTA = TA.synchronousProduct(this, List(lassoProcess), Some("_accept_"))
+    val result = productTA.checkBuchi(s"${lassoProcess.name}_accept_")
+    result
   }
 
   /**
@@ -168,7 +167,6 @@ class TA (
     * @return None if the formula is satisfied, and a counterexample lasso violating the formula otherwise.
     */
   def checkLTL(ltlFormula: LTL): Option[Lasso] = {
-    println(s"Checking LTL formula ${ltlFormula}")
     val accLabel = "_ltl_accept_"
     val fullAlphabet = this.alphabet | ltlFormula.getAlphabet
     val ta_ltl = TA.fromLTL(ltl.Not(ltlFormula).toString, Some(fullAlphabet), Some(accLabel))
@@ -212,8 +210,7 @@ class TA (
     // val cmd = "tck-liveness -a ndfs %s -C symbolic -l %s -o %s"
     val cmd = "tck-liveness -a couvscc %s -C symbolic -l %s -o %s"
       .format(modelFile.toString, label, certFile.toString)
-    System.out.println(s"${BLUE}${cmd}${RESET}")
-    TA.logger.debug(cmd)
+    TA.logger.debug(s"${BLUE}${cmd}${RESET}")
 
     val output = cmd.!!
     val cex = scala.io.Source.fromFile(certFile).getLines().toList
@@ -394,13 +391,12 @@ object TA{
     * @pre ta.systemName and dlts.name's are pairwise distinct
     * @return Product of ta and the given DLTS
     */
-  def synchronousProduct(ta : TA, dlts : List[DLTS], acceptingLabelSuffix : Option[String] = None) : TA = {
+  def synchronousProduct[S](ta : TA, dlts : List[LTS[S]], acceptingLabelSuffix : Option[String] = None) : TA = {
     val allNames = dlts.map(_.name) ++ ta.eventsOfProcesses.keys().toList
     if allNames.size > allNames.distinct.size then {
       throw Exception("Attempting synchronous product of processes of the same name")
     }
-    //if dlts.map(_.name).distinct.size < dlts.size || dlts.map(_.name).contains(ta.systemName) then {
-    val dltsTA = dlts.map({d => TA.fromLTS[FastDFAState](d, acceptingLabelSuffix)})
+    val dltsTA = dlts.map({d => TA.fromLTS[S](d, acceptingLabelSuffix)})
     val jointAlphabet = ta.alphabet | dlts.foldLeft(Set[String]())( (alph, d) => alph | d.alphabet)
     val sb = StringBuilder()
     val systemName = s"_premise_${ta.systemName}"
@@ -417,14 +413,9 @@ object TA{
             else Some((ta.getProcessNames().head, sigma))
         }
     ).toList.filter(_.size > 1)
-    // val syncs = jointAlphabet.map(
-    //   sigma => 
-    //     allProcesses.filter(eventsOfProcesses(_).contains(sigma))
-    //     .map({process => (process,sigma)})
-    // ).toList.filter(_.size > 1)
     TA(systemName, jointAlphabet, ta.internalAlphabet, sb.toString(), eventsOfProcesses, syncs)
   }
-
+  
   /**
     * Synchronous product of the given processes.
     * 

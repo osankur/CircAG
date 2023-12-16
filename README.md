@@ -77,16 +77,3 @@ Alternatively, just run `interactive.sh`.
 Use the following property while running the jar to set debug level to debug
     
      -Dorg.slf4j.simpleLogger.defaultLogLevel=debug
-
-## Tasks
-- Formalize the LTL AAG algorithm
-- Formalize the MTL AAG algorithm
-- Any other good passive learning algorithms for DFA?
-- Implement one or several passive learning algorithms for LTL. The simplest one is based on SAT (see Neider et al.)
-- Implement one or several passive learning algorithms for MTL.
-- Understand why the above example does not terminate: do we really need to keep the alphabet very small?
-- DFA case studies: reproduce CAV16 examples, and find a good one where our algorithm scales better.
-- LTL case study: write a SDN case study with very simple assumption formulas but very large combined state space
-- TChecker currently does not generate counterexamples for Buchi. Ask Frederic or do it yourself.
-- Update LTL proof skeleton so that the proven DFA assumptions can be used in LTL/MTL proofs
-- API for interactive / semi-atomated proof system

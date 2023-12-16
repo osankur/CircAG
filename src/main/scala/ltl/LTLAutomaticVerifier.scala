@@ -51,22 +51,29 @@ class LTLAutomaticVerifier(_system : SystemSpec, ltlLearningAlgorithm : LTLLearn
     )
     var doneVerification = false
     var currentState = LTLAGResult.Success
-    while (!doneVerification && count < 20) {
+    while (!doneVerification && count < 50) {
       count += 1
+      logger.debug(s"${BOLD}${MAGENTA}Attempt #${count}${RESET}")
       ltlGenerator.generateAssumptions(fixedAssumptionsMap) match {
-        case Some(newAss) => this.assumptions = newAss
+        case Some(newAss) =>           
+          this.assumptions = newAss
+          val (pos, neg) = ltlGenerator.getSamples()
+          for i <- 0 until nbProcesses do {
+            logger.debug(s"Pos($i) = ${pos(i)}")
+            logger.debug(s"Neg($i) = ${neg(i)}")
+            logger.debug(s"Assumption($i) = ${assumptions(i)}")
+          }          
         case None         => 
-          println(s"${RED}Unsat${RESET}")
+          logger.debug(s"${RED}${BOLD}Unsat${RESET}")
           throw LTLUnsatisfiableConstraints()
       }
-      println(s"${MAGENTA}Assumptions at attempt #${count}: ${assumptions}${RESET}")
       currentState = this.applyAG(proveGlobalProperty) 
       currentState match {
         case LTLAGResult.Success => 
-          println("Success")
+          logger.debug(s"${GREEN}${BOLD}Success${RESET}")
           doneVerification = true
         case LTLAGResult.AssumptionViolation(processID, cex, query) => 
-          println(s"AssumptionViolation ${processID} ${cex}")
+          logger.debug(s"${RED}AssumptionViolation ${processID} ${cex}${RESET}")
           query match {
             case q : NonCircularPremiseQuery => 
               ltlGenerator.refineByInductivePremiseCounterexample(cex, q, 0)
@@ -76,10 +83,10 @@ class LTLAutomaticVerifier(_system : SystemSpec, ltlLearningAlgorithm : LTLLearn
           }
           doneVerification = fixedAssumptions.contains(processID)
         case LTLAGResult.GlobalPropertyViolation(cex) => 
-          println(s"Gobalproperty violation ${cex}")
+          logger.debug(s"${RED}Gobalproperty violation ${cex}${RESET}")
           doneVerification = true
         case LTLAGResult.PremiseFail(processID, cex, query) => 
-          println(s"PremiseFail ${processID} ${cex}")
+          logger.debug(s"${RED}PremiseFail ${processID} ${cex}${RESET}")
           query match {
             case q : NonCircularPremiseQuery => 
               ltlGenerator.refineByInductivePremiseCounterexample(cex, q, 0)
@@ -87,11 +94,16 @@ class LTLAutomaticVerifier(_system : SystemSpec, ltlLearningAlgorithm : LTLLearn
               val k0 = getPremiseViolationIndex(cex, q)
               ltlGenerator.refineByInductivePremiseCounterexample(cex, q, k0)
           }
-          // ltlGenerator.refineConstraintsByPremiseQuery(cex, query)
+          logger.debug("Refined constraints")
         case LTLAGResult.GlobalPropertyProofFail(cex) => 
           println(s"Global Proof fail ${cex}")
           ltlGenerator.refineByFinalPremiseCounterexample(cex)
       }
+    }
+    val (pos, neg) = ltlGenerator.getSamples()
+    for i <- 0 until nbProcesses do {
+      logger.debug(s"Pos($i) = ${pos(i)}")
+      logger.debug(s"Neg($i) = ${neg(i)}")
     }
     currentState
   }

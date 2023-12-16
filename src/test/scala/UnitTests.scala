@@ -175,6 +175,13 @@ class TAandLTSTests extends munit.FunSuite {
     assert(ta.checkLassoMembership(l2) != None)
     assert(ta.checkLassoMembership(l3) == None)
   }
+  test("lasso as suffix"){
+     val ta = TA.fromFile(File("examples/untimed.ta"))
+     assert(ta.checkLassoSuffixMembership((List(),List("c","a"))) != None)
+     assert(ta.checkLassoSuffixMembership((List("b"),List("c","a")))!= None)
+     assert(ta.checkLassoSuffixMembership((List("a"),List("a","a")))!= None)
+     assert(ta.checkLassoSuffixMembership((List("a"),List("b","c","a"))) == None)
+  }
 }
 class DFAAAG extends munit.FunSuite {
   test("sat learner"){
@@ -704,7 +711,12 @@ class LTLAGTests extends munit.FunSuite {
       case None => assert(false)
       case Some(ltl) => assert(ltl.toString == "(G (F c))")
     }
-
+  }
+  test("sat-ltl-learner2"){
+    val learner = ltl.SATLearner("formula", Set("a","b","c"), universal=true, ltl.LTLLearningAlgorithm.Samples2LTL)
+    val pos = Set((List(),List("a", "b")), (List("a", "b"),List("a", "b")))
+    val neg = Set((List("c"),List("c")))
+    println(learner.getLTL())
   }
   test("ltl inductive check: ltl-toy1 a b"){
     // val ass = List("G ((a -> X !a) & !c)", "G F b")
@@ -726,7 +738,6 @@ class LTLAGTests extends munit.FunSuite {
 
 
 class Single extends munit.FunSuite {
-
   test("ltl learn assumptions: ltl-toy1 2 processes"){
     val tas = Array(File("examples/ltl-toy1/a.ta"), File("examples/ltl-toy1/b.ta"))
     val checker = LTLAutomaticVerifier(ltl.SystemSpec(tas, G(F(Atomic("a")))))
@@ -756,23 +767,21 @@ class Single extends munit.FunSuite {
     assert(TA.fromFile(tas(1)).checkLTL(ass1) == None)
     assert(checker.applyAG(proveGlobalproperty = false) == LTLAGResult.Success)
     assert(checker.applyAG(proveGlobalproperty = true) == LTLAGResult.Success)
-  }  
+  }
 }
 
 class A extends munit.FunSuite {
-  test("violation index"){
-    val tas = Array(File("examples/ltl-toy1/a.ta"), File("examples/ltl-toy1/b.ta"))
-    val checker = LTLAutomaticVerifier(ltl.SystemSpec(tas, G(F(Atomic("a")))))
-    val query = CircularPremiseQuery(1, List(), List((0,(Atomic("b")))), List(), Atomic("d"), LTLTrue())
-    val lasso = (List("a","a","c"), List("c"))
-    assert(checker.getPremiseViolationIndex(lasso, query) == 0)
-
-    val lasso2 = (List("d","d","d"), List("d", "a"))
-    assert(checker.getPremiseViolationIndex(lasso2, query) == 4) 
-  }
-  // test("seq-toy"){
-  //   val files = Array(File("examples/seq-toy/lts0.ta"),File("examples/seq-toy/lts1.ta"),File("examples/seq-toy/lts2.ta"))
-  //   val verRPNI = dfa.DFAAutomaticVerifier(files, Some(DLTS.fromErrorSymbol("err")), dfa.DFALearningAlgorithm.RPNI)
-  //   assert(verRPNI.learnAssumptions() != AGResult.Success)
+  //  test("ltl learn assumptions: ltl-toy1 2 processes"){
+  //   val tas = Array(File("examples/ltl-toy1/a.ta"), File("examples/ltl-toy1/b.ta"))
+  //   val checker = LTLAutomaticVerifier(ltl.SystemSpec(tas, G(F(Atomic("a")))))
+  //   checker.proofSkeleton.setProcessInstantaneousDependencies(0, Set(1))
+  //   val result = checker.learnAssumptions(proveGlobalProperty = true)
+  //   println(result)
+  // }
+  // test("sat-ltl-learner2"){
+  //   val learner = ltl.SATLearner("formula", Set("a","b","c"), universal=true, ltl.LTLLearningAlgorithm.Samples2LTL)
+  //   learner.setPositiveSamples(Set((List(),List("a", "b")), (List("a", "b"),List("a", "b"))))
+  //   learner.setNegativeSamples(Set((List("c"),List("c"))))    
+  //   println(learner.getLTL())
   // }
 }
