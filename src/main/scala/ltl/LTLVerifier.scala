@@ -159,8 +159,8 @@ class LTLVerifier(val system : SystemSpec) {
           LTL.asynchronousTransform(matrix, proofSkeleton.assumptionAlphabet(processID))
         case _ => throw Exception(s"Guarantee formula for circular process ${processID} must be universal: ${guarantee}")
       }
-      println(s"Checking inductive premise for ${processID}")
-      println(s"Guarantee matrix: ${guarantee_matrix}")
+      logger.debug(s"Checking inductive premise for ${processID}")
+      logger.debug(s"Guarantee matrix: ${guarantee_matrix}")
       
       // Check for CEX with an LTL formula of the form: /\_i noncircular-assumptions(i) /\ (/\_i circular-assumptions(i) U !guarantee)
       def getAsynchronousMatrix(i : Int) : LTL = {
@@ -178,7 +178,7 @@ class LTLVerifier(val system : SystemSpec) {
       val circularDeps = 
         dependencies.filter(proofSkeleton.isCircular).toList
         .map(i => (i,getAsynchronousMatrix(i)))
-      println(s"Assumption matrices: ${circularDeps}")
+      // logger.debug(s"Assumption matrices: ${circularDeps}")
 
       val noncircularDeps =
           dependencies.filterNot(proofSkeleton.isCircular)
@@ -207,7 +207,7 @@ class LTLVerifier(val system : SystemSpec) {
         case fl => And(fl.map(And(_)))
       }
     }
-    println(s"Checking premise ${premise}")
+    logger.debug(s"Checking premise ${premise}")
     val f = premise match {
       case CircularPremiseQuery(processID, noncircularDeps, circularDeps, instantaneousDeps, mainAssumption, fairness) => 
         val noncircularLHS = andOfList(noncircularDeps.map(_._2))
@@ -223,8 +223,7 @@ class LTLVerifier(val system : SystemSpec) {
 
   /**
     * @brief Given a circular premise query failed by lasso rho, find least k0 such that
-    * forall 1<=k<=k0, lasso, k |= circular-deps 
-    * lasso, k0 = instant-deps & ~main-assumption"
+    * lasso, k0 |= instant-deps & ~main-assumption"
     *
     * @param lasso the cex lasso that fails the premise query
     * @param query the failed circular premise query 
@@ -235,6 +234,7 @@ class LTLVerifier(val system : SystemSpec) {
       case CircularPremiseQuery(_processID, noncircularDeps, circularDeps, instantaneousDeps, mainAssumption, fairness) => 
         val processAlphabet = processes(_processID).alphabet 
         val rhs = And(Not(mainAssumption) :: instantaneousDeps.map(_._2))
+        logger.debug(s"Checking LTL formula (~mainAssumption & instantaneous): ${rhs}")
         val formulaAlphabet = rhs.getAlphabet
         val (p,c) = lasso
         val pc = p ++ c
@@ -323,10 +323,10 @@ class LTLVerifier(val system : SystemSpec) {
         val query = makePremiseQuery(i, fairness)
         checkInductivePremise(query) match {
           case None =>
-            println(s"${GREEN}Check passes${RESET}")
+            logger.debug(s"${GREEN}Inductive check ${i} passes${RESET}")
             ()
           case Some(lasso) => 
-            println(s"${RED}Check fails with lasso: ${lasso}${RESET}")
+            logger.debug(s"${RED}Inductive check ${i} fails with lasso: ${lasso}${RESET}")
             if checkCounterExample(lasso) then {
               throw LTLAGResult.AssumptionViolation(i, lasso, query)
             } else 
@@ -336,10 +336,10 @@ class LTLVerifier(val system : SystemSpec) {
       if proveGlobalproperty then {
         checkFinalPremise(fairness) match {
           case None =>
-            println(s"${GREEN}Final premise passes${RESET}")
+            logger.debug(s"${GREEN}Final premise passes${RESET}")
             ()
           case Some(lasso) => 
-            println(s"${RED}Final premise fails with ${lasso}${RESET}")
+            logger.debug(s"${RED}Final premise fails with ${lasso}${RESET}")
             if checkCounterExample(lasso) then {
               throw LTLAGResult.GlobalPropertyViolation(lasso)
             } else {

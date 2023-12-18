@@ -70,9 +70,9 @@ class SATLearner(name : String, alphabet : Alphabet, universal : Boolean, solver
   protected val logger = LoggerFactory.getLogger("CircAG")
 
   def learn() : Option[LTL] = {
-    logger.debug(s"Entering learn(${solver}) (universal=${universal}) for process ${name} with the following samples:")
-    logger.debug(s"Pos = ${positiveSamples}")
-    logger.debug(s"Neg = ${negativeSamples}")
+    // logger.debug(s"Entering learn(${solver}) (universal=${universal}) for process ${name} with the following samples:")
+    // logger.debug(s"Pos = ${positiveSamples}")
+    // logger.debug(s"Neg = ${negativeSamples}")
     // Take care of the corner case not handled by samples2LTL
     if negativeSamples.isEmpty then
       if universal then return Some(G(LTLTrue()))
@@ -146,7 +146,7 @@ class SATLearner(name : String, alphabet : Alphabet, universal : Boolean, solver
             case f if universal => G(f) 
             case f => f
           }      
-          logger.debug(s"Samples2LTL returned ${substLtl}")
+          // logger.debug(s"Samples2LTL returned ${substLtl}")
           Some(substLtl)
         }
       case LTLLearningAlgorithm.Scarlet =>        

@@ -241,7 +241,7 @@ class LTLEagerGenerator(_system : SystemSpec, _proofSkeleton : LTLProofSkeleton,
           )
           // 4. Otherwise we add the positive sample
           if !refined then {
-            addPositiveSample(_processID, lasso.filter(proofSkeleton.assumptionAlphabet(_processID).contains(_)))
+            addPositiveSample(_processID, lasso.suffix(violationIndex).filter(proofSkeleton.assumptionAlphabet(_processID).contains(_)))
             logger.debug(s"refineByInductivePremiseCounterexample. Circular case; item 4. Added positive sample")
           }
         }
@@ -275,6 +275,7 @@ class LTLDisjunctiveGenerator(_system : SystemSpec, _proofSkeleton : LTLProofSke
     cfg.put("model", "true")
     z3.Context(cfg);
   }
+  private val logger = LoggerFactory.getLogger("CircAG")
 
   protected val samples = Buffer.tabulate(nbProcesses)({_ => Buffer[(Lasso,z3.BoolExpr)]()})
   // Boolean variable corresponding to each pair (process,trace)
@@ -523,7 +524,7 @@ class LTLDisjunctiveGenerator(_system : SystemSpec, _proofSkeleton : LTLProofSke
                       blockCurrentAssignment()
                       throw UnsatAssumption()
                     case Some(ltl) => 
-                      println(s"Samples2LTL generated formula ${ltl} for ${i}")
+                      logger.debug(s"Samples2LTL generated formula ${ltl} for ${i}")
                       ltl
                   }
                 }

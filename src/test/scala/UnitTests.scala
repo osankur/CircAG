@@ -733,6 +733,14 @@ class LTLAGTests extends munit.FunSuite {
     assert(checker.checkInductivePremise(0) == None)
     assert(checker.checkFinalPremise() != None)
   } 
+  test("ltl learn assumptions: ltl-toy1 2 processes"){
+    val tas = Array(File("examples/ltl-toy1/a.ta"), File("examples/ltl-toy1/b.ta"))
+    val checker = LTLAutomaticVerifier(ltl.SystemSpec(tas, G(F(Atomic("a")))))
+    checker.proofSkeleton.setProcessInstantaneousDependencies(0, Set(1))
+    val result = checker.learnAssumptions(proveGlobalProperty = true)
+    println(result)
+    assert(result == ltl.LTLAGResult.Success)
+  }
 
 }
 
@@ -771,13 +779,6 @@ class Single extends munit.FunSuite {
 }
 
 class A extends munit.FunSuite {
-  //  test("ltl learn assumptions: ltl-toy1 2 processes"){
-  //   val tas = Array(File("examples/ltl-toy1/a.ta"), File("examples/ltl-toy1/b.ta"))
-  //   val checker = LTLAutomaticVerifier(ltl.SystemSpec(tas, G(F(Atomic("a")))))
-  //   checker.proofSkeleton.setProcessInstantaneousDependencies(0, Set(1))
-  //   val result = checker.learnAssumptions(proveGlobalProperty = true)
-  //   println(result)
-  // }
   // test("sat-ltl-learner2"){
   //   val learner = ltl.SATLearner("formula", Set("a","b","c"), universal=true, ltl.LTLLearningAlgorithm.Samples2LTL)
   //   learner.setPositiveSamples(Set((List(),List("a", "b")), (List("a", "b"),List("a", "b"))))
