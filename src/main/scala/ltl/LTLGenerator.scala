@@ -201,19 +201,22 @@ class LTLEagerGenerator(_system : SystemSpec, _proofSkeleton : LTLProofSkeleton,
     query match {
       case CircularPremiseQuery(_processID, noncircularDeps, circularDeps, instantaneousDeps, mainAssumption, fairness) => 
         breakable {
-        // 1. Check non-circular dependencies
           proofSkeleton.processDependencies(_processID)
-          .filter(!proofSkeleton.isCircular(_))
           .foreach(
             j => 
-              if system.processes(j).checkLassoMembership(lasso, Some(proofSkeleton.assumptionAlphabet(j))) == None then {                
-                addNegativeSample(j, lasso.filter(proofSkeleton.assumptionAlphabet(j).contains(_)))
-                logger.debug(s"refineByInductivePremiseCounterexample. Circular case; item 1. j=${j}")
-                refined = true
-                if lazyConstraints then break
+              val projectedLasso = lasso.filter(proofSkeleton.assumptionAlphabet(j).contains(_))
+              // 1. Check non-circular dependency
+              if !proofSkeleton.isCircular(j) then {                
+                if system.processes(j).checkLassoMembership(projectedLasso, Some(proofSkeleton.assumptionAlphabet(j))) == None then {                
+                  addNegativeSample(j, projectedLasso)
+                  logger.debug(s"refineByInductivePremiseCounterexample. Circular case; j=${j} is non-circular; negative sample: ${projectedLasso}")
+                  refined = true
+                  if lazyConstraints then break
+                }
               }
-          )
-        // 2. Check circular dependencies j, at each 0 <= k <= violationIndex-1
+              // There is no case 2 since in CircAG, all circular processes are circular dependencies
+          )          
+        // 3. Check circular dependencies j, at each 0 <= k <= violationIndex-1
           proofSkeleton.processDependencies(_processID)
           .filter(proofSkeleton.isCircular(_))
           .foreach(
@@ -228,7 +231,7 @@ class LTLEagerGenerator(_system : SystemSpec, _proofSkeleton : LTLProofSkeleton,
                   }
               }
           )
-          // 3. Instantaneous dependency at violationIndex
+          // 4. Instantaneous dependency at violationIndex
           proofSkeleton.processInstantaneousDependencies(_processID)
           .foreach(
             j => 
@@ -239,7 +242,7 @@ class LTLEagerGenerator(_system : SystemSpec, _proofSkeleton : LTLProofSkeleton,
                 if lazyConstraints then break
               }
           )
-          // 4. Otherwise we add the positive sample
+          // 5. Otherwise we add the positive sample
           if !refined then {
             addPositiveSample(_processID, lasso.suffix(violationIndex).filter(proofSkeleton.assumptionAlphabet(_processID).contains(_)))
             logger.debug(s"refineByInductivePremiseCounterexample. Circular case; item 4. Added positive sample")
@@ -247,18 +250,31 @@ class LTLEagerGenerator(_system : SystemSpec, _proofSkeleton : LTLProofSkeleton,
         }
       case NonCircularPremiseQuery(_processID, dependencies, mainAssumption, fairness) => 
         breakable {
-          // 1. Check all non-circular dependencies
           proofSkeleton.processDependencies(_processID)
           .foreach(
             j => 
-              if system.processes(j).checkLassoMembership(lasso, Some(proofSkeleton.assumptionAlphabet(j))) == None then {                
-                addNegativeSample(j, lasso.filter(proofSkeleton.assumptionAlphabet(j).contains(_)))
-                logger.debug(s"refineByInductivePremiseCounterexample. Non-Circular case; j=${j}")
-                refined = true
-                if lazyConstraints then break
+              val projectedLasso = lasso.filter(proofSkeleton.assumptionAlphabet(j).contains(_))
+              // 1. Check all non-circular dependencies
+              if !proofSkeleton.isCircular(j) then {                
+                if system.processes(j).checkLassoMembership(projectedLasso, Some(proofSkeleton.assumptionAlphabet(j))) == None then {                
+                  addNegativeSample(j, projectedLasso)
+                  logger.debug(s"refineByInductivePremiseCounterexample. Non-Circular case; j=${j} is non-circular; negative sample: ${projectedLasso}")
+                  refined = true
+                  if lazyConstraints then break
+                }
+              } else {
+                // 2. Check all circular dependencies
+                for k <- 0 until projectedLasso.size do {
+                  if system.processes(j).checkLassoMembership(projectedLasso.suffix(k), Some(proofSkeleton.assumptionAlphabet(j))) == None then {                
+                    addNegativeSample(j, projectedLasso.suffix(k))
+                    logger.debug(s"refineByInductivePremiseCounterexample. Non-Circular case; j=${j} is circular; negative sample: ${projectedLasso.suffix(k)}")
+                    refined = true
+                    if lazyConstraints then break
+                  }
+                }
               }
           )
-          // 2. Otherwise add the positive sample
+          // 3. Otherwise add the positive sample
           if !refined then {
             addPositiveSample(_processID, lasso.filter(proofSkeleton.assumptionAlphabet(_processID).contains(_)))
             logger.debug(s"refineByInductivePremiseCounterexample. Non-Circular case; Added positive sample")
@@ -524,7 +540,7 @@ class LTLDisjunctiveGenerator(_system : SystemSpec, _proofSkeleton : LTLProofSke
                       blockCurrentAssignment()
                       throw UnsatAssumption()
                     case Some(ltl) => 
-                      logger.debug(s"Samples2LTL generated formula ${ltl} for ${i}")
+                      // logger.debug(s"Samples2LTL generated formula ${ltl} for ${i}")
                       ltl
                   }
                 }
