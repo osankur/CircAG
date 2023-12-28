@@ -56,7 +56,7 @@ trait DFAGenerator(
     dfaLearnerAlgorithm match {
       case DFALearningAlgorithm.RPNI =>
         new RPNILearner(
-          s"assumption_${i}",
+          s"assumption_${i}_${system.processes(i).systemName}",
           proofSkeleton.assumptionAlphabets(i)
         )
       case DFALearningAlgorithm.SAT =>
@@ -335,7 +335,7 @@ class DFADisjunctiveGenerator(
       process: Int,
       sampleIndex: Int = 0
   ): Unit = {
-    println(s"updateTheoryConstraints(process = $process). Process alphabet: ${system.processes(process).alphabet} Ass alphabet: ${proofSkeleton.assumptionAlphabets(process)}")
+    // println(s"updateTheoryConstraints(process = $process). Process alphabet: ${system.processes(process).alphabet} Ass alphabet: ${proofSkeleton.assumptionAlphabets(process)}")
     for i <- sampleIndex until samples(process).size do {
       val projTrace_i = this
         .samples(process)(i)

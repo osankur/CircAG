@@ -741,7 +741,6 @@ class LTLAGTests extends munit.FunSuite {
     println(result)
     assert(result == ltl.LTLAGResult.Success)
   }
-
 }
 
 
@@ -759,7 +758,7 @@ class Single extends munit.FunSuite {
     // The learned assumptions are: G (b -> (X a))) and (G (c U b)
     // This corresponds to the only infinite execution in this product: abaac^omega
     assert(checker.learnAssumptions(proveGlobalProperty = true) == LTLAGResult.Success)
-  }  
+  }
   test("ltl inductive check: ltl-toy1 applyAG"){
     val tas = Array(File("examples/ltl-toy1/a.ta"), File("examples/ltl-toy1/b.ta"))
     val checker = LTLVerifier(ltl.SystemSpec(tas, G(F(Atomic("a")))))
@@ -785,4 +784,34 @@ class A extends munit.FunSuite {
   //   learner.setNegativeSamples(Set((List("c"),List("c"))))    
   //   println(learner.getLTL())
   // }
+  // test("ltl inductive check: ltl-toy1 a b"){
+  //   // val ass = List("G ((a -> X !a) & !c)", "G F b")
+  //   val tas = Array(File("examples/ltl-toy1/a.ta"), File("examples/ltl-toy1/b.ta"),File("examples/ltl-toy1/c.ta"))
+  //   val checker = LTLAutomaticVerifier(ltl.SystemSpec(tas, G(F(Atomic("a")))))
+  //   checker.proofSkeleton.setProcessInstantaneousDependencies(0, Set(1))
+  //   checker.learnAssumptions(true)
+  // // }
+  test("ltl learn assumptions: ltl-toy1 2 processes"){
+    val tas = Array(File("examples/ltl-toy1/a.ta"), File("examples/ltl-toy1/b.ta"))
+    val checker = LTLAutomaticVerifier(ltl.SystemSpec(tas, G(F(Atomic("a")))))
+    checker.proofSkeleton.setProcessInstantaneousDependencies(0, Set(1))
+    val result = checker.learnAssumptions(proveGlobalProperty = true)
+    println(result)
+    assert(result == ltl.LTLAGResult.Success)
+  }
+  // test("ltl inductive check: ltl-toy1 applyAG"){
+  //   val ass = List("G ((a -> X !a))", "G ((F b) & (F d))")
+  //   val ltlf = ass.map(LTL.fromString)
+  //   System.out.println(s"LTL assumptions: ${ltlf}")
+  //   val tas = Array(File("examples/ltl-toy2/a.ta"), File("examples/ltl-toy2/b.ta"))    
+  //   val checker = LTLVerifier(ltl.SystemSpec(tas, G(F(Atomic("a")))))
+  //   ltlf.zipWithIndex.foreach( (ltl,i) => checker.setAssumption(i, ltl))
+  //   // Without instantaneous assumptions, the proof fails:
+  //   println(checker.checkInductivePremise(0)) 
+  //   // By making an instantaneous assumption, the proof passes:
+  //   checker.proofSkeleton.setProcessInstantaneousDependencies(0, Set(1))
+  //   assert(checker.checkInductivePremise(0) == None)
+
+  // }
+  
 }

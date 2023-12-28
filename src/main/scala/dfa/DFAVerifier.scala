@@ -247,7 +247,7 @@ class DFAVerifier(val system: SystemSpec) {
     */
   def applyAG(proveGlobalProperty: Boolean = true): AGResult = {
     // A proof for a process must not depend on itself
-    logger.debug(s"applyAG with alphabets: ${assumptions.map(_.alphabet)}")
+    logger.debug(s"applying Assume-Guarantee rule with alphabets: ${assumptions.map(_.alphabet)}")
     try {
       for (ta, i) <- system.processes.zipWithIndex do {
         // DFAAssumeGuaranteeVerifier.checkInductivePremise(ta, proofSkeleton.processDependencies(i).map(assumptions(_)).toList, assumptions(i))

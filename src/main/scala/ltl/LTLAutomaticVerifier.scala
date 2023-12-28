@@ -55,13 +55,13 @@ class LTLAutomaticVerifier(_system : SystemSpec, ltlLearningAlgorithm : LTLLearn
       count += 1
       logger.debug(s"${BOLD}${MAGENTA}Attempt #${count}${RESET}")
       ltlGenerator.generateAssumptions(fixedAssumptionsMap) match {
-        case Some(newAss) =>           
+        case Some(newAss) => 
           this.assumptions = newAss
           val (pos, neg) = ltlGenerator.getSamples()
           for i <- 0 until nbProcesses do {
-            logger.debug(s"Pos($i) = ${pos(i)}")
-            logger.debug(s"Neg($i) = ${neg(i)}")
             logger.debug(s"Assumption($i) = ${assumptions(i)}")
+            logger.debug(s"\tPos($i) = ${MAGENTA}${pos(i)}${RESET}")
+            logger.debug(s"\tNeg($i) = ${MAGENTA}${neg(i)}${RESET}")
           }          
         case None         => 
           logger.debug(s"${RED}${BOLD}Unsat${RESET}")
@@ -71,6 +71,7 @@ class LTLAutomaticVerifier(_system : SystemSpec, ltlLearningAlgorithm : LTLLearn
       currentState match {
         case LTLAGResult.Success => 
           logger.debug(s"${GREEN}${BOLD}Success${RESET}")
+          logger.info(s"Following assumptions were learned: ${assumptions}")
           doneVerification = true
         case LTLAGResult.AssumptionViolation(processID, cex, query) => 
           logger.debug(s"${RED}AssumptionViolation ${processID} ${cex}${RESET}")

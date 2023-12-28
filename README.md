@@ -39,7 +39,7 @@ To check out and test the samples2LTL and Scarlet submodules, run:
     cd ..
     python3 -m Scarlet.ltllearner
 
-## DFA-based N-way Assume-Guarantee Reasoning with Learning
+## DFA-based Assume-Guarantee Reasoning with Learning
 The algorithm of the CAV16 paper is currently implemented with and without alphabet refinement. This can be tried as follows.
 
     java -jar target/scala-3.3/CircAG.jar dfa-aag --lts "examples/toy/lts1.ta,examples/toy/lts2.ta,examples/toy/lts3.ta" --err "err" --verbose false
@@ -60,6 +60,10 @@ Two toy examples easy to understand and another example with slightly larger aut
     java -jar target/scala-3.3.1/CircAG.jar dfa-aag --lts "examples/toy/lts1.ta,examples/toy/lts2.ta,examples/toy/lts3.ta" --err "err" --verbose false
     java -jar target/scala-3.3.1/CircAG.jar dfa-aag --lts "examples/seq-toy/lts0.ta,examples/seq-toy/lts1.ta,examples/seq-toy/lts2.ta,examples/seq-toy/lts3.ta" --err "err"
     java -jar target/scala-3.3.1/CircAG.jar dfa-aag --lts "examples/ums/machine.ta,examples/ums/scheduler.ta,examples/ums/user.ta" --err "err"
+
+## LTL-based Assume-Guarantee Reasoning with Learning
+We assume proof skeletons in which there is one big circular cluster, and possibly noncircular which point to each other (no cycle) and to the circular cluster.
+Any process whose proof depends on the circular cluster is also considered to be circular.
 
 ## Utilities
 The synchronized product of the processes can be output to stdout as a single TChecker file using

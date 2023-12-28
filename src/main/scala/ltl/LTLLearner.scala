@@ -137,7 +137,7 @@ class SATLearner(name : String, alphabet : Alphabet, universal : Boolean, solver
         statistics.Timers.incrementTimer("ltl-learner", System.nanoTime() - beginTime)
         
         if output.contains("NO SOLUTION") then
-          logger.debug(s"Samples2LTL returned NO SOLUTION")
+          // logger.debug(s"Samples2LTL returned NO SOLUTION")
           None
         else {      
           val output_ = output.replaceAll("true","1").replaceAll("false","0")

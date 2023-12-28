@@ -45,7 +45,6 @@ class DFAAutomaticVerifier(
     }
   }
 
-
   def this(
       ltsFiles: Array[File],
       property: Option[DLTS],
@@ -77,6 +76,15 @@ class DFAAutomaticVerifier(
       )
     }
     this.proofSkeleton.setAssumptionAlphabet(processID, alphabet);
+  }
+
+  def dumpAssumptions() : Unit = {
+    for i <- 0 until nbProcesses do {
+      val tck = TA.fromLTS(assumptions(i))
+      val writer = PrintWriter(new File(s"_assumption${i}_${system.processes(i).systemName}"))
+      writer.write(tck.toString())
+      writer.close()
+    }
   }
 
   /** Check the AG rule once for the current assumption alphabet and DFAs
@@ -195,6 +203,11 @@ class DFAAutomaticVerifier(
         case AGResult.PremiseFail(processID, cex)  => ()
         case AGResult.GlobalPropertyProofFail(cex) => ()
       }
+    }
+    if configuration.get().dumpAssumptions then dumpAssumptions()
+    {
+      val sizes = assumptions.map(a => s"${a.name} -> ${a.dfa.size()}")
+      logger.info(s"Size of the learned assumptions: ${sizes}")
     }
     currentState
   }

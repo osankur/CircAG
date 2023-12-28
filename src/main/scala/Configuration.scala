@@ -28,7 +28,7 @@ case class Configuration(
     verbose: Boolean = false,
     verbose_MembershipQueries : Boolean = false,
     tmpDirName: String = "/tmp/circag",
-    visualizeDFA : Boolean = false,
+    dumpAssumptions : Boolean = false,
     alphabetRefinement : Boolean = false,
     dfaLearningAlgorithm : DFALearningAlgorithm = DFALearningAlgorithm.RPNI,
     constraintStrategy : ConstraintStrategy = ConstraintStrategy.Eager,

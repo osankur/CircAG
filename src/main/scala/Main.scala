@@ -64,10 +64,10 @@ object Main {
         opt[Boolean]("keepTmpFiles")
           .action((x, c) => c.copy(keepTmpFiles = x))
           .valueName("(true|false)"),
-        opt[Boolean]("visualizeDFA")
-          .action((x, c) => c.copy(visualizeDFA = x))
+        opt[Boolean]("dumpAssumptions")
+          .action((x, c) => c.copy(dumpAssumptions = x))
           .valueName("(true|false)")
-          .text("Visualize the DFAs that were learned"),
+          .text("Dump the assumption DFAs or LTL formulas that were learned"),
         opt[String]("dfaLearningAlgorithm")
           .action({(x, c) => x match {
             case "SAT" => c.copy(dfaLearningAlgorithm = DFALearningAlgorithm.SAT)
@@ -126,7 +126,7 @@ object Main {
     val totalTime = (System.nanoTime() - beginTime)/1e9d
     logger.info(s"Counters: ${statistics.Counters.toString}")
     logger.info(s"Timers: ${statistics.Timers}")
-    logger.info(s"Total: ${totalTime}s")
+    logger.info(s"Total time: ${totalTime}s")
     logger.info(s"Relative times: ${statistics.Timers.timer.map({(k,value) => f"${k}:${(value/1e7d)/totalTime}%.2f%%"}).toString()}")
   }
 }
