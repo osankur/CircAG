@@ -111,6 +111,9 @@ class LTLEagerGenerator(_system : SystemSpec, _proofSkeleton : LTLProofSkeleton,
 
   // Whether to add a single sample at each refinement, or all possible refinements
   val lazyConstraints = false
+  // Whether to add positive samples as a last resort. Setting this true makes the alg. incomplete!
+  val positiveLastResort = true
+
   private val logger = LoggerFactory.getLogger("CircAG")
   protected val samples = Buffer.tabulate(nbProcesses)({_ => Buffer[Lasso]()})
   // Boolean variable corresponding to each pair (process,trace)
@@ -135,42 +138,42 @@ class LTLEagerGenerator(_system : SystemSpec, _proofSkeleton : LTLProofSkeleton,
   override def generateAssumptions(fixedAssumptions : Map[Int,LTL] = Map[Int,LTL]()) : Option[Buffer[LTL]] = {
     class UnsatAssumption extends Exception
     def findAssumptions() : Option[Buffer[LTL]] = {
-      try {
-            Some(Buffer.tabulate(proofSkeleton.nbProcesses)
-              (i => 
-                if fixedAssumptions.contains(i) then 
-                  fixedAssumptions(i)
-                else {
-                  learners(i).setPositiveSamples(positiveSamples(i))
-                  learners(i).setNegativeSamples(negativeSamples(i))
-                  learners(i).getLTL() match {
-                    case None => 
-                      throw UnsatAssumption()
-                    case Some(ltl) => 
-                      logger.debug(s"Samples2LTL generated formula ${ltl} for ${i}")
-                      ltl
-                  }
-                }
-              )
-            )
-      } catch {
-        case _ : UnsatAssumption => findAssumptions()
-        case e => throw e
-      }
+      Some(Buffer.tabulate(proofSkeleton.nbProcesses)
+        (i => 
+          if fixedAssumptions.contains(i) then 
+            fixedAssumptions(i)
+          else {
+            learners(i).setPositiveSamples(positiveSamples(i))
+            learners(i).setNegativeSamples(negativeSamples(i))
+            learners(i).getLTL() match {
+              case None => 
+                logger.debug(s"Samples for $i unsatisfiable:")
+                logger.debug(s"\tPos: ${positiveSamples(i)}")
+                logger.debug(s"\tNeg: ${negativeSamples(i)}")
+                throw UnsatAssumption()
+              case Some(ltl) => 
+                logger.debug(s"Samples2LTL generated formula ${ltl} for ${i}")
+                ltl
+            }
+          }
+        )
+      )
     }
     findAssumptions()
   }
 
   private def addNegativeSample(j : Int, lasso : Lasso) = {
-    if (negativeSamples(j).contains(lasso)) then {
-      throw Exception(s"Repeated negative lasso: ${lasso} for process ${j}")
-    }
+    require((lasso._1.toSet ++ lasso._2.toSet).subsetOf(proofSkeleton.assumptionAlphabet(j)))
+    // if (negativeSamples(j).contains(lasso)) then {
+    //   throw Exception(s"Repeated negative lasso: ${lasso} for process ${j}")
+    // }
     negativeSamples(j) = negativeSamples(j).incl(lasso)
   }
   private def addPositiveSample(j : Int, lasso : Lasso) = {
-    if (positiveSamples(j).contains(lasso)) then {
-      throw Exception(s"Repeated positive lasso: ${lasso} for process ${j}")
-    }
+    require((lasso._1.toSet ++ lasso._2.toSet).subsetOf(proofSkeleton.assumptionAlphabet(j)))
+    // if (positiveSamples(j).contains(lasso)) then {
+    //   throw Exception(s"Repeated positive lasso: ${lasso} for process ${j}")
+    // }
     positiveSamples(j) = positiveSamples(j).incl(lasso)
   }
 
@@ -179,13 +182,13 @@ class LTLEagerGenerator(_system : SystemSpec, _proofSkeleton : LTLProofSkeleton,
     breakable{
       for j <- 0 until nbProcesses do {
         if system.processes(j).checkLassoMembership(lasso, Some(proofSkeleton.assumptionAlphabet(j))) == None then {
-          addNegativeSample(j, lasso)
+          addNegativeSample(j, lasso.filter(proofSkeleton.assumptionAlphabet(j).contains(_)))
           refined = true
           if lazyConstraints then break
         }
-        // If we reached here, than this is confirmed counterexample
-        if !refined then throw LTLAGResult.GlobalPropertyViolation(lasso)        
       }  
+      // If we reached here, than this is confirmed counterexample
+      if !refined then throw LTLAGResult.GlobalPropertyViolation(lasso)        
     }
   }
 
@@ -215,8 +218,8 @@ class LTLEagerGenerator(_system : SystemSpec, _proofSkeleton : LTLProofSkeleton,
                 }
               }
               // There is no case 2 since in CircAG, all circular processes are circular dependencies
-          )          
-        // 3. Check circular dependencies j, at each 0 <= k <= violationIndex-1
+          )
+          // 3. Check circular dependencies j, at each 0 <= k <= violationIndex-1
           proofSkeleton.processDependencies(_processID)
           .filter(proofSkeleton.isCircular(_))
           .foreach(
@@ -225,7 +228,7 @@ class LTLEagerGenerator(_system : SystemSpec, _proofSkeleton : LTLProofSkeleton,
                 k => 
                   if system.processes(j).checkLassoSuffixMembership(lasso.suffix(k), Some(proofSkeleton.assumptionAlphabet(j))) == None then {
                     addNegativeSample(j, lasso.suffix(k).filter(proofSkeleton.assumptionAlphabet(j).contains(_)))
-                    logger.debug(s"refineByInductivePremiseCounterexample. Circular case; item 2. k=${k}, j=${j}")
+                    logger.debug(s"refineByInductivePremiseCounterexample. Circular case; item 2. k=${k}, j=${j}, sample: ${lasso.suffix(k).filter(proofSkeleton.assumptionAlphabet(j).contains(_))}")
                     refined = true
                     if lazyConstraints then break
                   }
@@ -237,15 +240,16 @@ class LTLEagerGenerator(_system : SystemSpec, _proofSkeleton : LTLProofSkeleton,
             j => 
               if system.processes(j).checkLassoSuffixMembership(lasso.suffix(violationIndex), Some(proofSkeleton.assumptionAlphabet(j))) == None then {
                 addNegativeSample(j, lasso.suffix(violationIndex).filter(proofSkeleton.assumptionAlphabet(j).contains(_)))
-                logger.debug(s"refineByInductivePremiseCounterexample. Circular case; item 3. k0=${violationIndex}, j=${j}")
+                logger.debug(s"refineByInductivePremiseCounterexample. Circular case; item 3. k0=${violationIndex}, j=${j}, sample: ${lasso.suffix(violationIndex).filter(proofSkeleton.assumptionAlphabet(j).contains(_))}")
                 refined = true
                 if lazyConstraints then break
               }
           )
           // 5. Otherwise we add the positive sample
-          if !refined then {
-            addPositiveSample(_processID, lasso.suffix(violationIndex).filter(proofSkeleton.assumptionAlphabet(_processID).contains(_)))
-            logger.debug(s"refineByInductivePremiseCounterexample. Circular case; item 4. Added positive sample")
+          if !refined || !positiveLastResort then {
+            val projLasso = lasso.suffix(violationIndex).filter(proofSkeleton.assumptionAlphabet(_processID).contains(_))
+            addPositiveSample(_processID, projLasso)
+            logger.debug(s"refineByInductivePremiseCounterexample. Circular case; item 4. Added positive sample to process $_processID: ${projLasso}")
           }
         }
       case NonCircularPremiseQuery(_processID, dependencies, mainAssumption, fairness) => 
@@ -275,9 +279,9 @@ class LTLEagerGenerator(_system : SystemSpec, _proofSkeleton : LTLProofSkeleton,
               }
           )
           // 3. Otherwise add the positive sample
-          if !refined then {
+          if !refined  || !positiveLastResort then {
             addPositiveSample(_processID, lasso.filter(proofSkeleton.assumptionAlphabet(_processID).contains(_)))
-            logger.debug(s"refineByInductivePremiseCounterexample. Non-Circular case; Added positive sample")
+            logger.debug(s"refineByInductivePremiseCounterexample. Non-Circular case; Added positive sample to $_processID: ${lasso.filter(proofSkeleton.assumptionAlphabet(_processID).contains(_))}")
           }
         }
       }

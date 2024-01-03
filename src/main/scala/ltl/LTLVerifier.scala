@@ -210,12 +210,12 @@ class LTLVerifier(val system : SystemSpec) {
     logger.debug(s"Checking premise ${premise}")
     val f = premise match {
       case CircularPremiseQuery(processID, noncircularDeps, circularDeps, instantaneousDeps, mainAssumption, fairness) => 
-        val noncircularLHS = andOfList(noncircularDeps.map(_._2))
-        val circularLHS = andOfList(circularDeps.map(_._2))
-        val instantaneousRHS = andOfList(instantaneousDeps.map(_._2))
+        val noncircularLHS = And(noncircularDeps.map(_._2) : _*)
+        val circularLHS = And(circularDeps.map(_._2) : _*)
+        val instantaneousRHS = And(instantaneousDeps.map(_._2) : _*)
         And( fairness, noncircularLHS, U(circularLHS, And(instantaneousRHS, Not(mainAssumption))))
       case NonCircularPremiseQuery(processID, deps, mainAssumption, fairness) => 
-        val noncircularLHS = andOfList(deps.map(_._2))
+        val noncircularLHS = And(deps.map(_._2) : _*)
         And( fairness, noncircularLHS, Not(mainAssumption))
     }
     processes(premise.processID).checkLTL(Not(f))
@@ -234,7 +234,7 @@ class LTLVerifier(val system : SystemSpec) {
       case CircularPremiseQuery(_processID, noncircularDeps, circularDeps, instantaneousDeps, mainAssumption, fairness) => 
         val processAlphabet = processes(_processID).alphabet 
         val rhs = And(Not(mainAssumption) :: instantaneousDeps.map(_._2))
-        logger.debug(s"Checking LTL formula (~mainAssumption & instantaneous): ${rhs}")
+        // logger.debug(s"Checking LTL formula (~mainAssumption & instantaneous): ${rhs}")
         val formulaAlphabet = rhs.getAlphabet
         val (p,c) = lasso
         val pc = p ++ c
@@ -282,9 +282,7 @@ class LTLVerifier(val system : SystemSpec) {
           .map({(f,i) => LTL.asynchronousTransform(f, proofSkeleton.assumptionAlphabet(i))})
           ).toList
       )
-    // val cexFormula = And(List(assFormulas, LTL.asynchronousTransform(Not(property), property.alphabet)))
     val cexFormula = And(List(assFormulas, Not(system.property)))
-    System.out.println(cexFormula)
     val ta = TA.fromLTL(cexFormula.toString, None, Some("_ltl_acc_"))
     ta.checkBuchi(s"${ta.systemName}_ltl_acc_")
   }
@@ -303,10 +301,10 @@ class LTLVerifier(val system : SystemSpec) {
         logger.debug(s"Checking if ${lasso} is accepted by process ${i} (${ta.systemName})")
         ta.checkLassoMembership(lasso, Some(ta.alphabet)) match {
           case None => // ta rejects
-            logger.debug("No")
+            logger.debug("\tNo")
             throw Break()
           case _ => // ta accepts
-            logger.debug("Yes")
+            logger.debug("\tYes")
             ()
         }
       }
@@ -326,7 +324,7 @@ class LTLVerifier(val system : SystemSpec) {
             logger.debug(s"${GREEN}Inductive check ${i} passes${RESET}")
             ()
           case Some(lasso) => 
-            logger.debug(s"${RED}Inductive check ${i} fails with lasso: ${lasso}${RESET}")
+            logger.debug(s"${RED}Inductive check for process ${i} fails with lasso: ${lasso}${RESET}")
             if checkCounterExample(lasso) then {
               throw LTLAGResult.AssumptionViolation(i, lasso, query)
             } else 

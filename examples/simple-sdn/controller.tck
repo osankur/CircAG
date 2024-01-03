@@ -1,0 +1,24 @@
+# upon receiving change from device, becomes unstable.
+# then asks the supervisor for auth, once obtaining a go,
+# it communicates ack to device and becomes stable again.
+system:controller
+
+event:change
+event:ack
+event:go
+event:ask
+event:send
+event:_c_idle
+
+process:Controller
+location:Controller:stable{initial:}
+location:Controller:unstable
+location:Controller:asking
+location:Controller:authorized
+
+edge:Controller:stable:stable:_c_idle
+edge:Controller:stable:stable:send
+edge:Controller:stable:unstable:change
+edge:Controller:unstable:asking:ask
+edge:Controller:asking:authorized:go
+edge:Controller:authorized:stable:ack

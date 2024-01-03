@@ -1,0 +1,17 @@
+# Model for a switch on which a connected device can change locations
+# It is unstable upon change, and becomes stable whenever ack is received.
+# it can send message if in state stable
+system:switch
+
+event:change
+event:ack
+event:send
+event:_d_idle
+
+process::Switch
+location::Switch:stable{initial:}
+location::Switch:unstable
+edge::Switch:stable:unstable:change
+edge::Switch:stable:stable:send
+edge::Switch:unstable:stable:ack
+edge::Switch:unstable:unstable:_d_idle

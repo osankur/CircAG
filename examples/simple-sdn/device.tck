@@ -1,0 +1,7 @@
+system:device
+
+event:change
+
+process:device
+location:device:q{initial:}
+edge:device:q:q:change

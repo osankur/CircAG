@@ -1,0 +1,17 @@
+system:User
+event:a
+event:b
+event:cycle
+event:err
+
+process:User
+location:User:l1{initial:}
+location:User:l2
+location:User:l3
+location:User:lerr
+
+edge:User:l1:l2:a
+edge:User:l2:l3:b
+edge:User:l3:l1:cycle
+edge:User:l2:lerr:a
+edge:User:lerr:lerr:err

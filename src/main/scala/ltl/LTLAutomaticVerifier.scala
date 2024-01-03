@@ -30,6 +30,7 @@ import com.microsoft.z3
 import fr.irisa.circag.statistics
 import fr.irisa.circag.configuration
 import fr.irisa.circag._
+import fr.irisa.circag.dfa.AGResult
 
 class LTLAutomaticVerifier(_system : SystemSpec, ltlLearningAlgorithm : LTLLearningAlgorithm = LTLLearningAlgorithm.Samples2LTL, constraintStrategy : ConstraintStrategy = ConstraintStrategy.Eager)
   extends LTLVerifier(_system){
@@ -53,16 +54,17 @@ class LTLAutomaticVerifier(_system : SystemSpec, ltlLearningAlgorithm : LTLLearn
     var currentState = LTLAGResult.Success
     while (!doneVerification && count < 50) {
       count += 1
-      logger.debug(s"${BOLD}${MAGENTA}Attempt #${count}${RESET}")
+      val (pos,neg) = ltlGenerator.getSamples()
+      val totalNbSamples = pos.map(_.size).fold(0)((x,y) => x + y) + neg.map(_.size).fold(0)((x,y) => x + y)
+      logger.debug(s"${BOLD}${MAGENTA}Attempt #${count}${RESET} with total ${totalNbSamples} of samples")
+      for i <- 0 until nbProcesses do {
+        logger.debug(s"Assumption($i) = ${assumptions(i)}")
+        logger.debug(s"\tPos($i) = ${MAGENTA}${pos(i)}${RESET}")
+        logger.debug(s"\tNeg($i) = ${MAGENTA}${neg(i)}${RESET}")
+      }
       ltlGenerator.generateAssumptions(fixedAssumptionsMap) match {
         case Some(newAss) => 
           this.assumptions = newAss
-          val (pos, neg) = ltlGenerator.getSamples()
-          for i <- 0 until nbProcesses do {
-            logger.debug(s"Assumption($i) = ${assumptions(i)}")
-            logger.debug(s"\tPos($i) = ${MAGENTA}${pos(i)}${RESET}")
-            logger.debug(s"\tNeg($i) = ${MAGENTA}${neg(i)}${RESET}")
-          }          
         case None         => 
           logger.debug(s"${RED}${BOLD}Unsat${RESET}")
           throw LTLUnsatisfiableConstraints()
@@ -97,8 +99,15 @@ class LTLAutomaticVerifier(_system : SystemSpec, ltlLearningAlgorithm : LTLLearn
           }
           logger.debug("Refined constraints")
         case LTLAGResult.GlobalPropertyProofFail(cex) => 
-          println(s"Global Proof fail ${cex}")
-          ltlGenerator.refineByFinalPremiseCounterexample(cex)
+          try {
+            ltlGenerator.refineByFinalPremiseCounterexample(cex)
+          } catch {
+            case LTLAGResult.GlobalPropertyViolation(lasso) => 
+              logger.debug(s"${RED}Gobalproperty violation ${cex}${RESET}")
+              doneVerification = true
+            case e => 
+              throw e
+          }
       }
     }
     val (pos, neg) = ltlGenerator.getSamples()

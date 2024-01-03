@@ -55,8 +55,13 @@ class TA (
 
   override def toString(): String = {
     val sb = StringBuilder()
+    sb.append("# alphabet:\n")
     sb.append(s"system:${systemName}\n\n")
     for sigma <- alphabet do {
+      sb.append(s"event:${sigma}\n")
+    }
+    sb.append("# Internal alphabet:\n")
+    for sigma <- internalAlphabet do {
       sb.append(s"event:${sigma}\n")
     }
     sb.append("\n")
@@ -76,7 +81,7 @@ class TA (
     val beginTime = System.nanoTime()    
     statistics.Counters.incrementCounter("model-checking")
     val modelFile =
-      Files.createTempFile(configuration.get().getTmpDirPath(), "circag-query", ".ta").toFile()
+      Files.createTempFile(configuration.get().getTmpDirPath(), "circag-query", ".tck").toFile()
     val pw = PrintWriter(modelFile)
     pw.write(this.toString())
     pw.close()
@@ -133,15 +138,86 @@ class TA (
     */
   def checkLassoMembership(lasso : Lasso, syncAlphabet : Option[Set[String]] = None) : Option[Lasso] = {  
     statistics.Counters.incrementCounter("lasso-membership")
-    // println(s"Checking membership of ${lasso} in ${systemName} with sync alphabet ${syncAlphabet}")
-    val lassoAlphabet = syncAlphabet.getOrElse(lasso._1.toSet ++ lasso._2.toSet)
-    val projLasso = lasso.filter(lassoAlphabet.contains(_))
-    val lassoProcess = DLTS.fromLasso(projLasso, Some(lassoAlphabet))
-    val productTA = TA.synchronousProduct(this, List(lassoProcess), Some("_accept_"))
-    val result = productTA.checkBuchi(s"${lassoProcess.name}_accept_")
+    val occurringSymbols = lasso._1.toSet ++ lasso._2.toSet
+    val lassoAlphabet = syncAlphabet.getOrElse(occurringSymbols) | occurringSymbols
+    require(!(lasso._2.toSet & lassoAlphabet).isEmpty)
+    val lassoNLTS = NLTS.fromDLTS(DLTS.fromLasso(lasso,Some(lassoAlphabet)))
+    val productTA = this.buchiIntersection(lassoNLTS, "_accept_")
+    val result = productTA.checkBuchi(s"${lassoNLTS.name}_accept_")
     result
   }
 
+  /**
+    * Compute TA with a Buchi acceptance condition which recognizes the intersection of lts and this.
+    * 
+    * Because the model checker is base on accepting states and not accepting labels, we need to make sure
+    * to exclude inf runs in which the lts stays forever in an accepting state (and not take any transition).
+    * This the case e.g. if the lts is a^\omega an if the other process reads, say, \tau^\omega.
+    * To do this, 
+    * 1. we extend the alphabet of LTS to include all non-sync labels of TA;
+    * 2. add a fresh dummy state D for each accepting state AC of LTS
+    * 3. all sync labels from the D has the same effect as from AC
+    * 4. all non-sync labels go from AC to D
+    * 5. there are self-loops on all non-sync labels at all states but accepting states
+    * 
+    * @param lts
+    * @param acceptingLabelSuffix
+    * @return
+    */
+  def buchiIntersection(lts : NLTS, acceptingLabelSuffix : String) : TA = {
+    val syncAlphabet = lts.alphabet & this.alphabet
+    val nonSyncAlpha = (this.internalAlphabet | this.alphabet).diff(syncAlphabet) // internal alphabet of ta
+    val fullAlphabet = (lts.alphabet | this.internalAlphabet | this.alphabet)
+    // Make a copy of the NLTS; add dummy state and self-loops
+    val statesMap = HashMap[FastNFAState,FastNFAState]()
+    val dummyStatesMap = HashMap[FastNFAState,FastNFAState]()
+    val newNFA = new FastNFA(Alphabets.fromList((fullAlphabet).toList))
+    val dfa = lts.dfa
+    lts.dfa.getStates()
+      .foreach({ state =>
+        val newstate = newNFA.addState(dfa.isAccepting(state))
+        statesMap.put(state, newstate)
+        if dfa.isAccepting(state) then    {
+          dummyStatesMap.put(newstate, newNFA.addState(false))
+        }
+      })
+    lts.dfa.getInitialStates().foreach(
+      s => newNFA.setInitial(statesMap(s), true)
+    )
+    dfa
+      .getStates()
+      .foreach(
+        { s =>
+          for a <- lts.alphabet do {
+            dfa
+              .getSuccessors(s, a)
+              .foreach(
+                { snext =>
+                  newNFA.addTransition(statesMap(s), a, statesMap(snext))
+                  if (dfa.isAccepting(s)) then {
+                    newNFA.addTransition(dummyStatesMap(statesMap(s)), a, statesMap(snext))
+                  }
+                }
+              )
+          }
+        }
+      )
+    // add trans from accepting states to their dummy states
+    newNFA.getStates().foreach(
+      s =>
+        if newNFA.isAccepting(s) then {
+          for a <- nonSyncAlpha do {
+            newNFA.addTransition(s, a, dummyStatesMap(s))
+          }
+        } else {
+          for a <- nonSyncAlpha do {
+            newNFA.addTransition(s, a, s)
+          }
+        }
+    )
+    val newNLTS = NLTS(lts.name, newNFA, fullAlphabet)
+    TA.synchronousProduct(this, List(newNLTS),Some(acceptingLabelSuffix),syncOnInternalEvents=true)
+  }
   /**
   * Check whether alpha*.(lasso|_alph) has non-empty intersection with ta|_alph where alph is syncAlphabet (default is lasso.toSet)
   * @param lasso a lasso
@@ -152,11 +228,11 @@ class TA (
   def checkLassoSuffixMembership(lasso : Lasso, syncAlphabet : Option[Set[String]] = None) : Option[Lasso] = {  
     statistics.Counters.incrementCounter("lasso-suffix-membership")
     val lassoAlphabet = syncAlphabet.getOrElse(lasso._1.toSet ++ lasso._2.toSet)
-    println(s"Checking membership of ${lasso} in process ${systemName} *as a suffix* with sync alphabet ${lassoAlphabet}")
     val projLasso = lasso.filter(lassoAlphabet.contains(_))
     val lassoProcess = NLTS.fromLassoAsSuffix(projLasso, Some(lassoAlphabet))
-    val productTA = TA.synchronousProduct(this, List(lassoProcess), Some("_accept_"))
+    val productTA = this.buchiIntersection(lassoProcess, "_accept_")
     val result = productTA.checkBuchi(s"${lassoProcess.name}_accept_")
+    TA.logger.debug(s"checkLassoSuffixMembership: whether ${lasso} can be read in process ${systemName} *as a suffix* with sync alphabet ${lassoAlphabet}: ${result != None}")
     result
   }
 
@@ -169,15 +245,12 @@ class TA (
   def checkLTL(ltlFormula: LTL): Option[Lasso] = {
     val accLabel = "_ltl_accept_"
     val fullAlphabet = this.alphabet | ltlFormula.getAlphabet
-    val ta_ltl = TA.fromLTL(ltl.Not(ltlFormula).toString, Some(fullAlphabet), Some(accLabel))
-    // extend the alphabet of this to fullAlphabet so that the LTL part cannot move alone outside of the process' alphabet
-    // val ta_ext_alphabet = TA(systemName, fullAlphabet, internalAlphabet, core, eventsOfProcesses, syncs)
-    // val productTA = TA.synchronousProduct(List(ta_ext_alphabet, ta_ltl))
-    val productTA = TA.synchronousProduct(List(this, ta_ltl))
-    val r = productTA.checkBuchi(s"${ta_ltl.systemName}${accLabel}")
-    // println(r)
+    val ltlNLTS = NLTS.fromLTL(ltl.Not(ltlFormula).toString(), Some(fullAlphabet))
+    val productTA = this.buchiIntersection(ltlNLTS,accLabel)
+    val r = productTA.checkBuchi(s"${ltlNLTS.name}${accLabel}")
     r
   }
+
   /** Check the existence of a lasso with infinitely many label. 
     *
     * @param ta process
@@ -192,7 +265,7 @@ class TA (
         .createTempFile(
           configuration.get().getTmpDirPath(),
           "circag-query",
-          ".ta"
+          ".tck"
         )
         .toFile()
     val pw = PrintWriter(modelFile)
@@ -379,25 +452,38 @@ object TA{
   /**
    * Build a TA representing an NBA that recognizes the given LTL formula.
    */
-  def fromLTL(ltlString : String, fullAlphabet : Option[Alphabet], acceptingLabel : Option[String] = None) : TA = {
+  def fromLTL(ltlString : String, fullAlphabet : Option[Alphabet], acceptingLabel : Option[String] ) : TA = {
     val nlts = NLTS.fromLTL(ltlString, fullAlphabet)
     this.fromLTS[FastNFAState](nlts, acceptingLabel)
+  }
+  def fromLTL(ltl : LTL, fullAlphabet : Option[Alphabet], acceptingLabel : Option[String]) : TA = {
+    fromLTL(ltl.toString, fullAlphabet, acceptingLabel)
   }
 
   /**
     * @param ta timed automaton
     * @param dlts list of DLTSs with which sync product is to be computed
-    * @param acceptingLabelSuffix if Some(suffix), then accepting states of each DLTS are labeled by name_suffix.
+    * @param acceptingLabelSuffix if Some(suffix), then accepting states of each LTS are labeled by name_suffix.
+    * @param syncOnInternalEvents whether to sync on events that are internal to ta as well
     * @pre ta.systemName and dlts.name's are pairwise distinct
     * @return Product of ta and the given DLTS
     */
-  def synchronousProduct[S](ta : TA, dlts : List[LTS[S]], acceptingLabelSuffix : Option[String] = None) : TA = {
+  def synchronousProduct[S](ta : TA, dlts : List[LTS[S]], acceptingLabelSuffix : Option[String] = None, syncOnInternalEvents : Boolean = false) : TA = {
     val allNames = dlts.map(_.name) ++ ta.eventsOfProcesses.keys().toList
     if allNames.size > allNames.distinct.size then {
       throw Exception("Attempting synchronous product of processes of the same name")
     }
     val dltsTA = dlts.map({d => TA.fromLTS[S](d, acceptingLabelSuffix)})
-    val jointAlphabet = ta.alphabet | dlts.foldLeft(Set[String]())( (alph, d) => alph | d.alphabet)
+    val jointAlphabet = 
+      ta.alphabet
+      // union of alphabets of the LTSs
+      | dlts.foldLeft(Set[String]())( (alph, d) => alph | d.alphabet)
+      // internal events
+      | (if syncOnInternalEvents then {
+          ta.internalAlphabet
+        } else {
+          Set()
+        })
     val sb = StringBuilder()
     val systemName = s"_premise_${ta.systemName}"
     sb.append(ta.core)
@@ -406,14 +492,14 @@ object TA{
     dlts.foreach({d => eventsOfProcesses += (d.name -> d.alphabet.toSet)})
     ta.eventsOfProcesses.foreach({(p,e) => eventsOfProcesses += (p -> e)})
     val allProcesses = eventsOfProcesses.keys.toList
-
     val syncs = jointAlphabet.map(
       sigma => ta::dltsTA flatMap { ta => 
-            if !ta.alphabet.contains(sigma) then None
-            else Some((ta.getProcessNames().head, sigma))
+          if ta.alphabet.contains(sigma) || syncOnInternalEvents && ta.internalAlphabet.contains(sigma) then
+            Some((ta.getProcessNames().head, sigma))
+          else None
         }
     ).toList.filter(_.size > 1)
-    TA(systemName, jointAlphabet, ta.internalAlphabet, sb.toString(), eventsOfProcesses, syncs)
+    TA(systemName, jointAlphabet, ta.internalAlphabet.diff(jointAlphabet), sb.toString(), eventsOfProcesses, syncs)
   }
   
   /**

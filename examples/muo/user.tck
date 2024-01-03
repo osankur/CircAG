@@ -1,0 +1,14 @@
+#  (ab*)^omega
+system:User
+
+event:a
+event:b
+
+process:User
+location:User:l1{initial:}
+location:User:l2
+
+edge:User:l1:l2:a
+edge:User:l2:l1:b
+edge:User:l2:l2:b
+

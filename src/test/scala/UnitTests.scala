@@ -182,6 +182,13 @@ class TAandLTSTests extends munit.FunSuite {
      assert(ta.checkLassoSuffixMembership((List("a"),List("a","a")))!= None)
      assert(ta.checkLassoSuffixMembership((List("a"),List("b","c","a"))) == None)
   }
+  test("lasso as suffix"){
+     val ta = TA.fromFile(File("examples/simple-sdn/controller.tck"))
+     val lasso = (List("change"),List("change"))
+     assert(ta.checkLassoMembership(lasso) != None)
+     assert(ta.checkLassoMembership(lasso,Some(ta.alphabet)) == None)
+  }
+
 }
 class DFAAAG extends munit.FunSuite {
   test("sat learner"){
@@ -567,9 +574,8 @@ class LTLTests extends munit.FunSuite {
     assert(lassoTA.checkLTL(h) == None)
   }
   test("ta |= LTL"){
-    val ta = TA.fromFile(File("examples/a.ta"))
-    assert(ta.checkLTL(Atomic("b")) == None)
-    assert(ta.checkLTL(Atomic("a")) != None)
+    val ta = TA.fromFile(File("examples/simple-sdn/controller.tck"))
+    assert(ta.checkLTL(G(F(Atomic("change")))) != None)
   }
 }
 
@@ -778,40 +784,36 @@ class Single extends munit.FunSuite {
 }
 
 class A extends munit.FunSuite {
-  // test("sat-ltl-learner2"){
-  //   val learner = ltl.SATLearner("formula", Set("a","b","c"), universal=true, ltl.LTLLearningAlgorithm.Samples2LTL)
-  //   learner.setPositiveSamples(Set((List(),List("a", "b")), (List("a", "b"),List("a", "b"))))
-  //   learner.setNegativeSamples(Set((List("c"),List("c"))))    
-  //   println(learner.getLTL())
-  // }
-  // test("ltl inductive check: ltl-toy1 a b"){
-  //   // val ass = List("G ((a -> X !a) & !c)", "G F b")
-  //   val tas = Array(File("examples/ltl-toy1/a.ta"), File("examples/ltl-toy1/b.ta"),File("examples/ltl-toy1/c.ta"))
-  //   val checker = LTLAutomaticVerifier(ltl.SystemSpec(tas, G(F(Atomic("a")))))
-  //   checker.proofSkeleton.setProcessInstantaneousDependencies(0, Set(1))
+
+  // test("ltl learn assumptions: ums"){
+  //   // This does not terminate :()
+  //   val tas = Array(File("examples/ums/user.ta"), File("examples/ums/scheduler.ta"), File("examples/ums/machine.ta"))
+  //   val checker = LTLAutomaticVerifier(ltl.SystemSpec(tas, G(F(Atomic("G(F(rel1))")))))
   //   checker.learnAssumptions(true)
-  // // }
-  test("ltl learn assumptions: ltl-toy1 2 processes"){
-    val tas = Array(File("examples/ltl-toy1/a.ta"), File("examples/ltl-toy1/b.ta"))
-    val checker = LTLAutomaticVerifier(ltl.SystemSpec(tas, G(F(Atomic("a")))))
-    checker.proofSkeleton.setProcessInstantaneousDependencies(0, Set(1))
+  // }
+//  test("ltl learn assumptions: sdn"){
+//     // val tas = Array(File("examples/simple-sdn/env.tck"), File("examples/simple-sdn/device.tck"), File("examples/simple-sdn/controller.tck"), File("examples/simple-sdn/supervisor.tck"))
+//     // This does not terminate :()
+//     val tas = Array(File("examples/simple-sdn/env.tck"), File("examples/simple-sdn/device.tck"), File("examples/simple-sdn/contsup_product.tck"))
+//     val checker = LTLAutomaticVerifier(ltl.SystemSpec(tas, G(F(Atomic("G(F(send))")))))
+//     checker.proofSkeleton.setProcessInstantaneousDependencies(2,Set(1))
+//     checker.learnAssumptions(true)
+//   }  
+  // test("ltl learn assumptions: ltl-toy2_2 3 processes"){
+  //   val tas = Array(File("examples/ltl-toy2/user2.tck"), File("examples/ltl-toy2/machine2.tck"), File("examples/ltl-toy2/observer2.tck"))
+  //   val checker = LTLAutomaticVerifier(ltl.SystemSpec(tas, G(F(Atomic("compute")))))
+  //   checker.proofSkeleton.setProcessInstantaneousDependencies(1, Set(0))
+  //   val result = checker.learnAssumptions(proveGlobalProperty = true)
+  //   println(result)
+  //   assert(result == ltl.LTLAGResult.Success)
+  // }
+  test("ltl learn assumptions: ltl-toy2 2 processes"){
+    val tas = Array(File("examples/ltl-toy2/user.tck"), File("examples/ltl-toy2/machine.tck"))
+    val checker = LTLAutomaticVerifier(ltl.SystemSpec(tas, G(F(Atomic("cycle")))))
+    checker.proofSkeleton.setProcessInstantaneousDependencies(1, Set(0))
     val result = checker.learnAssumptions(proveGlobalProperty = true)
     println(result)
     assert(result == ltl.LTLAGResult.Success)
   }
-  // test("ltl inductive check: ltl-toy1 applyAG"){
-  //   val ass = List("G ((a -> X !a))", "G ((F b) & (F d))")
-  //   val ltlf = ass.map(LTL.fromString)
-  //   System.out.println(s"LTL assumptions: ${ltlf}")
-  //   val tas = Array(File("examples/ltl-toy2/a.ta"), File("examples/ltl-toy2/b.ta"))    
-  //   val checker = LTLVerifier(ltl.SystemSpec(tas, G(F(Atomic("a")))))
-  //   ltlf.zipWithIndex.foreach( (ltl,i) => checker.setAssumption(i, ltl))
-  //   // Without instantaneous assumptions, the proof fails:
-  //   println(checker.checkInductivePremise(0)) 
-  //   // By making an instantaneous assumption, the proof passes:
-  //   checker.proofSkeleton.setProcessInstantaneousDependencies(0, Set(1))
-  //   assert(checker.checkInductivePremise(0) == None)
 
-  // }
-  
 }

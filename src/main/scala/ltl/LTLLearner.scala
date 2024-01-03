@@ -59,7 +59,7 @@ trait LTLLearner(name : String, alphabet : Alphabet, universal : Boolean) {
 }
 
 /**
-* Interface to Iran Gavran's samples2LTL, and Ritam et al. Scarlet tools.
+* Interface to samples2LTL.
 *
 * @param name name of the DLTS to be learned
 * @param alphabet alphabet of the DLTS
@@ -70,9 +70,10 @@ class SATLearner(name : String, alphabet : Alphabet, universal : Boolean, solver
   protected val logger = LoggerFactory.getLogger("CircAG")
 
   def learn() : Option[LTL] = {
-    // logger.debug(s"Entering learn(${solver}) (universal=${universal}) for process ${name} with the following samples:")
-    // logger.debug(s"Pos = ${positiveSamples}")
-    // logger.debug(s"Neg = ${negativeSamples}")
+    // logger.debug(s"Entering LTLLearner for ${name} (universal=${universal}) for process ${name} with the following samples:")
+    // logger.debug(s"\tPos = ${positiveSamples}")
+    // logger.debug(s"\tNeg = ${negativeSamples}")
+    // logger.debug(s"\tAlphabet = ${alphabet}")
     // Take care of the corner case not handled by samples2LTL
     if negativeSamples.isEmpty then
       if universal then return Some(G(LTLTrue()))

@@ -1,0 +1,12 @@
+# trivial supervisor that accepts all requests
+system:supervisor
+event:go
+event:ask
+event:_s_idle
+
+process:Supervisor
+location:Supervisor:norequest{initial:}
+location:Supervisor:request
+edge:Supervisor:norequest:norequest:_s_idle
+edge:Supervisor:norequest:request:ask
+edge:Supervisor:request:norequest:go

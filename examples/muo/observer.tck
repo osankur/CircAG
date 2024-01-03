@@ -1,0 +1,7 @@
+system:Observer
+event:cycle
+
+process:Observer
+location:Observer:l1{initial:}
+
+edge:Observer:l1:l1:cycle

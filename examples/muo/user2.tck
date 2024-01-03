@@ -1,0 +1,17 @@
+#  (ab*)^omega
+system:User
+
+event:lock
+event:release
+event:compute
+
+process:User
+location:User:l1{initial:}
+location:User:l2
+location:User:l3
+
+edge:User:l1:l2:lock
+edge:User:l2:l2:compute
+edge:User:l2:l3:compute
+edge:User:l3:l1:release
+

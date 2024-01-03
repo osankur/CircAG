@@ -1,0 +1,16 @@
+system:User
+event:lock
+event:release
+# event:compute
+event:err
+
+process:User
+location:User:l1{initial:}
+location:User:l2
+location:User:lerr
+
+edge:User:l1:l2:lock
+# edge:User:l2:l2:compute
+edge:User:l2:l1:release
+edge:User:l2:lerr:lock
+edge:User:lerr:lerr:err

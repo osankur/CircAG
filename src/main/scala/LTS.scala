@@ -210,7 +210,7 @@ object DLTS {
     require(cycle.forall(p => p != ""))
     val occurringSymbols = prefix.toSet ++ cycle.toSet
     val givenAlphabet = alphabet.getOrElse(occurringSymbols)
-    require(occurringSymbols.subsetOf(givenAlphabet))
+    require{occurringSymbols.subsetOf(givenAlphabet)}
     val n = prefix.size + cycle.size
     val newDFA =
      new FastDFA(Alphabets.fromList(givenAlphabet.toList))
@@ -644,7 +644,38 @@ extension(dfa : FastDFA[String]){
 }
 
 object NLTS {
-
+  def copy(nlts : NLTS) : NLTS = {
+    val dfa = nlts.dfa
+    val statesMap = HashMap[FastNFAState,FastNFAState]()
+    // val statesMap = HashMap((dfa.getInitialState(), FastNFAState(0,false)))
+    val alphabet = dfa.getInputAlphabet()
+    val newNFA = new FastNFA(alphabet)
+    dfa
+      .getStates()
+      .foreach({ state =>
+        val newstate = newNFA.addState(dfa.isAccepting(state))
+        statesMap.put(state, newstate)
+      })
+    newNFA.getInitialStates().foreach(
+      s => newNFA.setInitial(statesMap(s), true)
+    )
+    dfa
+      .getStates()
+      .foreach(
+        { s =>
+          for a <- alphabet do {
+            dfa
+              .getSuccessors(s, a)
+              .foreach(
+                { snext =>
+                  newNFA.addTransition(statesMap(s), a, statesMap(snext))
+                }
+              )
+          }
+        }
+      )
+    NLTS(nlts.name, newNFA, nlts.alphabet)
+  }
   def fromDLTS(dlts : DLTS) : NLTS = {
     val dfa = dlts.dfa
     val statesMap = HashMap((dfa.getInitialState(), FastNFAState(0,false)))
@@ -838,7 +869,8 @@ object NLTS {
 
   /**
     * Build a NLTS which recognizes traces that start with an arbitrary prefix, and then reads the given lasso.
-    * The NFA is defined as the union of two parts. Either the lasso DFA, or another initial state with self-loops which can go to the initial state of the lasso dfa.
+    * The NFA is defined as the union of two parts. Either the lasso DFA, or another initial state with self-loops 
+    * which can go to the initial state of the lasso dfa.
     * @param lasso
     * @param alphabet
     * @return

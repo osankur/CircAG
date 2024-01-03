@@ -73,7 +73,7 @@ The synchronized product of the processes can be output to stdout as a single TC
 ## Scala3 Console
 To use the API as an interactive proof system, you can use the Scala console:
 
-    scala3 -cp target/scala-3.1.2/CircAG.jar -Dfile.encoding=UTF-8
+    scala3 -cp target/scala-3.3.1/CircAG.jar -Dfile.encoding=UTF-8
 
 Alternatively, just run `interactive.sh`.
 
