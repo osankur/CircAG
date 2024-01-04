@@ -150,7 +150,6 @@ class LTLVerifier(val system : SystemSpec) {
             .toList
           )
       } else LTLTrue()
-    // System.out.println(s"Fairness constraint: ${fairnessConstraint}")
     val guarantee = assumptions(processID)
     val dependencies = proofSkeleton.processDependencies(processID)
     if proofSkeleton.isCircular(processID) then {
@@ -167,7 +166,6 @@ class LTLVerifier(val system : SystemSpec) {
           assumptions(i) match {
             case G(subf) => 
               val x = LTL.asynchronousTransform(subf, proofSkeleton.assumptionAlphabet(i))
-              // System.out.println(s"Transformed subf: ${x}")
               x
             case _ =>
               throw Exception(

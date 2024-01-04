@@ -302,6 +302,9 @@ object DLTS {
       line match {
         case regProcess(_) => ()
         case regEdge(pr, src, tgt, event) =>
+          if !alphabet.contains(event) then {
+            throw Exception(s"DFA cannot silen transitions: $event")
+          }
           dfa.addTransition(statesMap(src),event, statesMap(tgt))
         case regLocation(pr, loc) =>  ()
         case _ => ()

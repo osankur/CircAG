@@ -2,6 +2,7 @@ package fr.irisa.circag
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import io.AnsiColor._
+import scala.util.boundary, boundary.break
 
 import collection.JavaConverters._
 import collection.convert.ImplicitConversions._
@@ -541,14 +542,20 @@ object TA{
   }
 
   /**
-   * Parser for counterexamples in which each state has a single succesor (trace, or lasso)
+   * Parser for TChecker counterexamples in which each state has a single succesor (trace, or lasso).
+   * @return (states,edges) a map pair where states maps each integer node identifier to its fields (final, initial, intval, labels, vloc, zone) as a single string,
+   * and edges maps each node to a pair of label and successor node identifier
    */
-  def getGraphFromCounterExampleOutput(cexDescription : List[String], events : Set[String]) : HashMap[Int,(String,Int)] = {
+  def getGraphFromCounterExampleOutput(cexDescription : List[String], events : Set[String]) : (HashMap[Int, String],HashMap[Int,(String,Int)]) = {
       val states = HashMap[Int, String]() // state names
       val edges = HashMap[Int,(String,Int)]()
       val regEdge = "\\s*([0-9]+)\\s*->\\s*([0-9]+).*vedge=\"<(.*)>\".*".r
-      val regState = "\\s*([0-9]+)\\s*->\\s*([0-9]+).*vedge=\"<(.*)>\".*".r
+      val regState = "\\s*([0-9]+)\\s*\\[(.*)\\]\\s*".r
       cexDescription.foreach({
+        case regState(i, content) => 
+          // content contains the following attributes: final, initial, intval, labels, vloc, zone
+          // println(s"Read state $i with content: $content")
+          states.put(i.toInt, content)
         case regEdge(src,tgt,syncList) => 
           val singleSync = syncList.split(",").map(_.split("@")(1)).toSet.intersect(events)
           if (singleSync.size == 1){
@@ -565,7 +572,7 @@ object TA{
           }
         case line => //println(s"Ignoring line ${line}")
       })
-      edges
+      (states,edges)
   }
   /** 
    *  Given the counterexample description output by TChecker, given as a list of lines,
@@ -574,7 +581,7 @@ object TA{
   def getTraceFromCounterExampleOutput(cexDescription : List[String], events : Set[String]) : Trace = {
       val word = ListBuffer[String]()
       val parents = HashMap[Int,Int]()
-      val edges = getGraphFromCounterExampleOutput(cexDescription : List[String], events : Set[String])
+      val (_,edges) = getGraphFromCounterExampleOutput(cexDescription : List[String], events : Set[String])
       edges.foreachEntry{case (s,(sigma,t)) => 
         assert(!parents.contains(t))
         parents.put(t,s)
@@ -597,15 +604,94 @@ object TA{
   }
 
 
+  /** Simplify the lasso by rendering the prefix simple and taking shortcuts 
+  * @post modifies the maps
+  * @returns new root and beginning of cycle node identifiers
+  */
+  private def simplifyLassoGraph(states : HashMap[Int, String], edges : HashMap[Int,(String,Int)], root : Int, beginCycle : Int ) : (Int,Int) = {
+    var newRoot = root
+    var newBeginCycle = beginCycle
+    /* Check if some state in the cycle already appears in the prefix; if yes shortcut */
+    def shortcutToCycle() : Unit = {
+      var node = root
+      var prevNode = node
+      while( node != newBeginCycle) do {
+        // check if label of node appears in the cycle
+        boundary {
+          var cnode = newBeginCycle
+          if states(cnode) == states(node) then
+            // println(s"\tDetected that $node == $cnode")
+            if prevNode == node then
+              // the first state of the prefix is in the cycle: set the newRoot to cnode
+              newRoot = cnode
+            else 
+              // redirect prevNode to cnode instead of node
+              edges.put(prevNode, (edges(prevNode)._1, cnode))
+              // cnode == newBeginCycle remains the beginning of the cycle
+            break()
+          cnode = edges(cnode)._2
+          while (cnode != newBeginCycle) do {
+            if states(cnode) == states(node) then
+              if prevNode == node then
+                newRoot = cnode
+              else 
+                // redirect prevNode to cnode instead of node
+                edges.put(prevNode, (edges(prevNode)._1, cnode))
+                // define cnode as the beginning of the cycle
+                newBeginCycle = cnode
+              break()
+            cnode = edges(cnode)._2
+          }
+        }
+        prevNode = node 
+        node = edges(node)._2
+      }
+    }
+    /* remove cycles within the prefix */
+    def shortcutWithinPrefix() : Unit = {
+      // node which is to be tested
+      var sourceNode = newRoot
+      // predecessor of the said node
+      var prevSourceNode = newRoot 
+      // if any, a copy of sourceNode occurring in the prefix, at the right of sourceNode
+      var copyNode : Option[Int] = None
+      while (sourceNode != newBeginCycle) do {
+        var node = edges(sourceNode)._2
+        while (node != newBeginCycle) do {
+          if ( states(node) == states(sourceNode) ) then {
+            copyNode = Some(node)
+          }
+          node = edges(node)._2
+        }
+        copyNode match {
+          case None => () // no copy, do nothing
+          case Some(j) => 
+            if prevSourceNode == sourceNode then
+              newRoot = j
+            else 
+              // redirect the edge to node to j
+              edges.put(prevSourceNode, (edges(prevSourceNode)._1, j))
+        }
+        prevSourceNode = sourceNode
+        sourceNode = edges(sourceNode)._2
+      }
+    }
+    shortcutToCycle()
+    shortcutWithinPrefix()
+    (newRoot, newBeginCycle)
+  }
 
   /** 
    *  Given the counterexample description output by TChecker, given as a list of lines,
    *  return the trace, that is, the sequence of events in the alphabet encoded by the said counterexample.
    */
   def getLassoFromCounterExampleOutput(cexDescription : List[String], events : Set[String]) : Lasso = {
+    val (states,edges) = getGraphFromCounterExampleOutput(cexDescription : List[String], events : Set[String])
+    var root = -1
+    var beginCycle = -1
+
     val prefix = ListBuffer[String]()
     val cycle = ListBuffer[String]()
-    val edges = getGraphFromCounterExampleOutput(cexDescription : List[String], events : Set[String])
     var indegree = HashMap[Int,Int]()
     edges.foreachEntry{
       case(s,(sigma,t)) => 
@@ -613,8 +699,6 @@ object TA{
         indegree.put(s, indegree.getOrElse(s,0))
     }
     if edges.size > 0 then {
-      var root = -1
-      var beginCycle = -1
       indegree.foreachEntry({
         (s,ind) => if ind == 0 then root = s
         else if ind == 2 then beginCycle = s 
@@ -624,6 +708,12 @@ object TA{
       if root == -1 then {        
         root = indegree.keys().nextElement()
         beginCycle = root
+      }
+      // simplify the graph
+      simplifyLassoGraph(states, edges, root, beginCycle) match {
+        case (x,y) =>
+          root = x
+          beginCycle = y
       }
       var node = root
       var atPrefix = true
@@ -640,7 +730,6 @@ object TA{
         node = next
       }
     }
-    
     (prefix.toList, cycle.toList)
   }
 }

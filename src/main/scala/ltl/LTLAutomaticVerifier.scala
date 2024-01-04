@@ -66,13 +66,13 @@ class LTLAutomaticVerifier(_system : SystemSpec, ltlLearningAlgorithm : LTLLearn
         case Some(newAss) => 
           this.assumptions = newAss
         case None         => 
-          logger.debug(s"${RED}${BOLD}Unsat${RESET}")
+          logger.info(s"${RED}${BOLD}Constraints unsat: verification is inconclusive${RESET}")
           throw LTLUnsatisfiableConstraints()
       }
       currentState = this.applyAG(proveGlobalProperty) 
       currentState match {
         case LTLAGResult.Success => 
-          logger.debug(s"${GREEN}${BOLD}Success${RESET}")
+          logger.info(s"${GREEN}${BOLD}Success${RESET}")
           logger.info(s"Following assumptions were learned: ${assumptions}")
           doneVerification = true
         case LTLAGResult.AssumptionViolation(processID, cex, query) => 
@@ -86,7 +86,7 @@ class LTLAutomaticVerifier(_system : SystemSpec, ltlLearningAlgorithm : LTLLearn
           }
           doneVerification = fixedAssumptions.contains(processID)
         case LTLAGResult.GlobalPropertyViolation(cex) => 
-          logger.debug(s"${RED}Gobalproperty violation ${cex}${RESET}")
+          logger.info(s"${RED}Gobalproperty violation ${cex}${RESET}")
           doneVerification = true
         case LTLAGResult.PremiseFail(processID, cex, query) => 
           logger.debug(s"${RED}PremiseFail ${processID} ${cex}${RESET}")
@@ -112,8 +112,8 @@ class LTLAutomaticVerifier(_system : SystemSpec, ltlLearningAlgorithm : LTLLearn
     }
     val (pos, neg) = ltlGenerator.getSamples()
     for i <- 0 until nbProcesses do {
-      logger.debug(s"Pos($i) = ${pos(i)}")
-      logger.debug(s"Neg($i) = ${neg(i)}")
+      logger.debug(s"Positive samples for process $i: ${pos(i)}")
+      logger.debug(s"Negative samples for process $i: ${neg(i)}")
     }
     currentState
   }
