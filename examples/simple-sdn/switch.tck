@@ -8,10 +8,10 @@ event:ack
 event:send
 event:_d_idle
 
-process::Switch
-location::Switch:stable{initial:}
-location::Switch:unstable
-edge::Switch:stable:unstable:change
-edge::Switch:stable:stable:send
-edge::Switch:unstable:stable:ack
-edge::Switch:unstable:unstable:_d_idle
+process:Switch
+location:Switch:stable{initial:}
+location:Switch:unstable
+edge:Switch:stable:unstable:change
+edge:Switch:stable:stable:send
+edge:Switch:unstable:stable:ack
+edge:Switch:unstable:unstable:_d_idle

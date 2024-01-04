@@ -310,6 +310,15 @@ object DLTS {
     DLTS(ta.systemName, dfa, alphabet)
   }
 
+  /**
+  * Create a regexp with the Brics library with the following syntactic sugar:
+  * each event preceded by '@' is interpreted as an atomic letter.
+  * Example: (~(.*@start1[^@end1]*@start1.*))&(~(.*@start2[^@end2]*@start2.*))
+  *
+  * @param name
+  * @param regexp
+  * @return
+  */
   def fromRegExp(name : String, regexp : String ) : DLTS = {
     var currentChar = 'a'
     val names = HashMap[Character, String]()
@@ -328,10 +337,14 @@ object DLTS {
       }
     }
     while(addIdentifier()){}
+    println(s"Modified regexp: ${modifiedRegexp}")
     val aut = BricsNFA(dk.brics.automaton.RegExp(modifiedRegexp).toAutomaton())
     val dfa = NFAs.determinize(aut, Alphabets.characters('A', 'z'))
-
     val alph = Alphabets.fromList(names.values.toList)
+
+    // val localAlph = Alphabets.fromList()
+    // Visualization.visualize(dfa,Alphabets.characters('a', 'b'))
+    
     val newDFA = FastDFA(alph)
     val newStates = Buffer[FastDFAState]()
     dfa
