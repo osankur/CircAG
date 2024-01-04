@@ -544,8 +544,10 @@ object TA{
    * Parser for counterexamples in which each state has a single succesor (trace, or lasso)
    */
   def getGraphFromCounterExampleOutput(cexDescription : List[String], events : Set[String]) : HashMap[Int,(String,Int)] = {
+      val states = HashMap[Int, String]() // state names
       val edges = HashMap[Int,(String,Int)]()
       val regEdge = "\\s*([0-9]+)\\s*->\\s*([0-9]+).*vedge=\"<(.*)>\".*".r
+      val regState = "\\s*([0-9]+)\\s*->\\s*([0-9]+).*vedge=\"<(.*)>\".*".r
       cexDescription.foreach({
         case regEdge(src,tgt,syncList) => 
           val singleSync = syncList.split(",").map(_.split("@")(1)).toSet.intersect(events)

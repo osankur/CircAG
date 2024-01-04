@@ -23,6 +23,7 @@ case class Configuration(
     cmd : String = "",
     ltsFiles : Array[File] = Array[File](),
     err: String = "",
+    ltlProperty : Option[String] = None,
     ltsFormat: FSM.FSMFormat = FSM.FSMFormat.TCheckerTA,
     keepTmpFiles: Boolean = true,
     verbose: Boolean = false,

@@ -167,7 +167,7 @@ class TAandLTSTests extends munit.FunSuite {
     assert(!f3.accepts(l3))
   }
   test("lasso membership"){
-    val ta = TA.fromFile(File("examples/untimed.ta"))
+    val ta = TA.fromFile(File("examples/simple.tck"))
     val l1 : Lasso = (List("a","a","b"), List("c", "a", "c", "a"))
     val l2 : Lasso = (List("b"), List("c"))
     val l3 : Lasso = (List("b","b"), List("c"))
@@ -176,7 +176,7 @@ class TAandLTSTests extends munit.FunSuite {
     assert(ta.checkLassoMembership(l3) == None)
   }
   test("lasso as suffix"){
-     val ta = TA.fromFile(File("examples/untimed.ta"))
+     val ta = TA.fromFile(File("examples/simple.tck"))
      assert(ta.checkLassoSuffixMembership((List(),List("c","a"))) != None)
      assert(ta.checkLassoSuffixMembership((List("b"),List("c","a")))!= None)
      assert(ta.checkLassoSuffixMembership((List("a"),List("a","a")))!= None)
@@ -695,7 +695,7 @@ class LTLAGTests extends munit.FunSuite {
   } 
 
   test("TA Buchi check"){
-    val ta = TA.fromFile(File("examples/untimed.ta"))
+    val ta = TA.fromFile(File("examples/simple.tck"))
     assert(ta.checkBuchi("3") == Some(List("a","b"), List("c", "a")))
     assert(ta.checkBuchi("4") == None)
   }
@@ -750,8 +750,8 @@ class LTLAGTests extends munit.FunSuite {
 }
 
 class LTLAutomatic  extends munit.FunSuite {
- test("ltl learn assumptions: ltl-toy2 2 processes"){
-    val tas = Array(File("examples/ltl-toy2/user.tck"), File("examples/ltl-toy2/machine.tck"))
+ test("ltl learn assumptions: muo 2 processes"){
+    val tas = Array(File("examples/muo/user.tck"), File("examples/muo/machine.tck"))
     val checker = LTLAutomaticVerifier(ltl.SystemSpec(tas, G(F(Atomic("cycle")))))
     checker.proofSkeleton.setProcessInstantaneousDependencies(1, Set(0))
     val result = checker.learnAssumptions(proveGlobalProperty = true)

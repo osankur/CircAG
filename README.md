@@ -26,7 +26,7 @@ Then run the following in the main directory
 
 This will create a fat executable jar target/scala-3*/CircAG.jar.
 
-### Submodules: Samples2LTL and Scarlet
+### Submodule: Samples2LTL and Scarlet
 To check out and test the samples2LTL and Scarlet submodules, run:
 
     git submodule init
@@ -42,7 +42,7 @@ To check out and test the samples2LTL and Scarlet submodules, run:
 ## DFA-based Assume-Guarantee Reasoning with Learning
 The algorithm of the CAV16 paper is currently implemented with and without alphabet refinement. This can be tried as follows.
 
-    java -jar target/scala-3.3/CircAG.jar dfa-aag --lts "examples/toy/lts1.ta,examples/toy/lts2.ta,examples/toy/lts3.ta" --err "err" --verbose false
+    java -jar target/scala-3.3/CircAG.jar dfa --lts "examples/toy/lts1.ta,examples/toy/lts2.ta,examples/toy/lts3.ta" --err "err" --verbose false
 
 Here, the list of automata are given wuth the option --lts: each file must contain a single process TChecker file (with or without clocks).
 All variables and clocks must have distinct names. These processes synchronize on all declared events but those that start with _.
@@ -57,13 +57,15 @@ You can add the option `--visualizeDFA true` to see the assumption DFAs that wer
 ### Other examples
 Two toy examples easy to understand and another example with slightly larger automata and alphabets:
 
-    java -jar target/scala-3.3.1/CircAG.jar dfa-aag --lts "examples/toy/lts1.ta,examples/toy/lts2.ta,examples/toy/lts3.ta" --err "err" --verbose false
-    java -jar target/scala-3.3.1/CircAG.jar dfa-aag --lts "examples/seq-toy/lts0.ta,examples/seq-toy/lts1.ta,examples/seq-toy/lts2.ta,examples/seq-toy/lts3.ta" --err "err"
-    java -jar target/scala-3.3.1/CircAG.jar dfa-aag --lts "examples/ums/machine.ta,examples/ums/scheduler.ta,examples/ums/user.ta" --err "err"
+    java -jar target/scala-3.3.1/CircAG.jar dfa --lts "examples/toy/lts1.ta,examples/toy/lts2.ta,examples/toy/lts3.ta" --err "err"
+    java -jar target/scala-3.3.1/CircAG.jar dfa --lts "examples/seq-toy/lts0.ta,examples/seq-toy/lts1.ta,examples/seq-toy/lts2.ta,examples/seq-toy/lts3.ta" --err "err"
+    java -jar target/scala-3.3.1/CircAG.jar dfa --lts "examples/ums/machine.ta,examples/ums/scheduler.ta,examples/ums/user.ta" --err "err"
 
 ## LTL-based Assume-Guarantee Reasoning with Learning
 We assume proof skeletons in which there is one big circular cluster, and possibly noncircular which point to each other (no cycle) and to the circular cluster.
 Any process whose proof depends on the circular cluster is also considered to be circular.
+
+    java -jar target/scala-3.3.1/CircAG.jar ltl --lts "examples/muo/user.tck,examples/muo/machine.tck" --ltlProperty "G F cycle"
 
 ## Utilities
 The synchronized product of the processes can be output to stdout as a single TChecker file using

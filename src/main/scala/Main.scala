@@ -56,6 +56,12 @@ object Main {
               c.copy(err = x)
             )
           .text("err is the label indicating an error; so that the property to be checked is 'G not err'."),
+        opt[String]("ltlProperty")
+          .valueName("<ltlProperty>")
+          .action((x, c) => 
+              c.copy(ltlProperty = Some(x))
+            )
+          .text("LTL property to be checked in the infinite and fair behaviors of the overall system."),
         opt[Boolean]("verbose")
           .action((x, c) => c.copy(verbose = x))
           .valueName("(true|false)"),
@@ -83,10 +89,10 @@ object Main {
           .text("DFA Learning algorithm (RPNI|SAT|UFSAT)"),
         cmd("product")
           .action((_, c) => c.copy(cmd = "product")),
-        cmd("dfa-aag")
-          .action((_, c) => c.copy(cmd = "dfa-aag")),
-        cmd("ltl-aag")
-          .action((_, c) => c.copy(cmd = "ltl-aag"))
+        cmd("dfa")
+          .action((_, c) => c.copy(cmd = "dfa")),
+        cmd("ltl")
+          .action((_, c) => c.copy(cmd = "ltl"))
       )
     }
     val beginTime = System.nanoTime()
@@ -108,12 +114,17 @@ object Main {
               val tas = configuration.get().ltsFiles.map(TA.fromFile(_))
               val product = TA.synchronousProduct(tas.toList)
               System.out.println(product.toString())
-            case "dfa-aag" =>
+            case "dfa" =>
                 dfa.DFAAutomaticVerifier(configuration.get().ltsFiles, 
                     Some(DLTS.fromErrorSymbol(configuration.get().err)), 
                     configuration.get().dfaLearningAlgorithm,
                     configuration.get().constraintStrategy
                   ).learnAssumptions()
+            case "ltl" =>
+              val ltlProperty = LTL.fromString(configuration.get().ltlProperty.getOrElse("G 1"))
+              val files = configuration.get().ltsFiles              
+                ltl.LTLAutomaticVerifier(ltl.SystemSpec(files,ltlProperty))
+                .learnAssumptions(configuration.get().ltlProperty != None)
             case _ => 
               logger.error("Unknown command")
           }
