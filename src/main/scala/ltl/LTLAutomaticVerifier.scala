@@ -35,7 +35,28 @@ import fr.irisa.circag.dfa.AGResult
 class LTLAutomaticVerifier(_system : SystemSpec, ltlLearningAlgorithm : LTLLearningAlgorithm = LTLLearningAlgorithm.Samples2LTL, constraintStrategy : ConstraintStrategy = ConstraintStrategy.Eager)
   extends LTLVerifier(_system){
 
-  private val ltlGenerator = LTLGenerator.getGenerator(system, proofSkeleton, ltlLearningAlgorithm, constraintStrategy)
+  private var ltlGenerator = LTLGenerator.getGenerator(system, proofSkeleton, ltlLearningAlgorithm, constraintStrategy)
+
+  override def setProcessDependencies(i: Int, deps: Set[Int]) : Unit =
+    super.setProcessDependencies(i,deps)
+    ltlGenerator = LTLGenerator.getGenerator(system, proofSkeleton, ltlLearningAlgorithm, constraintStrategy)
+
+  override def setProcessInstantaneousDependencies(i: Int, deps: Set[Int]) : Unit =
+    super.setProcessInstantaneousDependencies(i,deps)
+    ltlGenerator = LTLGenerator.getGenerator(system, proofSkeleton, ltlLearningAlgorithm, constraintStrategy)
+
+  override def setPropertyDependencies(deps: Set[Int]) =
+    super.setPropertyDependencies(deps)
+    ltlGenerator = LTLGenerator.getGenerator(system, proofSkeleton, ltlLearningAlgorithm, constraintStrategy)
+
+  override def setAssumptionAlphabet(i: Int, alphabet: Alphabet) =
+    super.setAssumptionAlphabet(i, alphabet)
+    ltlGenerator = LTLGenerator.getGenerator(system, proofSkeleton, ltlLearningAlgorithm, constraintStrategy)
+
+  override def setPropertyAlphabet(alphabet: Alphabet) =
+    super.setPropertyAlphabet(alphabet)
+    ltlGenerator = LTLGenerator.getGenerator(system, proofSkeleton, ltlLearningAlgorithm, constraintStrategy)
+
 
   /**
     * @brief Prove or disprove the fixed assumptions and the global property by learning nonfixed assumptions
@@ -58,9 +79,9 @@ class LTLAutomaticVerifier(_system : SystemSpec, ltlLearningAlgorithm : LTLLearn
       val totalNbSamples = pos.map(_.size).fold(0)((x,y) => x + y) + neg.map(_.size).fold(0)((x,y) => x + y)
       logger.debug(s"${BOLD}${MAGENTA}Attempt #${count}${RESET} with total ${totalNbSamples} of samples")
       for i <- 0 until nbProcesses do {
-        logger.debug(s"Assumption($i) = ${assumptions(i)}")
-        logger.debug(s"\tPos($i) = ${MAGENTA}${pos(i)}${RESET}")
-        logger.debug(s"\tNeg($i) = ${MAGENTA}${neg(i)}${RESET}")
+        logger.debug(s"Previous assumption($i) = ${assumptions(i)}")
+        logger.debug(s"\tNew PositiveSamples($i) = ${MAGENTA}${pos(i)}${RESET}")
+        logger.debug(s"\tNew NegativeSamples($i) = ${MAGENTA}${neg(i)}${RESET}")
       }
       ltlGenerator.generateAssumptions(fixedAssumptionsMap) match {
         case Some(newAss) => 
@@ -75,29 +96,34 @@ class LTLAutomaticVerifier(_system : SystemSpec, ltlLearningAlgorithm : LTLLearn
           logger.info(s"${GREEN}${BOLD}Success${RESET}")
           logger.info(s"Following assumptions were learned: ${assumptions}")
           doneVerification = true
-        case LTLAGResult.AssumptionViolation(processID, cex, query) => 
-          logger.debug(s"${RED}AssumptionViolation ${processID} ${cex}${RESET}")
-          query match {
-            case q : NonCircularPremiseQuery => 
-              ltlGenerator.refineByInductivePremiseCounterexample(cex, q, 0)
-            case q : CircularPremiseQuery => 
-              val k0 = getPremiseViolationIndex(cex, q)
-              ltlGenerator.refineByInductivePremiseCounterexample(cex, q, k0)
-          }
-          doneVerification = fixedAssumptions.contains(processID)
+        // case LTLAGResult.AssumptionViolation(processID, cex, query) => 
+        //   logger.debug(s"${RED}AssumptionViolation ${processID} ${cex}${RESET}")
+        //   query match {
+        //     case q : NonCircularPremiseQuery => 
+        //       ltlGenerator.refineByInductivePremiseCounterexample(cex, q, 0)
+        //     case q : CircularPremiseQuery => 
+        //       val k0 = getPremiseViolationIndex(cex, q)
+        //       ltlGenerator.refineByInductivePremiseCounterexample(cex, q, k0)
+        //   }
         case LTLAGResult.GlobalPropertyViolation(cex) => 
           logger.info(s"${RED}Gobalproperty violation ${cex}${RESET}")
           doneVerification = true
         case LTLAGResult.PremiseFail(processID, cex, query) => 
           logger.debug(s"${RED}PremiseFail ${processID} ${cex}${RESET}")
-          query match {
-            case q : NonCircularPremiseQuery => 
-              ltlGenerator.refineByInductivePremiseCounterexample(cex, q, 0)
-            case q : CircularPremiseQuery => 
-              val k0 = getPremiseViolationIndex(cex, q)
-              ltlGenerator.refineByInductivePremiseCounterexample(cex, q, k0)
+          if fixedAssumptions.contains(processID) then {
+            if checkCounterExample(cex) then {
+              doneVerification = true
+              logger.info(s"${RED}Fixed assumption $processID fails with ${cex}${RESET}")
+            }
+          } else {
+            query match {
+              case q : NonCircularPremiseQuery => 
+                ltlGenerator.refineByInductivePremiseCounterexample(cex, q, 0)
+              case q : CircularPremiseQuery => 
+                val k0 = getPremiseViolationIndex(cex, q)
+                ltlGenerator.refineByInductivePremiseCounterexample(cex, q, k0)
+            }          
           }
-          logger.debug("Refined constraints")
         case LTLAGResult.GlobalPropertyProofFail(cex) => 
           try {
             ltlGenerator.refineByFinalPremiseCounterexample(cex)

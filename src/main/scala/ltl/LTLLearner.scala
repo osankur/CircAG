@@ -39,7 +39,7 @@ enum LTLLearningAlgorithm:
   * @param alphabet alphabet of the DLTS
   * @param universal whether a universal formula is to be learned.
   */
-trait LTLLearner(name : String, alphabet : Alphabet, universal : Boolean) {
+trait LTLLearner(val name : String, val alphabet : Alphabet, val universal : Boolean) {
   def setPositiveSamples(samples : Set[Lasso]) = {
     if positiveSamples != samples then {
       positiveSamples = samples
@@ -78,10 +78,10 @@ class SATLearner(name : String, alphabet : Alphabet, universal : Boolean, solver
     if negativeSamples.isEmpty then
       if universal then return Some(G(LTLTrue()))
       else return Some(LTLTrue())
-    else if positiveSamples.isEmpty then {
-      if universal then return Some(G(LTLFalse()))
-      else return Some(LTLFalse())
-    }
+    // else if positiveSamples.isEmpty then {
+    //   if universal then return Some(G(LTLFalse()))
+    //   else return Some(LTLFalse())
+    // }
 
     // Map each symbol of alphabet to 1,0,0; 0,1,0; 0,0,1 etc.
     val symbol2code = mutable.Map[String, String]()    

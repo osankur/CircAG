@@ -59,7 +59,8 @@ Two toy examples easy to understand and another example with slightly larger aut
 
     java -jar target/scala-3.3.1/CircAG.jar dfa --lts "examples/toy/lts1.ta,examples/toy/lts2.ta,examples/toy/lts3.ta" --err "err"
     java -jar target/scala-3.3.1/CircAG.jar dfa --lts "examples/seq-toy/lts0.ta,examples/seq-toy/lts1.ta,examples/seq-toy/lts2.ta,examples/seq-toy/lts3.ta" --err "err"
-    java -jar target/scala-3.3.1/CircAG.jar dfa --lts "examples/ums/machine.ta,examples/ums/scheduler.ta,examples/ums/user.ta" --err "err"
+    java -jar target/scala-3.3.1/CircAG.jar dfa --lts "examples/ums/machine.tck,examples/ums/scheduler.tck,examples/ums/user.tck" --err "err"
+    java -jar target/scala-3.3.1/CircAG.jar dfa --lts "examples/simple-sdn/device.tck,examples/simple-sdn/switch.tck,examples/simple-sdn/controller.tck,examples/simple-sdn/supervisor.tck,examples/simple-sdn/observer.tck" --err "err"
 
 ## LTL-based Assume-Guarantee Reasoning with Learning
 We assume proof skeletons in which there is one big circular cluster, and possibly noncircular which point to each other (no cycle) and to the circular cluster.

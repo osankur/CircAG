@@ -1,7 +1,9 @@
 system:device
 
 event:change
+event:send
 
 process:device
 location:device:q{initial:}
 edge:device:q:q:change
+edge:device:q:q:send

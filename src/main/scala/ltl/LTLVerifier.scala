@@ -80,7 +80,7 @@ enum LTLAGResult extends Exception:
   case GlobalPropertyProofFail(cex : Lasso) // Global property proof fails, but lasso not realizable
   case GlobalPropertyViolation(cex : Lasso) // Global property proof fails, and lasso realizable
   case PremiseFail(processID : Int, cex : Lasso, query : PremiseQuery) // Premise proof fails, but lasso not realizable
-  case AssumptionViolation(processID : Int, cex : Lasso, query : PremiseQuery) // Premise proof fails, and lasso realizable
+  // case AssumptionViolation(processID : Int, cex : Lasso, query : PremiseQuery) // Premise proof fails, and lasso realizable
 
 class LTLUnsatisfiableConstraints extends Exception
 
@@ -93,9 +93,33 @@ class LTLVerifier(val system : SystemSpec) {
   protected val logger = LoggerFactory.getLogger("CircAG")
 
   val nbProcesses = system.ltsFiles.size
-  val propertyAlphabet = system.property.getAlphabet
+  
   protected val processes = system.ltsFiles.map(TA.fromFile(_)).toBuffer
-  val proofSkeleton = LTLProofSkeleton(processes, system.property)
+  protected val proofSkeleton = LTLProofSkeleton(processes, system.property)
+  require(proofSkeleton.propertyAlphabet == system.property.getAlphabet)
+
+  def processInstantaneousDependencies(i: Int) = proofSkeleton.processInstantaneousDependencies(i)
+  def processDependencies(i: Int) = proofSkeleton.processDependencies(i)
+  def assumptionAlphabet(i: Int) = proofSkeleton.assumptionAlphabet(i)
+  def isCircular(i: Int) = proofSkeleton.isCircular(i)
+  def propertyDependencies = proofSkeleton.propertyDependencies
+  def propertyAlphabet = proofSkeleton.propertyAlphabet
+
+  def setProcessDependencies(i: Int, deps: Set[Int]) : Unit =
+    proofSkeleton.setProcessDependencies(i,deps)
+
+  def setProcessInstantaneousDependencies(i: Int, deps: Set[Int]) : Unit =
+    proofSkeleton.setProcessInstantaneousDependencies(i,deps)
+
+  def setPropertyDependencies(deps: Set[Int]) =
+    proofSkeleton.setPropertyDependencies(deps)
+
+  def setAssumptionAlphabet(i: Int, alphabet: Alphabet) =
+    proofSkeleton.setAssumptionAlphabet(i, alphabet)
+
+  def setPropertyAlphabet(alphabet: Alphabet) =
+    proofSkeleton.setPropertyAlphabet(alphabet)
+
 
   // Initial assumptions: True or G(True) for circular processes
   protected var assumptions : Buffer[LTL] = Buffer.tabulate(nbProcesses){
@@ -176,7 +200,6 @@ class LTLVerifier(val system : SystemSpec) {
       val circularDeps = 
         dependencies.filter(proofSkeleton.isCircular).toList
         .map(i => (i,getAsynchronousMatrix(i)))
-      // logger.debug(s"Assumption matrices: ${circularDeps}")
 
       val noncircularDeps =
           dependencies.filterNot(proofSkeleton.isCircular)
@@ -194,7 +217,7 @@ class LTLVerifier(val system : SystemSpec) {
           dependencies
           .toList
           .map({i => (i,LTL.asynchronousTransform(assumptions(i), proofSkeleton.assumptionAlphabet(i)))})
-      NonCircularPremiseQuery(processID, noncircularDeps, (assumptions(processID)), fairnessConstraint)
+      NonCircularPremiseQuery(processID, noncircularDeps, LTL.asynchronousTransform(assumptions(processID), proofSkeleton.assumptionAlphabet(processID)), fairnessConstraint)
     }
   }
 
@@ -281,6 +304,7 @@ class LTLVerifier(val system : SystemSpec) {
           ).toList
       )
     val cexFormula = And(List(assFormulas, Not(system.property)))
+    logger.debug(s"Checking final premise formula: $cexFormula")
     val ta = TA.fromLTL(cexFormula.toString, None, Some("_ltl_acc_"))
     ta.checkBuchi(s"${ta.systemName}_ltl_acc_")
   }
@@ -315,20 +339,6 @@ class LTLVerifier(val system : SystemSpec) {
 
   def applyAG(proveGlobalproperty : Boolean = true, fairness : Boolean = true): LTLAGResult = {
     try { 
-      for i <- 0 until proofSkeleton.nbProcesses do {
-        val query = makePremiseQuery(i, fairness)
-        checkInductivePremise(query) match {
-          case None =>
-            logger.debug(s"${GREEN}Inductive check ${i} passes${RESET}")
-            ()
-          case Some(lasso) => 
-            logger.debug(s"${RED}Inductive check for process ${i} fails with lasso: ${lasso}${RESET}")
-            if checkCounterExample(lasso) then {
-              throw LTLAGResult.AssumptionViolation(i, lasso, query)
-            } else 
-              throw LTLAGResult.PremiseFail(i, lasso, query)
-        }
-      }
       if proveGlobalproperty then {
         checkFinalPremise(fairness) match {
           case None =>
@@ -341,6 +351,21 @@ class LTLVerifier(val system : SystemSpec) {
             } else {
               throw LTLAGResult.GlobalPropertyProofFail(lasso)
             }
+        }
+      }
+      for i <- 0 until proofSkeleton.nbProcesses do {
+        val query = makePremiseQuery(i, fairness)
+        checkInductivePremise(query) match {
+          case None =>
+            logger.debug(s"${GREEN}Inductive check ${i} passes${RESET}")
+            ()
+          case Some(lasso) => 
+            logger.debug(s"${RED}Inductive check for process ${i} fails with lasso: ${lasso}${RESET}")
+            throw LTLAGResult.PremiseFail(i, lasso, query)
+            // if checkCounterExample(lasso) then {
+            //   throw LTLAGResult.AssumptionViolation(i, lasso, query)
+            // } else 
+            //   throw LTLAGResult.PremiseFail(i, lasso, query)
         }
       }
       LTLAGResult.Success

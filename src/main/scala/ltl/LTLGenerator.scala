@@ -48,7 +48,9 @@ trait LTLGenerator(
   })
 
   protected val learners : Buffer[LTLLearner] = Buffer.tabulate(proofSkeleton.nbProcesses)
-    (i => SATLearner(s"assumption${i}", proofSkeleton.assumptionAlphabet(i), universal = proofSkeleton.isCircular(i), ltlLearningAlgorithm))
+    (i => 
+      SATLearner(s"assumption${i}", proofSkeleton.assumptionAlphabet(i), universal = proofSkeleton.isCircular(i), ltlLearningAlgorithm)
+      )
 
   /** Reinitialize the solver and samples.
     */
@@ -152,7 +154,7 @@ class LTLEagerGenerator(_system : SystemSpec, _proofSkeleton : LTLProofSkeleton,
                 logger.debug(s"\tNeg: ${negativeSamples(i)}")
                 throw UnsatAssumption()
               case Some(ltl) => 
-                logger.debug(s"Samples2LTL generated formula ${ltl} for ${i}")
+                logger.debug(s"Samples2LTL generated (universal=${learners(i).universal}) formula ${ltl} for ${i}")
                 ltl
             }
           }
