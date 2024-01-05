@@ -813,28 +813,34 @@ class DFAAutomatic extends munit.FunSuite {
  test("DFA learn assumptions: sdn"){
     val tas = Array(File("examples/simple-sdn/device.tck"), File("examples/simple-sdn/switch.tck"), File("examples/simple-sdn/controller.tck"), File("examples/simple-sdn/supervisor.tck"), File("examples/simple-sdn/observer.tck"))
     val dfaChecker = DFAAutomaticVerifier(tas, Some(DLTS.fromErrorSymbol("err")), dfa.DFALearningAlgorithm.RPNI)
-    // dfaChecker.learnAssumptions(true)
-    val ltlChecker = LTLAutomaticVerifier(ltl.SystemSpec(tas, G(F(Atomic("G(F(send))")))))
-    ltlChecker.learnAssumptions(true)
-  }  
+    dfaChecker.learnAssumptions(true)
+  }
 }
 class LTLAutomatic  extends munit.FunSuite {
-//  test("ltl learn assumptions: muo 2 processes"){
-//     val tas = Array(File("examples/muo/user.tck"), File("examples/muo/machine.tck"))
-//     val checker = LTLAutomaticVerifier(ltl.SystemSpec(tas, G(F(Atomic("cycle")))))
-//     checker.proofSkeleton.setProcessInstantaneousDependencies(1, Set(0))
-//     // this should take 15 attempts
-//     val result2 = checker.learnAssumptions(proveGlobalProperty = true)
-//     assert(result2 == ltl.LTLAGResult.Success)
-//     // One can also check just F send much faster
-//   }
-  // test("ltl learn assumptions: ltl-toy1 2 processes"){
-  //   val tas = Array(File("examples/ltl-toy1/a.ta"), File("examples/ltl-toy1/b.ta"))
-  //   val checker = LTLAutomaticVerifier(ltl.SystemSpec(tas, G(F(Atomic("a")))))
-  //   checker.proofSkeleton.setProcessInstantaneousDependencies(0, Set(1))
-  //   val result = checker.learnAssumptions(proveGlobalProperty = true)
-  //   assert(result == ltl.LTLAGResult.Success)
-  // }  
+  test("ltl learn assumptions: sdn"){
+      val tas = Array(File("examples/simple-sdn/device.tck"), File("examples/simple-sdn/switch.tck"), File("examples/simple-sdn/controller.tck"), File("examples/simple-sdn/supervisor.tck"), File("examples/simple-sdn/observer.tck"))
+      val ltlChecker = LTLAutomaticVerifier(ltl.SystemSpec(tas, (F(Atomic("change")))))
+      ltlChecker.setAssumptionAlphabet(1, Set("change","send"))
+      ltlChecker.setAssumptionAlphabet(2, Set("change","ack","send"))
+      // ~100s
+      ltlChecker.learnAssumptions(true)
+    }
+  test("ltl learn assumptions: muo 2 processes"){
+    val tas = Array(File("examples/muo/user.tck"), File("examples/muo/machine.tck"))
+    val checker = LTLAutomaticVerifier(ltl.SystemSpec(tas, G(F(Atomic("cycle")))))
+    checker.setProcessInstantaneousDependencies(1, Set(0))
+    // this should take 15 attempts
+    val result2 = checker.learnAssumptions(proveGlobalProperty = true)
+    assert(result2 == ltl.LTLAGResult.Success)
+    // One can also check just F send much faster
+  }
+  test("ltl learn assumptions: ltl-toy1 2 processes"){
+    val tas = Array(File("examples/ltl-toy1/a.ta"), File("examples/ltl-toy1/b.ta"))
+    val checker = LTLAutomaticVerifier(ltl.SystemSpec(tas, G(F(Atomic("a")))))
+    checker.setProcessInstantaneousDependencies(0, Set(1))
+    val result = checker.learnAssumptions(proveGlobalProperty = true)
+    assert(result == ltl.LTLAGResult.Success)
+  }
 
   test("ltl learn assumptions: ums-1task"){
     val tas = Array(File("examples/ltl-toy1/a.ta"), File("examples/ltl-toy1/b.ta"))
@@ -842,7 +848,7 @@ class LTLAutomatic  extends munit.FunSuite {
     checker.setProcessInstantaneousDependencies(0, Set(1))
     val result = checker.learnAssumptions(proveGlobalProperty = true)
     assert(result == ltl.LTLAGResult.Success)
-  }  
+  }
 
 }
 

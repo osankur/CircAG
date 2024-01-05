@@ -96,15 +96,6 @@ class LTLAutomaticVerifier(_system : SystemSpec, ltlLearningAlgorithm : LTLLearn
           logger.info(s"${GREEN}${BOLD}Success${RESET}")
           logger.info(s"Following assumptions were learned: ${assumptions}")
           doneVerification = true
-        // case LTLAGResult.AssumptionViolation(processID, cex, query) => 
-        //   logger.debug(s"${RED}AssumptionViolation ${processID} ${cex}${RESET}")
-        //   query match {
-        //     case q : NonCircularPremiseQuery => 
-        //       ltlGenerator.refineByInductivePremiseCounterexample(cex, q, 0)
-        //     case q : CircularPremiseQuery => 
-        //       val k0 = getPremiseViolationIndex(cex, q)
-        //       ltlGenerator.refineByInductivePremiseCounterexample(cex, q, k0)
-        //   }
         case LTLAGResult.GlobalPropertyViolation(cex) => 
           logger.info(s"${RED}Gobalproperty violation ${cex}${RESET}")
           doneVerification = true

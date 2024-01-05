@@ -149,7 +149,7 @@ class LTLEagerGenerator(_system : SystemSpec, _proofSkeleton : LTLProofSkeleton,
             learners(i).setNegativeSamples(negativeSamples(i))
             learners(i).getLTL() match {
               case None => 
-                logger.debug(s"Samples for $i unsatisfiable:")
+                logger.debug(s"Samples for process $i (${system.processes(i).systemName}) are unsatisfiable:")
                 logger.debug(s"\tPos: ${positiveSamples(i)}")
                 logger.debug(s"\tNeg: ${negativeSamples(i)}")
                 throw UnsatAssumption()

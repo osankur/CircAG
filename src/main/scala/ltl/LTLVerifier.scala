@@ -339,6 +339,17 @@ class LTLVerifier(val system : SystemSpec) {
 
   def applyAG(proveGlobalproperty : Boolean = true, fairness : Boolean = true): LTLAGResult = {
     try { 
+      for i <- 0 until proofSkeleton.nbProcesses do {
+        val query = makePremiseQuery(i, fairness)
+        checkInductivePremise(query) match {
+          case None =>
+            logger.debug(s"${GREEN}Inductive check ${i} passes${RESET}")
+            ()
+          case Some(lasso) => 
+            logger.debug(s"${RED}Inductive check for process ${i} fails with lasso: ${lasso}${RESET}")
+            throw LTLAGResult.PremiseFail(i, lasso, query)
+        }
+      }
       if proveGlobalproperty then {
         checkFinalPremise(fairness) match {
           case None =>
@@ -351,21 +362,6 @@ class LTLVerifier(val system : SystemSpec) {
             } else {
               throw LTLAGResult.GlobalPropertyProofFail(lasso)
             }
-        }
-      }
-      for i <- 0 until proofSkeleton.nbProcesses do {
-        val query = makePremiseQuery(i, fairness)
-        checkInductivePremise(query) match {
-          case None =>
-            logger.debug(s"${GREEN}Inductive check ${i} passes${RESET}")
-            ()
-          case Some(lasso) => 
-            logger.debug(s"${RED}Inductive check for process ${i} fails with lasso: ${lasso}${RESET}")
-            throw LTLAGResult.PremiseFail(i, lasso, query)
-            // if checkCounterExample(lasso) then {
-            //   throw LTLAGResult.AssumptionViolation(i, lasso, query)
-            // } else 
-            //   throw LTLAGResult.PremiseFail(i, lasso, query)
         }
       }
       LTLAGResult.Success
