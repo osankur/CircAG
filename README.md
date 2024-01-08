@@ -71,7 +71,7 @@ Any process whose proof depends on the circular cluster is also considered to be
 ## Utilities
 The synchronized product of the processes can be output to stdout as a single TChecker file using
 
-    run product --lts "examples/ums/machine.ta,examples/ums/scheduler.ta,examples/ums/user.ta"
+    java -jar target/scala-3.3.1/CircAG.jar product --lts "examples/ums/machine.ta,examples/ums/scheduler.ta,examples/ums/user.ta"
 
 ## Scala3 Console
 To use the API as an interactive proof system, you can use the Scala console:

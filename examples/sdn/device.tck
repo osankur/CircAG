@@ -1,0 +1,19 @@
+system:device
+
+event:change
+event:send
+event:_devW
+event:_d_idle_
+# 0: send, 1: change, 2: other
+int:4:0:2:0:sbuf # fifo for switch
+int:1:0:3:0:ss1 # start index of the fifo
+int:1:0:3:0:se1 # end index of the fifo
+
+process:device
+location:device:q{initial:}
+edge:device:q:q:change{provided: se1 != ss1 && sbuf[ss1] == 0 : do : ss1 = (ss1+1)%4}
+edge:device:q:q:send{provided: se1 != ss1 && sbuf[ss1] == 1 : do : ss1 = (ss1+1)%4}
+edge:device:q:q:_d_idle_{provided: se1 != ss1 && sbuf[ss1] == 2 : do : ss1 = (ss1+1)%4}
+edge:device:q:q:_devW{provided: (se1+1)%4 != ss1 : do : sbuf[se1] = 0; se1 = (se1+1)%4}
+edge:device:q:q:_devW{provided: (se1+1)%4 != ss1 : do : sbuf[se1] = 1; se1 = (se1+1)%4}
+edge:device:q:q:_devW{provided: (se1+1)%4 != ss1 : do : sbuf[se1] = 2; se1 = (se1+1)%4}

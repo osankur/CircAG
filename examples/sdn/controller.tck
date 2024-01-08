@@ -11,15 +11,14 @@ event:send
 event:_c_idle
 
 process:Controller
-location:Controller:idle{initial:}
-location:Controller:stable
+location:Controller:stable{initial:}
 location:Controller:unstable
 location:Controller:asking
 location:Controller:authorized
 
-edge:Controller:idle:stable:send
+edge:Controller:stable:stable:_c_idle
 edge:Controller:stable:stable:send
 edge:Controller:stable:unstable:change
 edge:Controller:unstable:asking:ask
 edge:Controller:asking:authorized:go
-edge:Controller:authorized:idle:ack
+edge:Controller:authorized:stable:ack

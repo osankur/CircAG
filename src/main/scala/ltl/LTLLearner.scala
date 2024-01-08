@@ -114,8 +114,9 @@ class SATLearner(name : String, alphabet : Alphabet, universal : Boolean, solver
       pw.write(samples)  
       pw.write("\n")
     }
-    // pw.write("---\n")
-    // pw.write("G,F,!,|,&\n")
+    pw.write("---\n")
+    pw.write("G,F,!,|,&,->\n")
+
     pw.close()
 
     solver match {
@@ -133,10 +134,11 @@ class SATLearner(name : String, alphabet : Alphabet, universal : Boolean, solver
           } catch {        
             case e => 
               logger.error(s"Unexpected return value when executing: ${cmd}")
+              logger.error(s"stdout: ${stdout}")
+              logger.error(s"stderr: ${stderr}")
               throw e
           }
         statistics.Timers.incrementTimer("ltl-learner", System.nanoTime() - beginTime)
-        
         if output.contains("NO SOLUTION") then
           // logger.debug(s"Samples2LTL returned NO SOLUTION")
           None

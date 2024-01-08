@@ -1,0 +1,21 @@
+# trivial supervisor that accepts all requests
+system:supervisor
+event:go
+event:ask
+event:_supW
+event:_sup_idle
+
+# 0: send, 1: change, 2: other
+int:4:0:2:0:supbuf # fifo for switch
+int:1:0:3:0:sups # start index of the fifo
+int:1:0:3:0:supe # end index of the fifo
+process:Supervisor
+location:Supervisor:norequest{initial:}
+location:Supervisor:request
+edge:Supervisor:norequest:norequest:_sup_idle{provided: supe != sups && supbuf[sups] == 2 : do : sups = (sups+1)%4}
+edge:Supervisor:norequest:request:ask{provided: supe != sups && supbuf[sups] == 0 : do : sups = (sups+1)%4}
+edge:Supervisor:request:norequest:go{provided: supe != sups && supbuf[sups] == 1 : do : sups = (sups+1)%4}
+edge:Supervisor:norequest:norequest:_supW{provided: (supe+1)%4 != sups : do : supbuf[supe] = 0; supe = (supe+1)%4}
+edge:Supervisor:norequest:norequest:_supW{provided: (supe+1)%4 != sups : do : supbuf[supe] = 1; supe = (supe+1)%4}
+edge:Supervisor:norequest:norequest:_supW{provided: (supe+1)%4 != sups : do : supbuf[supe] = 2; supe = (supe+1)%4}
+

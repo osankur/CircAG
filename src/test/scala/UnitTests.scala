@@ -810,8 +810,13 @@ class LTLAGTests extends munit.FunSuite {
 }
 
 class DFAAutomatic extends munit.FunSuite {
- test("DFA learn assumptions: sdn"){
+ test("DFA learn assumptions: simple sdn"){
     val tas = Array(File("examples/simple-sdn/device.tck"), File("examples/simple-sdn/switch.tck"), File("examples/simple-sdn/controller.tck"), File("examples/simple-sdn/supervisor.tck"), File("examples/simple-sdn/observer.tck"))
+    val dfaChecker = DFAAutomaticVerifier(tas, Some(DLTS.fromErrorSymbol("err")), dfa.DFALearningAlgorithm.RPNI)
+    dfaChecker.learnAssumptions(true)
+  }
+ test("DFA learn assumptions: full sdn"){
+    val tas = Array(File("examples/sdn/device.tck"), File("examples/sdn/switch.tck"), File("examples/sdn/controller.tck"), File("examples/sdn/supervisor.tck"), File("examples/sdn/observer.tck"))
     val dfaChecker = DFAAutomaticVerifier(tas, Some(DLTS.fromErrorSymbol("err")), dfa.DFALearningAlgorithm.RPNI)
     dfaChecker.learnAssumptions(true)
   }
@@ -887,13 +892,53 @@ class Single extends munit.FunSuite {
 
 class A extends munit.FunSuite {
 
-  test("ltl learn assumptions: ums"){
-    // This does not terminate :()
-    val tas = Array(File("examples/ums-1task/user.tck"), File("examples/ums-1task/scheduler.tck"), File("examples/ums-1task/machine.tck"))
-    val checker = LTLAutomaticVerifier(ltl.SystemSpec(tas, (F(Atomic("rel1")))))
-    checker.setProcessDependencies(0, Set())
-    checker.learnAssumptions(true)
+  // test("ltl learn assumptions: ums"){
+  //   // This does not terminate :()
+  //   val tas = Array(File("examples/ums-1task/user.tck"), File("examples/ums-1task/scheduler.tck"), File("examples/ums-1task/machine.tck"))
+  //   val checker = LTLAutomaticVerifier(ltl.SystemSpec(tas, (F(Atomic("rel1")))))
+  //   checker.setProcessDependencies(0, Set())
+  //   checker.learnAssumptions(true)
+  // }
+
+  // test("ltl learn assumptions: sdn"){
+  //     val tas = Array(File("examples/sdn/device.tck"), File("examples/sdn/switch.tck"), File("examples/sdn/controller.tck"), File("examples/sdn/supervisor.tck"), File("examples/sdn/observer.tck"))
+  //     val ltlChecker = LTLAutomaticVerifier(ltl.SystemSpec(tas, (F(Atomic("change")))))
+  //     ltlChecker.setAssumptionAlphabet(1, Set("change","send"))
+  //     ltlChecker.setAssumptionAlphabet(2, Set("change","ack","send"))
+  //     ltlChecker.learnAssumptions(true)
+  // //   }
+  // test("ltl learn assumptions: simple-sdn"){
+  //     val tas = Array(File("examples/simple-sdn/device.tck"), File("examples/simple-sdn/switch.tck"), File("examples/simple-sdn/controller.tck"), File("examples/simple-sdn/supervisor.tck"), File("examples/simple-sdn/observer.tck"))
+  //     // 15s, ArrayBuffer((G 1), (G 1), (G (F ack)), (G (F go)), (G ((F err) -> err)))
+  //     // val ltlChecker = LTLAutomaticVerifier(ltl.SystemSpec(tas, LTL.fromString("G(ask -> F go)")))
+
+  //     // 89s, ArrayBuffer((G 1), (G ((G (change -> (G change))) -> (G send))), (G (G ((F ack) & (F send)))), (G (G (F (go & (F ask))))), (G (G (!err))))
+  //     // val ltlChecker = LTLAutomaticVerifier(ltl.SystemSpec(tas, LTL.fromString("G(change -> F ack)")))
+
+  //     val ltlChecker = LTLAutomaticVerifier(ltl.SystemSpec(tas, LTL.fromString("G(F send)"))) // constraints unsatisfiable 150s
+  //     ltlChecker.learnAssumptions(true)
+  // }
+  // test("manual simple-sdn"){
+  //   val assumptions = Array(G(LTLTrue()), G(LTLTrue()), G(LTL.fromString("(G (G (((send U ack) -> ack) U ack)))")), G(LTL.fromString("(G (G ((!go) U (go & (X (!go))))))")), LTL.fromString("(G (!(F err)))"))
+  //   val tas = Array(File("examples/simple-sdn/device.tck"), File("examples/simple-sdn/switch.tck"), File("examples/simple-sdn/controller.tck"), File("examples/simple-sdn/supervisor.tck"), File("examples/simple-sdn/observer.tck"))
+  //   val ltlChecker = LTLAutomaticVerifier(ltl.SystemSpec(tas, (F(Atomic("change")))))
+  //   ltlChecker.setAssumptionAlphabet(1, Set("change","send"))
+  //   ltlChecker.setAssumptionAlphabet(2, Set("change","ack","send"))
+  //   assumptions
+  //     .zipWithIndex
+  //     .foreach((f,i) => ltlChecker.setAssumption(i, f))
+  //   ltlChecker.applyAG(true)
+  // }
+    // test("as"){
+    //   val ta = TA.fromFile(File("examples/simple-sdn/a.tck"))
+    //   val bta = ta.buchiIntersection(NLTS.fromLTL("((G F (go | ask)) & (G F (change | send)) & ~(G(ask -> F go)))", None),"acc")
+    //   println(bta)
+    // }
+  test("DFA learn assumptions: full sdn"){
+    val tas = Array(File("examples/sdn/device.tck"), File("examples/sdn/switch.tck"), File("examples/sdn/controller.tck"), File("examples/sdn/supervisor.tck"), File("examples/sdn/observer.tck"))
+    val dfaChecker = DFAAutomaticVerifier(tas, Some(DLTS.fromErrorSymbol("err")), dfa.DFALearningAlgorithm.RPNI)
+    dfaChecker.learnAssumptions(true)
   }
-
-
+    
  }
+ 

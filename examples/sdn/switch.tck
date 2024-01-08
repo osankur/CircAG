@@ -1,0 +1,33 @@
+# Model for a switch on which a connected device can change locations
+# It is unstable upon change, and becomes stable whenever ack is received.
+# it can send message if in state stable
+system:switch
+
+event:change
+event:ack
+event:send
+event:_d_idle
+event:_dataR
+event:_dataW
+
+# 0: send, 1: change, 2: other
+int:4:0:2:0:buf1 # fifo for switch
+int:1:0:3:0:s1 # start index of the fifo
+int:1:0:3:0:e1 # end index of the fifo
+
+process:Switch
+location:Switch:stable{initial:}
+location:Switch:unstable
+
+edge:Switch:stable:unstable:change{provided: e1 != s1 && buf1[s1] == 1 : do : s1 = (s1+1)%4}
+edge:Switch:stable:stable:send{provided: e1 != s1 && buf1[s1] == 0 : do : s1 = (s1+1)%4}
+edge:Switch:stable:stable:_dataR{provided: e1 != s1 && buf1[s1] == 2 : do : s1 = (s1+1)%4}
+edge:Switch:stable:stable:_dataW{provided: (e1+1)%4 != s1 : do : buf1[e1] = 0; e1 = (e1+1)%4}
+edge:Switch:stable:stable:_dataW{provided: (e1+1)%4 != s1 : do : buf1[e1] = 1; e1 = (e1+1)%4}
+edge:Switch:stable:stable:_dataW{provided: (e1+1)%4 != s1 : do : buf1[e1] = 2; e1 = (e1+1)%4}
+
+edge:Switch:unstable:stable:ack
+edge:Switch:unstable:unstable:_d_idle
+edge:Switch:unstable:unstable:_dataW{provided: (e1+1)%4 != s1 : do : buf1[e1] = 0; e1 = (e1+1)%4}
+edge:Switch:unstable:unstable:_dataW{provided: (e1+1)%4 != s1 : do : buf1[e1] = 1; e1 = (e1+1)%4}
+edge:Switch:unstable:unstable:_dataW{provided: (e1+1)%4 != s1 : do : buf1[e1] = 2; e1 = (e1+1)%4}
