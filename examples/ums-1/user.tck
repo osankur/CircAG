@@ -1,0 +1,14 @@
+system:user
+
+event:req1
+event:rel1
+event:grant1
+
+process:user
+location:user:i{initial:}
+location:user:r1
+location:user:g1
+
+edge:user:i:r1:req1
+edge:user:r1:g1:grant1
+edge:user:g1:i:rel1
