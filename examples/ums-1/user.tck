@@ -3,12 +3,19 @@ system:user
 event:req1
 event:rel1
 event:grant1
+event:_user
+
+int:1:0:100:0:a
+# int:1:0:100:0:b
 
 process:user
 location:user:i{initial:}
 location:user:r1
 location:user:g1
+edge:user:i:i:_user{do : if a < 100 then a = a + 1 else a = 0 end}
+# edge:user:i:i:_user{do : if b < 100 then b = b + 1 else b = 0 end}
 
-edge:user:i:r1:req1
+edge:user:i:r1:req1#{provided: a % 7 == 0 : do : if a < 100 then a = a + 1 else a = 0 end}
+edge:user:i:r1:req1#{provided: b % 11 == 0 : do : if b < 100 then b = b + 1 else b = 0 end}
 edge:user:r1:g1:grant1
-edge:user:g1:i:rel1
+edge:user:g1:i:rel1{provided: a % 7 == 0 : do : if a < 100 then a = a + 1 else a = 0 end}

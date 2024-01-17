@@ -3,14 +3,19 @@ system:machine
 event:start1
 event:end1
 event:err
-
+event:_machine
+int:1:0:100:0:ma
+int:1:0:100:0:mb
 int:1:0:2:0:task
 process:machine
 location:machine:q{initial:}
 location:machine:qerr{labels:err}
+edge:machine:q:q:_machine{do : if ma < 100 then ma = ma + 1 else ma = 0 end}
+edge:machine:q:q:_machine{do : if mb < 100 then mb = mb + 1 else mb = 0 end}
 edge:machine:q:q:start1{provided: task == 0 : do : task = 1}
 # edge:machine:q:q:start2{provided: task == 0 : do : task = 2}
-edge:machine:q:q:end1{provided: task == 1 : do : task = 0}
+edge:machine:q:q:end1{provided: task == 1 && ma % 7 == 0 : do : task = 0; if ma < 100 then ma = ma + 1 else ma = 0 end}
+edge:machine:q:q:end1{provided: task == 1 && mb % 11 == 0 : do : task = 0; if mb < 100 then mb = mb + 1 else mb = 0 end}
 # edge:machine:q:q:end2{provided: task == 2 : do : task = 0}
 edge:machine:q:qerr:start1{provided: task != 0 }
 # edge:machine:q:qerr:start2{provided: task != 0 }

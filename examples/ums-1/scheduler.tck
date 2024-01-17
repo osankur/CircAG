@@ -10,6 +10,9 @@ event:rel1
 # event:rel2
 event:grant1
 # event:grant2
+event:_sched
+
+int:1:0:10:0:b
 
 process:scheduler
 location:scheduler:q0{initial:}
@@ -21,8 +24,9 @@ location:scheduler:s1
 # location:scheduler:s2
 location:scheduler:e1
 # location:scheduler:e2
+edge:scheduler:q0:q0:_sched{do : if b < 10 then b = b + 1 else b = 0 end}
 
-edge:scheduler:q0:r1:req1
+edge:scheduler:q0:r1:req1{provided: b % 5 == 0 : do : if b < 10 then b = b + 1 else b = 0 end}
 edge:scheduler:r1:g1:grant1
 edge:scheduler:g1:s1:start1
 edge:scheduler:s1:e1:end1

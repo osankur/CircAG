@@ -73,15 +73,6 @@ edge:Controller:unstable:asking:ask
 edge:Controller:asking:authorized:go
 edge:Controller:authorized:stable:ack
 # trivial supervisor that accepts all requests
-
-
-# process:Supervisor
-# location:Supervisor:norequest{initial:}
-# location:Supervisor:request
-# edge:Supervisor:norequest:norequest:_sup_idle
-# edge:Supervisor:norequest:request:ask
-# edge:Supervisor:request:norequest:go
-
 # 0: send, 1: change, 2: other
 int:4:0:2:0:supbuf # fifo for switch
 int:1:0:3:0:sups # start index of the fifo
