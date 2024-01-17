@@ -48,7 +48,7 @@ class Interactive(
     val files = filenames.map(s => java.io.File(s))
     val nbProcesses = files.size
     files.foreach(f=> if !f.exists() then throw Exception(s"File ${f} could not be read"))
-    var dfaVerifier = DFAAutomaticVerifier(files.toArray, dfaProperty, DFALearningAlgorithm.RPNI)
+    var dfaVerifier = DFAAutomaticVerifier(dfa.SystemSpec(files.toArray, dfaProperty))
     var ltlVerifier = LTLVerifier(ltl.SystemSpec(files.toArray, ltlProperty))
 
     private var dfaProofStates = Buffer.fill(nbProcesses)(DFAProofState.Unknown)

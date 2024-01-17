@@ -80,7 +80,7 @@ enum LTLAGResult extends Exception:
   case GlobalPropertyProofFail(cex : Lasso) // Global property proof fails, but lasso not realizable
   case GlobalPropertyViolation(cex : Lasso) // Global property proof fails, and lasso realizable
   case PremiseFail(processID : Int, cex : Lasso, query : PremiseQuery) // Premise proof fails, but lasso not realizable
-  // case AssumptionViolation(processID : Int, cex : Lasso, query : PremiseQuery) // Premise proof fails, and lasso realizable
+  case Unsat // Constraints are unsatisfiable
 
 class LTLUnsatisfiableConstraints extends Exception
 
@@ -346,7 +346,7 @@ class LTLVerifier(val system : SystemSpec) {
             logger.debug(s"${GREEN}Inductive check ${i} passes${RESET}")
             ()
           case Some(lasso) => 
-            logger.debug(s"${RED}Inductive check for process ${i} fails with lasso: ${lasso}${RESET}")
+            logger.debug(s"${RED}Inductive check for process ${i} fails with lasso: ${lasso.filter(proofSkeleton.assumptionAlphabet(i).contains(_))}${RESET}")
             throw LTLAGResult.PremiseFail(i, lasso, query)
         }
       }

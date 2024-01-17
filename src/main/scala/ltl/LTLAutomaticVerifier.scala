@@ -73,7 +73,8 @@ class LTLAutomaticVerifier(_system : SystemSpec, ltlLearningAlgorithm : LTLLearn
     )
     var doneVerification = false
     var currentState = LTLAGResult.Success
-    while (!doneVerification && count < 50) {
+    while (!doneVerification) {
+      statistics.Counters.incrementCounter("iteration")      
       count += 1
       val (pos,neg) = ltlGenerator.getSamples()
       val totalNbSamples = pos.map(_.size).fold(0)((x,y) => x + y) + neg.map(_.size).fold(0)((x,y) => x + y)
@@ -83,17 +84,20 @@ class LTLAutomaticVerifier(_system : SystemSpec, ltlLearningAlgorithm : LTLLearn
         logger.debug(s"\tNew PositiveSamples($i) = ${MAGENTA}${pos(i)}${RESET}")
         logger.debug(s"\tNew NegativeSamples($i) = ${MAGENTA}${neg(i)}${RESET}")
       }
-      ltlGenerator.generateAssumptions(fixedAssumptionsMap) match {
-        case Some(newAss) => 
-          this.assumptions = newAss
-        case None         => 
-          logger.info(s"${RED}${BOLD}Constraints unsat: verification is inconclusive${RESET}")
-          throw LTLUnsatisfiableConstraints()
+      currentState = 
+        ltlGenerator.generateAssumptions(fixedAssumptionsMap) match {
+          case Some(newAss) => 
+            this.assumptions = newAss
+            this.applyAG(proveGlobalProperty) 
+          case None         => 
+            LTLAGResult.Unsat
       }
-      currentState = this.applyAG(proveGlobalProperty) 
       currentState match {
+        case LTLAGResult.Unsat => 
+          logger.info(s"${RED}${BOLD}Constraints unsat: verification is inconclusive${RESET}")
+          doneVerification = true
         case LTLAGResult.Success => 
-          logger.info(s"${GREEN}${BOLD}Success${RESET}")
+          logger.info(s"${GREEN}${BOLD}Property holds${RESET}")
           logger.info(s"Following assumptions were learned: ${assumptions}")
           doneVerification = true
         case LTLAGResult.GlobalPropertyViolation(cex) => 
@@ -132,7 +136,6 @@ class LTLAutomaticVerifier(_system : SystemSpec, ltlLearningAlgorithm : LTLLearn
       logger.debug(s"Positive samples for process $i: ${pos(i)}")
       logger.debug(s"Negative samples for process $i: ${neg(i)}")
     }
-    currentState
+    currentState    
   }
-
 }

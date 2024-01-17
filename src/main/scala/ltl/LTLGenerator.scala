@@ -140,26 +140,31 @@ class LTLEagerGenerator(_system : SystemSpec, _proofSkeleton : LTLProofSkeleton,
   override def generateAssumptions(fixedAssumptions : Map[Int,LTL] = Map[Int,LTL]()) : Option[Buffer[LTL]] = {
     class UnsatAssumption extends Exception
     def findAssumptions() : Option[Buffer[LTL]] = {
-      Some(Buffer.tabulate(proofSkeleton.nbProcesses)
-        (i => 
-          if fixedAssumptions.contains(i) then 
-            fixedAssumptions(i)
-          else {
-            learners(i).setPositiveSamples(positiveSamples(i))
-            learners(i).setNegativeSamples(negativeSamples(i))
-            learners(i).getLTL() match {
-              case None => 
-                logger.debug(s"Samples for process $i (${system.processes(i).systemName}) are unsatisfiable:")
-                logger.debug(s"\tPos: ${positiveSamples(i)}")
-                logger.debug(s"\tNeg: ${negativeSamples(i)}")
-                throw UnsatAssumption()
-              case Some(ltl) => 
-                logger.debug(s"Samples2LTL generated (universal=${learners(i).universal}) formula ${ltl} for ${i}")
-                ltl
+      try{
+        Some(Buffer.tabulate(proofSkeleton.nbProcesses)
+          (i => 
+            if fixedAssumptions.contains(i) then 
+              fixedAssumptions(i)
+            else {
+              learners(i).setPositiveSamples(positiveSamples(i))
+              learners(i).setNegativeSamples(negativeSamples(i))
+              learners(i).getLTL() match {
+                case None => 
+                  logger.debug(s"Samples for process $i (${system.processes(i).systemName}) are unsatisfiable:")
+                  logger.debug(s"\tPos: ${positiveSamples(i)}")
+                  logger.debug(s"\tNeg: ${negativeSamples(i)}")
+                  throw UnsatAssumption()
+                case Some(ltl) => 
+                  logger.debug(s"Samples2LTL generated (universal=${learners(i).universal}) formula ${ltl} for ${i}")
+                  ltl
+              }
             }
-          }
+          )
         )
-      )
+      } catch {
+        case e : UnsatAssumption => None 
+        case e => throw e
+      }
     }
     findAssumptions()
   }

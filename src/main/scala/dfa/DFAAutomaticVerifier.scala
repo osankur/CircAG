@@ -34,8 +34,8 @@ import fr.irisa.circag.statistics
   */
 class DFAAutomaticVerifier(
     _system: SystemSpec,
-    dfaLearnerAlgorithm: DFALearningAlgorithm,
-    constraintStrategy : ConstraintStrategy
+    dfaLearnerAlgorithm: DFALearningAlgorithm = DFALearningAlgorithm.RPNI,
+    constraintStrategy : ConstraintStrategy  = ConstraintStrategy.Eager
 ) extends DFAVerifier(_system) {
 
   private val cexHistory = Buffer.tabulate(nbProcesses)({_ => Set[Trace]()})
@@ -45,14 +45,14 @@ class DFAAutomaticVerifier(
     }
   }
 
-  def this(
-      ltsFiles: Array[File],
-      property: Option[DLTS],
-      dfaLearnerAlgorithm: DFALearningAlgorithm = DFALearningAlgorithm.RPNI,
-      constraintStrategy : ConstraintStrategy = ConstraintStrategy.Eager
-  ) = {
-    this(SystemSpec(ltsFiles, property), dfaLearnerAlgorithm, constraintStrategy)
-  }
+  // def this(
+  //     ltsFiles: Array[File],
+  //     property: Option[DLTS],
+  //     dfaLearnerAlgorithm: DFALearningAlgorithm,
+  //     constraintStrategy : ConstraintStrategy
+  // ) = {
+  //   this(SystemSpec(ltsFiles, property), dfaLearnerAlgorithm, constraintStrategy)
+  // }
 
   protected val logger = LoggerFactory.getLogger("CircAG")
   protected var dfaGenerator =
@@ -97,21 +97,19 @@ class DFAAutomaticVerifier(
       for (ta, i) <- system.processes.zipWithIndex do {
         // DFAAssumeGuaranteeVerifier.checkInductivePremise(ta, proofSkeleton.processDependencies(i).map(assumptions(_)).toList, assumptions(i))
         this.checkInductivePremise(i) match {
-          case None => ()
-            // System.out.println(s"${GREEN}Premise ${i} passed${RESET}")
+          case None =>
+            logger.debug(s"${GREEN}Premise ${i} passed${RESET}")
           case Some(cexTrace) =>
             latestCex = cexTrace
-            System.out.println(
-              s"${RED}Premise ${i} failed with cex: ${cexTrace}${RESET}"
-            )
+            logger.debug(s"${RED}Premise ${i} failed: ${cexTrace}${RESET}")
             if (this.cexHistory(i).contains(cexTrace)) then {
               for j <- proofSkeleton.processDependencies(i) do {
-                System.out.println(
+                println(
                   s"Dependency: Assumption ${assumptions(j).name} for ${system.processes(j).systemName}"
                 )
                 assumptions(j).visualize()
               }
-              System.out.println(
+              println(
                 s"Assumption for this process ${system.processes(i).systemName}"
               )
               assumptions(i).visualize()
@@ -185,6 +183,7 @@ class DFAAutomaticVerifier(
     var doneVerification = false
     var currentState = AGResult.PremiseFail(0, List())
     while (!doneVerification) {
+      statistics.Counters.incrementCounter("iteration")
       var newAss = dfaGenerator.generateAssumptions(fixedAssumptionsMap)
       newAss match {
         case Some(newAss) => this.assumptions = newAss
