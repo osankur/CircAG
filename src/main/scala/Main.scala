@@ -43,9 +43,9 @@ object Main {
       OParser.sequence(
         programName("CircAG"),
         head("circAG", "0.1"),
-        opt[Seq[File]]("lts")
+        opt[Seq[File]]("files")
           .required()
-          .valueName("<lts>")
+          .valueName("<files>")
           .action(
             (x,c) =>
             c.copy(ltsFiles = x.toArray)
@@ -115,11 +115,13 @@ object Main {
               val product = TA.synchronousProduct(tas.toList)
               System.out.println(product.toString())
             case "dfa" =>
-                dfa.DFAAutomaticVerifier(configuration.get().ltsFiles, 
-                    Some(DLTS.fromErrorSymbol(configuration.get().err)), 
-                    configuration.get().dfaLearningAlgorithm,
-                    configuration.get().constraintStrategy
-                  ).learnAssumptions()
+                dfa.DFAAutomaticVerifier(
+                  dfa.SystemSpec(
+                    configuration.get().ltsFiles, 
+                    Some(DLTS.fromErrorSymbol(configuration.get().err))),
+                  configuration.get().dfaLearningAlgorithm,
+                  configuration.get().constraintStrategy
+                ).learnAssumptions()
             case "ltl" =>
               val ltlProperty = LTL.fromString(configuration.get().ltlProperty.getOrElse("G 1"))
               val files = configuration.get().ltsFiles              
