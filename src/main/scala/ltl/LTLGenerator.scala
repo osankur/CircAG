@@ -18,7 +18,7 @@ import com.microsoft.z3
 import fr.irisa.circag.statistics
 import fr.irisa.circag.configuration
 import fr.irisa.circag.{Trace, Lasso, DLTS, Alphabet}
-import fr.irisa.circag.{pruned, filter, suffix, semanticEquals, size}
+import fr.irisa.circag.{pruned, filter, suffix, semanticEquals, size, project}
 
 enum ConstraintStrategy:
   case Disjunctive
@@ -214,7 +214,7 @@ class LTLEagerGenerator(_system : SystemSpec, _proofSkeleton : LTLProofSkeleton,
           proofSkeleton.processDependencies(_processID)
           .foreach(
             j => 
-              val projectedLasso = lasso.filter(proofSkeleton.assumptionAlphabet(j).contains(_))
+              val projectedLasso = lasso.project(proofSkeleton.assumptionAlphabet(j))
               // 1. Check non-circular dependency
               if !proofSkeleton.isCircular(j) then {                
                 if system.processes(j).checkLassoMembership(projectedLasso, Some(proofSkeleton.assumptionAlphabet(j))) == None then {                
@@ -234,7 +234,7 @@ class LTLEagerGenerator(_system : SystemSpec, _proofSkeleton : LTLProofSkeleton,
               (0 until violationIndex) foreach {
                 k => 
                   if system.processes(j).checkLassoSuffixMembership(lasso.suffix(k), Some(proofSkeleton.assumptionAlphabet(j))) == None then {
-                    addNegativeSample(j, lasso.suffix(k).filter(proofSkeleton.assumptionAlphabet(j).contains(_)))
+                    addNegativeSample(j, lasso.suffix(k).project(proofSkeleton.assumptionAlphabet(j)))
                     logger.debug(s"refineByInductivePremiseCounterexample. Circular case; item 2. k=${k}, j=${j}, sample: ${lasso.suffix(k).filter(proofSkeleton.assumptionAlphabet(j).contains(_))}")
                     refined = true
                     if lazyConstraints then break
@@ -246,7 +246,7 @@ class LTLEagerGenerator(_system : SystemSpec, _proofSkeleton : LTLProofSkeleton,
           .foreach(
             j => 
               if system.processes(j).checkLassoSuffixMembership(lasso.suffix(violationIndex), Some(proofSkeleton.assumptionAlphabet(j))) == None then {
-                addNegativeSample(j, lasso.suffix(violationIndex).filter(proofSkeleton.assumptionAlphabet(j).contains(_)))
+                addNegativeSample(j, lasso.suffix(violationIndex).project(proofSkeleton.assumptionAlphabet(j)))
                 logger.debug(s"refineByInductivePremiseCounterexample. Circular case; item 3. k0=${violationIndex}, j=${j}, sample: ${lasso.suffix(violationIndex).filter(proofSkeleton.assumptionAlphabet(j).contains(_))}")
                 refined = true
                 if lazyConstraints then break
@@ -254,7 +254,7 @@ class LTLEagerGenerator(_system : SystemSpec, _proofSkeleton : LTLProofSkeleton,
           )
           // 5. Otherwise we add the positive sample
           if !refined || !positiveLastResort then {
-            val projLasso = lasso.suffix(violationIndex).filter(proofSkeleton.assumptionAlphabet(_processID).contains(_))
+            val projLasso = lasso.suffix(violationIndex).project(proofSkeleton.assumptionAlphabet(_processID))
             addPositiveSample(_processID, projLasso)
             logger.debug(s"refineByInductivePremiseCounterexample. Circular case; item 4. Added positive sample to process $_processID: ${projLasso}")
           }
@@ -264,7 +264,7 @@ class LTLEagerGenerator(_system : SystemSpec, _proofSkeleton : LTLProofSkeleton,
           proofSkeleton.processDependencies(_processID)
           .foreach(
             j => 
-              val projectedLasso = lasso.filter(proofSkeleton.assumptionAlphabet(j).contains(_))
+              val projectedLasso = lasso.project(proofSkeleton.assumptionAlphabet(j))
               // 1. Check all non-circular dependencies
               if !proofSkeleton.isCircular(j) then {                
                 if system.processes(j).checkLassoMembership(projectedLasso, Some(proofSkeleton.assumptionAlphabet(j))) == None then {                

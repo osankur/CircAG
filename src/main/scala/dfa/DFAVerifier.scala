@@ -256,11 +256,11 @@ class DFAVerifier(val system: SystemSpec) {
             logger.info(s"${GREEN}Premise ${i} passed${RESET}")
           case Some(cexTrace) =>
             latestCex = cexTrace
-            logger.info(
+            logger.debug(
               s"${RED}Premise ${i} failed with cex: ${cexTrace}${RESET}"
             )
             if checkCounterExample(cexTrace) then {
-              logger.info(s"\tCex to assumption ${i} confirmed: ${cexTrace}")
+              logger.debug(s"\tCex to assumption ${i} confirmed: ${cexTrace}")
               throw AGResult.AssumptionViolation(i, cexTrace)
             } else throw AGResult.PremiseFail(i, cexTrace)
         }

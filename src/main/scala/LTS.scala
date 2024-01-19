@@ -491,10 +491,17 @@ extension(dfa : CompactDFA[String]){
     newDFA
   }
 }
-
+extension(trace : Trace){
+  def project(alpha : Set[String]) : Trace = {
+    trace.filter(alpha.contains(_))    
+  }
+}
 extension(lasso : Lasso){
   def filter(f : String => Boolean) : Lasso = {
     (lasso._1.filter(f), lasso._2.filter(f))
+  }
+  def project(alpha : Set[String]) : Lasso = {
+    lasso.filter(alpha.contains(_))    
   }
   /**
     * Suffix obtained from lasso by dropping the prefix of length k
