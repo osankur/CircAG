@@ -70,7 +70,7 @@ Any process whose proof depends on the circular cluster is also considered to be
 
     java -jar CircAG.jar ltl --files "examples/muo/user.tck,examples/muo/machine.tck" --ltlProperty "G F cycle"
     java -jar CircAG.jar ltl --files "examples/ums-1/machine.tck,examples/ums-1/scheduler.tck,examples/ums-1/user.tck" --ltlProperty "G(start1 -> F end1)
-    
+    java -jar CircAG.jar ltl --files "examples/sdn/device.tck,examples/sdn/switch.tck,examples/sdn/controller.tck,examples/sdn/supervisor.tck,examples/sdn/observer.tck" --ltlProperty "G(ask -> F go)
 ## Utilities
 The synchronized product of the processes can be output to stdout as a single TChecker file using
 
