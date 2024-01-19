@@ -543,7 +543,8 @@ object TA{
 
   /**
    * Parser for TChecker counterexamples in which each state has a single succesor (trace, or lasso).
-   * @return (states,edges) a map pair where states maps each integer node identifier to its fields (final, initial, intval, labels, vloc, zone) as a single string,
+   * @return (states,edges) a map pair where states maps each integer node identifier to its fields 
+   * (final, initial, intval, labels, vloc, zone) as a single string,
    * and edges maps each node to a pair of label and successor node identifier
    */
   def getGraphFromCounterExampleOutput(cexDescription : List[String], events : Set[String]) : (HashMap[Int, String],HashMap[Int,(String,Int)]) = {
@@ -557,7 +558,7 @@ object TA{
           // println(s"Read state $i with content: $content")
           states.put(i.toInt, content)
         case regEdge(src,tgt,syncList) => 
-          val singleSync = syncList.split(",").map(_.split("@")(1)).toSet.intersect(events)
+          val singleSync = syncList.split(",").map(_.split("@")(1)).toSet//.intersect(events)
           if (singleSync.size == 1){
             val a = singleSync.toArray
             // word.append(a(0))
@@ -581,7 +582,7 @@ object TA{
   def getTraceFromCounterExampleOutput(cexDescription : List[String], events : Set[String]) : Trace = {
       val word = ListBuffer[String]()
       val parents = HashMap[Int,Int]()
-      val (_,edges) = getGraphFromCounterExampleOutput(cexDescription : List[String], events : Set[String])
+      val (nodes,edges) = getGraphFromCounterExampleOutput(cexDescription : List[String], events : Set[String])
       edges.foreachEntry{case (s,(sigma,t)) => 
         assert(!parents.contains(t))
         parents.put(t,s)
@@ -600,7 +601,7 @@ object TA{
           node = next
         }
       }
-      word.toList
+      word.toList.filter(events.contains(_))
   }
 
 

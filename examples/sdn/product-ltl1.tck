@@ -1,0 +1,216 @@
+# alphabet:
+system:_product_
+
+event:ack
+event:err
+event:ask
+event:send
+event:change
+event:go
+# Internal alphabet:
+event:_d_idle
+event:_dataR
+event:_devW
+event:_dataW
+event:_c_idle
+event:_sup_idle
+
+
+
+# 0: send, 1: change, 2: other
+int:4:0:2:0:sbuf # fifo for switch
+int:1:0:3:0:ss1 # start index of the fifo
+int:1:0:3:0:se1 # end index of the fifo
+
+process:device
+location:device:q{initial:}
+edge:device:q:q:change{provided: se1 != ss1 && sbuf[ss1] == 0 : do : ss1 = (ss1+1)%4}
+edge:device:q:q:send{provided: se1 != ss1 && sbuf[ss1] == 1 : do : ss1 = (ss1+1)%4}
+edge:device:q:q:_d_idle{provided: se1 != ss1 && sbuf[ss1] == 2 : do : ss1 = (ss1+1)%4}
+edge:device:q:q:_devW{provided: (se1+1)%4 != ss1 : do : sbuf[se1] = 0; se1 = (se1+1)%4}
+edge:device:q:q:_devW{provided: (se1+1)%4 != ss1 : do : sbuf[se1] = 1; se1 = (se1+1)%4}
+edge:device:q:q:_devW{provided: (se1+1)%4 != ss1 : do : sbuf[se1] = 2; se1 = (se1+1)%4}
+# Model for a switch on which a connected device can change locations
+# It is unstable upon change, and becomes stable whenever ack is received.
+# it can send message if in state stable
+
+
+# 0: send, 1: change, 2: other
+int:4:0:2:0:buf1 # fifo for switch
+int:1:0:3:0:s1 # start index of the fifo
+int:1:0:3:0:e1 # end index of the fifo
+
+process:Switch
+location:Switch:stable{initial:}
+location:Switch:unstable
+
+edge:Switch:stable:unstable:change{provided: e1 != s1 && buf1[s1] == 1 : do : s1 = (s1+1)%4}
+edge:Switch:stable:stable:send{provided: e1 != s1 && buf1[s1] == 0 : do : s1 = (s1+1)%4}
+edge:Switch:stable:stable:_dataR{provided: e1 != s1 && buf1[s1] == 2 : do : s1 = (s1+1)%4}
+edge:Switch:stable:stable:_dataW{provided: (e1+1)%4 != s1 : do : buf1[e1] = 0; e1 = (e1+1)%4}
+edge:Switch:stable:stable:_dataW{provided: (e1+1)%4 != s1 : do : buf1[e1] = 1; e1 = (e1+1)%4}
+edge:Switch:stable:stable:_dataW{provided: (e1+1)%4 != s1 : do : buf1[e1] = 2; e1 = (e1+1)%4}
+
+edge:Switch:unstable:stable:ack
+edge:Switch:unstable:unstable:_dataW{provided: (e1+1)%4 != s1 : do : buf1[e1] = 0; e1 = (e1+1)%4}
+edge:Switch:unstable:unstable:_dataW{provided: (e1+1)%4 != s1 : do : buf1[e1] = 1; e1 = (e1+1)%4}
+edge:Switch:unstable:unstable:_dataW{provided: (e1+1)%4 != s1 : do : buf1[e1] = 2; e1 = (e1+1)%4}
+# upon receiving change from device, becomes unstable.
+# then asks the supervisor for auth, once obtaining a go,
+# it communicates ack to device and becomes stable again.
+
+
+process:Controller
+location:Controller:stable{initial:}
+location:Controller:unstable
+location:Controller:asking
+location:Controller:authorized
+
+edge:Controller:stable:stable:_c_idle
+edge:Controller:stable:stable:send
+edge:Controller:stable:unstable:change
+edge:Controller:unstable:asking:ask
+edge:Controller:asking:authorized:go
+edge:Controller:authorized:stable:ack
+# trivial supervisor that accepts all requests
+# 0: send, 1: change, 2: other
+int:4:0:2:0:supbuf # fifo for switch
+int:1:0:3:0:sups # start index of the fifo
+int:1:0:3:0:supe # end index of the fifo
+process:Supervisor
+location:Supervisor:norequest{initial:}
+location:Supervisor:request
+edge:Supervisor:norequest:norequest:_sup_idle{provided: supe != sups && supbuf[sups] == 2 : do : sups = (sups+1)%4}
+edge:Supervisor:norequest:request:ask{provided: supe != sups && supbuf[sups] == 0 : do : sups = (sups+1)%4}
+edge:Supervisor:request:norequest:go{provided: supe != sups && supbuf[sups] == 1 : do : sups = (sups+1)%4}
+edge:Supervisor:norequest:norequest:_devW{provided: (supe+1)%4 != sups : do : supbuf[supe] = 0; supe = (supe+1)%4}
+edge:Supervisor:norequest:norequest:_devW{provided: (supe+1)%4 != sups : do : supbuf[supe] = 1; supe = (supe+1)%4}
+edge:Supervisor:norequest:norequest:_devW{provided: (supe+1)%4 != sups : do : supbuf[supe] = 2; supe = (supe+1)%4}
+
+
+process:Obs
+location:Obs:q0{initial:}
+location:Obs:changed
+location:Obs:err{labels:err}
+edge:Obs:q0:changed:change
+edge:Obs:changed:changed:change
+edge:Obs:q0:q0:send
+edge:Obs:q0:q0:ack
+edge:Obs:changed:q0:ack
+edge:Obs:changed:err:send
+edge:Obs:err:err:err
+
+
+## ~G( change -> F ack)
+process:_hoa_
+location:_hoa_:qs0{initial:}
+location:_hoa_:qs1{labels:live}
+location:_hoa_:qs2{}
+location:_hoa_:qs3{}
+location:_hoa_:qs4{}
+edge:_hoa_:qs0:qs0:_c_idle
+edge:_hoa_:qs0:qs0:ack
+edge:_hoa_:qs0:qs0:err
+edge:_hoa_:qs0:qs0:ask
+edge:_hoa_:qs0:qs0:send
+edge:_hoa_:qs0:qs0:_d_idle
+edge:_hoa_:qs0:qs0:_sup_idle
+edge:_hoa_:qs0:qs0:change
+edge:_hoa_:qs0:qs1:change
+edge:_hoa_:qs0:qs0:go
+edge:_hoa_:qs1:qs2:_c_idle
+edge:_hoa_:qs1:qs2:err
+edge:_hoa_:qs1:qs3:ask
+edge:_hoa_:qs1:qs4:send
+edge:_hoa_:qs1:qs2:_d_idle
+edge:_hoa_:qs1:qs2:_sup_idle
+edge:_hoa_:qs1:qs4:change
+edge:_hoa_:qs1:qs3:go
+edge:_hoa_:qs2:qs2:_c_idle
+edge:_hoa_:qs2:qs2:err
+edge:_hoa_:qs2:qs3:ask
+edge:_hoa_:qs2:qs4:send
+edge:_hoa_:qs2:qs2:_d_idle
+edge:_hoa_:qs2:qs2:_sup_idle
+edge:_hoa_:qs2:qs4:change
+edge:_hoa_:qs2:qs3:go
+edge:_hoa_:qs3:qs3:_c_idle
+edge:_hoa_:qs3:qs3:err
+edge:_hoa_:qs3:qs3:ask
+edge:_hoa_:qs3:qs4:send
+edge:_hoa_:qs3:qs3:_d_idle
+edge:_hoa_:qs3:qs3:_sup_idle
+edge:_hoa_:qs3:qs4:change
+edge:_hoa_:qs3:qs3:go
+edge:_hoa_:qs4:qs4:_c_idle
+edge:_hoa_:qs4:qs4:err
+edge:_hoa_:qs4:qs1:ask
+edge:_hoa_:qs4:qs4:send
+edge:_hoa_:qs4:qs4:_d_idle
+edge:_hoa_:qs4:qs4:_sup_idle
+edge:_hoa_:qs4:qs4:change
+edge:_hoa_:qs4:qs1:go
+
+## ~G( ask -> F go )
+# process:device
+# location:device:q{initial:}
+# edge:device:q:q:change
+# edge:device:q:q:send
+# process:_hoa_
+# location:_hoa_:qs0{initial:}
+# location:_hoa_:qs1{labels:nonlive}
+# location:_hoa_:qs2{}
+# location:_hoa_:qs3{}
+# location:_hoa_:qs4{}
+# edge:_hoa_:qs0:qs0:_c_idle
+# edge:_hoa_:qs0:qs0:ack
+# edge:_hoa_:qs0:qs0:err
+# edge:_hoa_:qs0:qs0:ask
+# edge:_hoa_:qs0:qs1:ask
+# edge:_hoa_:qs0:qs0:send
+# edge:_hoa_:qs0:qs0:_d_idle
+# edge:_hoa_:qs0:qs0:_sup_idle
+# edge:_hoa_:qs0:qs0:change
+# edge:_hoa_:qs0:qs0:go
+# edge:_hoa_:qs1:qs2:_c_idle
+# edge:_hoa_:qs1:qs2:ack
+# edge:_hoa_:qs1:qs2:err
+# edge:_hoa_:qs1:qs3:ask
+# edge:_hoa_:qs1:qs4:send
+# edge:_hoa_:qs1:qs2:_d_idle
+# edge:_hoa_:qs1:qs2:_sup_idle
+# edge:_hoa_:qs1:qs4:change
+# edge:_hoa_:qs2:qs2:_c_idle
+# edge:_hoa_:qs2:qs2:ack
+# edge:_hoa_:qs2:qs2:err
+# edge:_hoa_:qs2:qs3:ask
+# edge:_hoa_:qs2:qs4:send
+# edge:_hoa_:qs2:qs2:_d_idle
+# edge:_hoa_:qs2:qs2:_sup_idle
+# edge:_hoa_:qs2:qs4:change
+# edge:_hoa_:qs3:qs3:_c_idle
+# edge:_hoa_:qs3:qs3:ack
+# edge:_hoa_:qs3:qs3:err
+# edge:_hoa_:qs3:qs3:ask
+# edge:_hoa_:qs3:qs4:send
+# edge:_hoa_:qs3:qs3:_d_idle
+# edge:_hoa_:qs3:qs3:_sup_idle
+# edge:_hoa_:qs3:qs4:change
+# edge:_hoa_:qs4:qs4:_c_idle
+# edge:_hoa_:qs4:qs4:ack
+# edge:_hoa_:qs4:qs4:err
+# edge:_hoa_:qs4:qs1:ask
+# edge:_hoa_:qs4:qs4:send
+# edge:_hoa_:qs4:qs4:_d_idle
+# edge:_hoa_:qs4:qs4:_sup_idle
+# edge:_hoa_:qs4:qs4:change
+
+sync:device@send:Switch@send:Controller@send:Obs@send:_hoa_@send
+sync:Switch@ack:Controller@ack:Obs@ack:_hoa_@ack
+sync:device@change:Switch@change:Controller@change:Obs@change:_hoa_@change
+sync:Controller@go:Supervisor@go:_hoa_@go
+sync:Controller@ask:Supervisor@ask:_hoa_@ask
+sync:Switch@_d_idle:_hoa_@_d_idle
+sync:Controller@_c_idle:_hoa_@_c_idle
+sync:Supervisor@_sup_idle:_hoa_@_sup_idle
+sync:Obs@err:_hoa_@err

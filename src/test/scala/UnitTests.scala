@@ -123,6 +123,7 @@ class TAandLTSTests extends munit.FunSuite {
     println(trace)
     assert(trace == List("a","b","c","a"))
   }
+
   test("Lasso graph parsing optimizations"){
     // val tck_output = """digraph _hoa_ {
     //   0 [initial="true", intval="", labels="", vloc="<qs0>", zone="()"]
@@ -318,14 +319,6 @@ class DFAAAG extends munit.FunSuite {
         .withAccepting("q0")
         .create();
 
-    val dltss = List(DLTS("ass1p", dfa1, dfa1.getInputAlphabet().toSet), DLTS("ass2", dfa2, dfa2.getInputAlphabet().toSet))
-    val dltsssB = dltss.toBuffer
-    val agv = dfa.DFAAutomaticVerifier(dfa.SystemSpec(Array(File("examples/lts1.ta"), File("examples/lts1.ta")), Some(DLTS.fromErrorSymbol(err))))
-    agv.setAssumption(0, dltsssB(0))
-
-    assert(None == agv.system.processes(0).checkTraceMembership(List[String]("c", "c", "err", "err"), Some(Set[String]("c", "err"))))
-    assert(None != agv.system.processes(0).checkTraceMembership(List[String]("c", "c", "err"), Some(Set[String]("c", "err"))))
-    assert(None != agv.system.processes(0).checkTraceMembership(List[String]("c", "b", "err"), Some(Set[String]("c", "err"))))
   }
   test("mus-inline"){
     val inputs1: Alphabet[String] = Alphabets.fromList(List("req1","req2", "rel1", "rel2"))
@@ -391,7 +384,7 @@ class DFAAAG extends munit.FunSuite {
         .withAccepting("q0")
         .create();
 
-    val ver = dfa.DFAAutomaticVerifier(dfa.SystemSpec(Array(File("examples/ums/user.ta"), File("examples/ums/scheduler.ta"), File("examples/ums/machine.ta")), Some(DLTS.fromErrorSymbol("err"))))
+    val ver = dfa.DFAAutomaticVerifier(dfa.SystemSpec(Array(File("examples/simple-ums/user.tck"), File("examples/simple-ums/scheduler.tck"), File("examples/simple-ums/machine.tck")), Some(DLTS.fromErrorSymbol("err"))))
     ver.setAssumption(0, DLTS("user", gUser, gUser.getInputAlphabet().toSet))
     ver.setAssumption(1, DLTS("sched", gSched, gSched.getInputAlphabet().toSet))
     ver.setAssumption(2, DLTS("machine", gMachine, gMachine.getInputAlphabet().toSet))
@@ -527,7 +520,7 @@ class DFAAAG extends munit.FunSuite {
     assert(errDFA.pruned.isPrunedSafety)
     assert(gUser.isPrunedSafety)
     assert(gUser.isSafety)
-    val ver = dfa.DFAAutomaticVerifier(dfa.SystemSpec(Array(File("examples/ums/user.ta"), File("examples/ums/scheduler.ta"), File("examples/ums/machine.ta")), Some(DLTS.fromErrorSymbol("err"))))
+    val ver = dfa.DFAAutomaticVerifier(dfa.SystemSpec(Array(File("examples/simple-ums/user.tck"), File("examples/simple-ums/scheduler.tck"), File("examples/simple-ums/machine.tck")), Some(DLTS.fromErrorSymbol("err"))))
     ver.setAssumption(0, DLTS("user", gUser, gUser.getInputAlphabet().toSet))
     ver.setAssumption(1, DLTS("sched", gSched, gSched.getInputAlphabet().toSet))
     ver.setAssumption(2, DLTS("machine", gMachine, gMachine.getInputAlphabet().toSet))
@@ -540,7 +533,7 @@ class DFAAAG extends munit.FunSuite {
 
 
   test("toy: with SAT, UFSAT, RPNI"){
-    val files = Array(File("examples/toy/lts1.ta"),File("examples/toy/lts2.ta"),File("examples/toy/lts3.ta"))
+    val files = Array(File("examples/toy/lts1.tck"),File("examples/toy/lts2.tck"),File("examples/toy/lts3.tck"))
     val verSAT = dfa.DFAAutomaticVerifier(dfa.SystemSpec(files, Some(DLTS.fromErrorSymbol("err"))), dfa.DFALearningAlgorithm.SAT)
     val verUFSAT = dfa.DFAAutomaticVerifier(dfa.SystemSpec(files, Some(DLTS.fromErrorSymbol("err"))), dfa.DFALearningAlgorithm.UFSAT)
     val verRPNI = dfa.DFAAutomaticVerifier(dfa.SystemSpec(files, Some(DLTS.fromErrorSymbol("err"))), dfa.DFALearningAlgorithm.RPNI)
@@ -550,7 +543,7 @@ class DFAAAG extends munit.FunSuite {
   }
 
   test("seq-toy"){
-    val files = Array(File("examples/seq-toy/lts0.ta"),File("examples/seq-toy/lts1.ta"),File("examples/seq-toy/lts2.ta"))
+    val files = Array(File("examples/seq-toy/lts0.tck"),File("examples/seq-toy/lts1.tck"),File("examples/seq-toy/lts2.tck"))
     val verUFSAT =  dfa.DFAAutomaticVerifier(dfa.SystemSpec(files, Some(DLTS.fromErrorSymbol("err"))), dfa.DFALearningAlgorithm.SAT)
     val verSAT =  dfa.DFAAutomaticVerifier(dfa.SystemSpec(files, Some(DLTS.fromErrorSymbol("err"))), dfa.DFALearningAlgorithm.SAT)
     val verRPNI = dfa.DFAAutomaticVerifier(dfa.SystemSpec(files, Some(DLTS.fromErrorSymbol("err"))), dfa.DFALearningAlgorithm.RPNI)
@@ -558,7 +551,7 @@ class DFAAAG extends munit.FunSuite {
     assert(verSAT.learnAssumptions() != AGResult.Success)
     assert(verUFSAT.learnAssumptions() != AGResult.Success)
 
-    val files2 = Array(File("examples/seq-toy/lts0.ta"),File("examples/seq-toy/lts1.ta"),File("examples/seq-toy/lts2.ta"),File("examples/seq-toy/lts3.ta"))
+    val files2 = Array(File("examples/seq-toy/lts0.tck"),File("examples/seq-toy/lts1.tck"),File("examples/seq-toy/lts2.tck"),File("examples/seq-toy/lts3.tck"))
     val ver2SAT = dfa.DFAAutomaticVerifier(dfa.SystemSpec(files2, Some(DLTS.fromErrorSymbol("err"))), dfa.DFALearningAlgorithm.SAT)
     assert(ver2SAT.learnAssumptions() == AGResult.Success)
     val ver2UFSAT = dfa.DFAAutomaticVerifier(dfa.SystemSpec(files2, Some(DLTS.fromErrorSymbol("err"))), dfa.DFALearningAlgorithm.SAT)
@@ -691,7 +684,7 @@ class LTLAGTests extends munit.FunSuite {
     assert(!nlts.dfa.accepts(List("a","a","b")))
   }
   test("violation index"){
-    val tas = Array(File("examples/ltl-toy1/a.ta"), File("examples/ltl-toy1/b.ta"))
+    val tas = Array(File("examples/ltl-toy1/a.tck"), File("examples/ltl-toy1/b.tck"))
     val checker = LTLAutomaticVerifier(ltl.SystemSpec(tas, G(F(Atomic("a")))))
     val query = CircularPremiseQuery(1, List(), List((0,(Atomic("b")))), List(), Atomic("d"), LTLTrue())
     val lasso = (List("a","a","c"), List("c"))
@@ -706,7 +699,7 @@ class LTLAGTests extends munit.FunSuite {
     val ass = List("G ((a -> X !a))", "G F b")
     val ltlf = ass.map(LTL.fromString)
     System.out.println(s"LTL assumptions: ${ltlf}")
-    val tas = Array(File("examples/ltl-toy1/a.ta"), File("examples/ltl-toy1/b.ta"))    
+    val tas = Array(File("examples/ltl-toy1/a.tck"), File("examples/ltl-toy1/b.tck"))    
     val checker = LTLVerifier(ltl.SystemSpec(tas, G(F(Atomic("a")))))
     ltlf.zipWithIndex.foreach( (ltl,i) => checker.setAssumption(i, ltl))
     // Without instantaneous assumptions, the proof fails:
@@ -720,7 +713,7 @@ class LTLAGTests extends munit.FunSuite {
     val ass = List("G ((a -> X !a))", "G G F b") // Spot will simplify G G to G
     val ltlf = ass.map(LTL.fromString)
     System.out.println(s"LTL assumptions: ${ltlf}")
-    val tas = Array(File("examples/ltl-toy1/a.ta"), File("examples/ltl-toy1/b.ta"))
+    val tas = Array(File("examples/ltl-toy1/a.tck"), File("examples/ltl-toy1/b.tck"))
     val checker = LTLVerifier(ltl.SystemSpec(tas, G(F(Atomic("a")))))
     checker.setAssumption(1, G(G(F(Atomic("b"))))) // Overwrite
     ltlf.zipWithIndex.foreach( (ltl,i) => checker.setAssumption(i, ltl))
@@ -735,7 +728,7 @@ class LTLAGTests extends munit.FunSuite {
     val ass = List("G F (a | b)", "G !d")
     val ltlf = ass.map(LTL.fromString)
     System.out.println(s"LTL assumptions: ${ltlf}")
-    val tas = Array(File("examples/ltl-toy1/c.ta"), File("examples/ltl-toy1/d.ta"))
+    val tas = Array(File("examples/ltl-toy1/c.tck"), File("examples/ltl-toy1/d.tck"))
     val checker = LTLVerifier(ltl.SystemSpec(tas, LTLTrue()))
     ltlf.zipWithIndex.foreach( (ltl,i) => checker.setAssumption(i, ltl))
 
@@ -751,7 +744,7 @@ class LTLAGTests extends munit.FunSuite {
     val ass = List("G ((a -> X !a) & !c)", "G (d -> (X c))")
     val ltlf = ass.map(LTL.fromString)
     // System.out.println(s"LTL assumptions: ${ltl}")
-    val tas = Array(File("examples/ltl-toy1/a.ta"), File("examples/ltl-toy1/b.ta"))
+    val tas = Array(File("examples/ltl-toy1/a.tck"), File("examples/ltl-toy1/b.tck"))
     val checker = LTLVerifier(ltl.SystemSpec(tas, G(Not(Atomic("d")))))
     ltlf.zipWithIndex.foreach( (ltl,i) => checker.setAssumption(i, ltl))
     System.out.println(checker.checkFinalPremise(true))
@@ -797,7 +790,7 @@ class LTLAGTests extends munit.FunSuite {
     val ass = List("G ((a -> X !a))", "G F b")
     val ltlf = ass.map(LTL.fromString)
     System.out.println(s"LTL assumptions: ${ltlf}")
-    val tas = Array(File("examples/ltl-toy1/a.ta"), File("examples/ltl-toy1/b.ta"))
+    val tas = Array(File("examples/ltl-toy1/a.tck"), File("examples/ltl-toy1/b.tck"))
     val checker = LTLVerifier(tas, G(F(Atomic("a"))))
     ltlf.zipWithIndex.foreach( (ltl,i) => checker.setAssumption(i, ltl))
     // Without instantaneous assumptions, the proof fails:
@@ -845,7 +838,7 @@ class LTLAutomatic  extends munit.FunSuite {
     // One can also check just F send much faster
   }
   test("ltl learn assumptions: ltl-toy1 2 processes"){
-    val tas = Array(File("examples/ltl-toy1/a.ta"), File("examples/ltl-toy1/b.ta"))
+    val tas = Array(File("examples/ltl-toy1/a.tck"), File("examples/ltl-toy1/b.tck"))
     val checker = LTLAutomaticVerifier(ltl.SystemSpec(tas, G(F(Atomic("a")))))
     checker.setProcessInstantaneousDependencies(0, Set(1))
     val result = checker.learnAssumptions(proveGlobalProperty = true)
@@ -855,13 +848,13 @@ class LTLAutomatic  extends munit.FunSuite {
 
 class Single extends munit.FunSuite {
   test("ltl learn assumptions: ltl-toy1 2 processes"){
-    val tas = Array(File("examples/ltl-toy1/a.ta"), File("examples/ltl-toy1/b.ta"))
+    val tas = Array(File("examples/ltl-toy1/a.tck"), File("examples/ltl-toy1/b.tck"))
     val checker = LTLAutomaticVerifier(ltl.SystemSpec(tas, G(F(Atomic("a")))))
     checker.setProcessInstantaneousDependencies(0, Set(1))
     assert(checker.learnAssumptions(proveGlobalProperty = true) == LTLAGResult.Success)
   }
   test("ltl learn assumptions: ltl-toy1 3 processes"){
-    val tas = Array(File("examples/ltl-toy1/a.ta"), File("examples/ltl-toy1/b.ta"), File("examples/ltl-toy1/c.ta"))
+    val tas = Array(File("examples/ltl-toy1/a.tck"), File("examples/ltl-toy1/b.tck"), File("examples/ltl-toy1/c.tck"))
     val checker = LTLAutomaticVerifier(ltl.SystemSpec(tas, G(F(Atomic("a")))))
     checker.setProcessInstantaneousDependencies(0, Set(1))
     // The learned assumptions are: G (b -> (X a))) and (G (c U b)
@@ -869,7 +862,7 @@ class Single extends munit.FunSuite {
     assert(checker.learnAssumptions(proveGlobalProperty = true) == LTLAGResult.Success)
   }
   test("ltl inductive check: ltl-toy1 applyAG"){
-    val tas = Array(File("examples/ltl-toy1/a.ta"), File("examples/ltl-toy1/b.ta"))
+    val tas = Array(File("examples/ltl-toy1/a.tck"), File("examples/ltl-toy1/b.tck"))
     val checker = LTLVerifier(ltl.SystemSpec(tas, G(F(Atomic("a")))))
     checker.setAssumption(0, G(LTLTrue()))
     checker.setAssumption(1, G(LTLTrue()))
@@ -887,17 +880,52 @@ class Single extends munit.FunSuite {
 }
 
 class A extends munit.FunSuite {
-   test("buchi automata for sdn and ums"){
-      // val ta = TA.fromFile(File("examples/sdn/a.tck"))
-      // val bta = ta.buchiIntersection(NLTS.fromLTL("((G F (go | ask)) & (G F (change | send)) & ~(G(ask -> F go)))", None),"acc")
-      // println(bta)
-      val ta = TA.fromFile(File("examples/ums-1/a.tck"))
-      // val bta = ta.buchiIntersection(NLTS.fromLTL("((G F (start1 | end1 | err)) & (G F (req1 | rel1 | grant1)) & ~(G(start1 -> F end1)))", None),"acc")
-      val bta = ta.buchiIntersection(NLTS.fromLTL("((G F (start1 | end1 | err)) & (G F (req1 | rel1 | grant1)) & ~(F rel1))", None),"acc")
-      // val ta = TA.fromFile(File("examples/ums-1/a.tck"))
-      // val bta = ta.buchiIntersection(NLTS.fromLTL("((G F (start1 | end1 | start2 | end2 | err)) & (G F (req1 | rel1 | grant1 | req2 | grant2 | rel2)) & ~(G(start1 -> F end1)))", None),"acc")
-      // val bta = ta.buchiIntersection(NLTS.fromLTL("((G F (start1 | end1 | start2 | end2 | err)) & (G F (req1 | rel1 | grant1 | req2 | grant2 | rel2)) & ~(F rel1))", None),"acc")
-      println(bta)
-    }    
+  //  test("buchi automata for sdn and ums"){
+  //     // val ta = TA.fromFile(File("examples/sdn/a.tck"))
+  //     // val bta = ta.buchiIntersection(NLTS.fromLTL("((G F (go | ask)) & (G F (change | send)) & ~(G(ask -> F go)))", None),"acc")
+  //     // println(bta)
+  //     val ta = TA.fromFile(File("examples/ums-1/a.tck"))
+  //     // val bta = ta.buchiIntersection(NLTS.fromLTL("((G F (start1 | end1 | err)) & (G F (req1 | rel1 | grant1)) & ~(G(start1 -> F end1)))", None),"acc")
+  //     val bta = ta.buchiIntersection(NLTS.fromLTL("((G F (start1 | end1 | err)) & (G F (req1 | rel1 | grant1)) & ~(F rel1))", None),"acc")
+  //     // val ta = TA.fromFile(File("examples/ums-1/a.tck"))
+  //     // val bta = ta.buchiIntersection(NLTS.fromLTL("((G F (start1 | end1 | start2 | end2 | err)) & (G F (req1 | rel1 | grant1 | req2 | grant2 | rel2)) & ~(G(start1 -> F end1)))", None),"acc")
+  //     // val bta = ta.buchiIntersection(NLTS.fromLTL("((G F (start1 | end1 | start2 | end2 | err)) & (G F (req1 | rel1 | grant1 | req2 | grant2 | rel2)) & ~(F rel1))", None),"acc")
+  //     println(bta)
+  //   }    
+//  test("DFA learn assumptions: ums-1"){
+//     val tas = Array(File("examples/ums-1/user.tck"), File("examples/ums-1/scheduler.tck"), File("examples/ums-1/machine.tck"))
+//     val checker = DFAAutomaticVerifier(dfa.SystemSpec(tas, Some(DLTS.fromErrorSymbol("err"))))
+//     // val checker = LTLAutomaticVerifier(ltl.SystemSpec(tas, LTL.fromString("F(rel1)"))) // fails
+//     checker.learnAssumptions(true)
+//   }
+  test("CEX Parsing from String"){
+    val tck_output = """
+      digraph _premise_scheduler {
+      0 [intval="b=1", labels="lifted_assumption_0_user_accept_,lifted_assumption_2_machine_accept_", vloc="<q0,qs0,qs0,qs0>", zone="()"]
+      1 [intval="b=2", labels="lifted_assumption_0_user_accept_,lifted_assumption_2_machine_accept_", vloc="<q0,qs0,qs0,qs0>", zone="()"]
+      2 [intval="b=3", labels="lifted_assumption_0_user_accept_,lifted_assumption_2_machine_accept_", vloc="<q0,qs0,qs0,qs0>", zone="()"]
+      3 [intval="b=4", labels="lifted_assumption_0_user_accept_,lifted_assumption_2_machine_accept_", vloc="<q0,qs0,qs0,qs0>", zone="()"]
+      4 [intval="b=5", labels="lifted_assumption_0_user_accept_,lifted_assumption_2_machine_accept_", vloc="<q0,qs0,qs0,qs0>", zone="()"]
+      5 [initial="true", intval="b=0", labels="lifted_assumption_0_user_accept_,lifted_assumption_2_machine_accept_", vloc="<q0,qs2,qs2,qs0>", zone="()"]
+      6 [intval="b=1", labels="lifted_assumption_0_user_accept_,lifted_assumption_2_machine_accept_", vloc="<r1,qs2,qs0,qs0>", zone="()"]
+      7 [final="true", intval="b=6", labels="_comp_assumption_1_scheduler_accept_,lifted_assumption_0_user_accept_,lifted_assumption_2_machine_accept_", vloc="<r1,qs4,qs0,qs0>", zone="()"]
+      8 [intval="b=1", labels="lifted_assumption_0_user_accept_,lifted_assumption_2_machine_accept_", vloc="<g1,qs3,qs0,qs0>", zone="()"]
+      9 [intval="b=1", labels="lifted_assumption_0_user_accept_,lifted_assumption_2_machine_accept_", vloc="<s1,qs2,qs0,qs0>", zone="()"]
+      10 [intval="b=1", labels="lifted_assumption_0_user_accept_,lifted_assumption_2_machine_accept_", vloc="<e1,qs0,qs0,qs0>", zone="()"]
+      0 -> 1 [guard="", reset="", src_invariant="", tgt_invariant="", vedge="<scheduler@_sched>"]
+      1 -> 2 [guard="", reset="", src_invariant="", tgt_invariant="", vedge="<scheduler@_sched>"]
+      2 -> 3 [guard="", reset="", src_invariant="", tgt_invariant="", vedge="<scheduler@_sched>"]
+      3 -> 4 [guard="", reset="", src_invariant="", tgt_invariant="", vedge="<scheduler@_sched>"]
+      4 -> 7 [guard="", reset="", src_invariant="", tgt_invariant="", vedge="<scheduler@req1,_comp_assumption_1_scheduler@req1,lifted_assumption_0_user@req1,lifted_assumption_2_machine@req1>"]
+      5 -> 6 [guard="", reset="", src_invariant="", tgt_invariant="", vedge="<scheduler@req1,_comp_assumption_1_scheduler@req1,lifted_assumption_0_user@req1,lifted_assumption_2_machine@req1>"]
+      6 -> 8 [guard="", reset="", src_invariant="", tgt_invariant="", vedge="<scheduler@grant1,_comp_assumption_1_scheduler@grant1,lifted_assumption_0_user@grant1,lifted_assumption_2_machine@grant1>"]
+      8 -> 9 [guard="", reset="", src_invariant="", tgt_invariant="", vedge="<scheduler@start1,_comp_assumption_1_scheduler@start1,lifted_assumption_0_user@start1,lifted_assumption_2_machine@start1>"]
+      9 -> 10 [guard="", reset="", src_invariant="", tgt_invariant="", vedge="<scheduler@end1,_comp_assumption_1_scheduler@end1,lifted_assumption_0_user@end1,lifted_assumption_2_machine@end1>"]
+      10 -> 0 [guard="", reset="", src_invariant="", tgt_invariant="", vedge="<scheduler@rel1,_comp_assumption_1_scheduler@rel1,lifted_assumption_0_user@rel1,lifted_assumption_2_machine@rel1>"]
+      """
+    val trace = TA.getTraceFromCounterExampleOutput(tck_output.split("\n").toList, Set("start1","end1","grant1", "rel1", "req1"))
+    println(trace)
+  }
+
  }
  

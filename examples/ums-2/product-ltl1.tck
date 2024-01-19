@@ -93,7 +93,7 @@ edge:scheduler:s2:r1:req1
 # ((G F (start1 | end1 | start2 | end2 | err)) & (G F (req1 | rel1 | grant1 | req2 | grant2 | rel2)) & ~(G(start1 -> F end1)))
 process:_hoa_
 location:_hoa_:qs0{initial:}
-location:_hoa_:qs1{labels:_hoa_acc}
+location:_hoa_:qs1{labels:live}
 location:_hoa_:qs2{}
 location:_hoa_:qs3{}
 location:_hoa_:qs4{}

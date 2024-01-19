@@ -153,7 +153,7 @@ class DFAVerifier(val system: SystemSpec) {
       guarantee.alphabet
     )
     val liftedAssumptions =
-      assumptions.map({ ass =>
+      localAssumptions.map({ ass =>
         DLTS.liftAndStripNonAccepting(
           ass,
           ta.alphabet,

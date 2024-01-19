@@ -193,6 +193,11 @@ class DFAEagerGenerator(
   override def generateAssumptions(
       fixedAssumptions: Map[Int, DLTS] = Map()
   ): Option[Buffer[DLTS]] = {
+    logger.debug(s"Learning DFA for following assumptions")
+    for i <- 0 until nbProcesses do {
+      logger.debug(s"\tPos($i) = ${positiveSamples(i)}")
+      logger.debug(s"\tNeg($i) = ${negativeSamples(i)}")
+    }
     None
       Some(
         Buffer.tabulate(proofSkeleton.nbProcesses)(i =>
@@ -200,7 +205,15 @@ class DFAEagerGenerator(
           else {
             learners(i).setPositiveSamples(positiveSamples(i))
             learners(i).setNegativeSamples(negativeSamples(i))
-            learners(i).getDLTS()
+            val dlts = learners(i).getDLTS()
+            // Test
+            for trace <- positiveSamples(i) do  {
+              assert(dlts.dfa.accepts(trace))
+            }
+            for trace <- negativeSamples(i) do  {
+              assert(!dlts.dfa.accepts(trace))
+            }
+            dlts
           }
         )
       )

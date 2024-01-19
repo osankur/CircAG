@@ -1,0 +1,130 @@
+system:_product_
+
+event:grant1
+event:rel1
+event:req1
+event:err
+event:start1
+event:end1
+# Internal alphabet:
+event:_user
+event:_sched
+event:_machine
+
+
+
+int:1:0:100:0:a
+# int:1:0:100:0:b
+
+process:user
+location:user:i{initial:}
+location:user:r1
+location:user:g1
+edge:user:i:i:_user{do : if a < 100 then a = a + 1 else a = 0 end}
+# edge:user:i:i:_user{do : if b < 100 then b = b + 1 else b = 0 end}
+
+edge:user:i:r1:req1#{provided: a % 7 == 0 : do : if a < 100 then a = a + 1 else a = 0 end}
+edge:user:i:r1:req1#{provided: b % 11 == 0 : do : if b < 100 then b = b + 1 else b = 0 end}
+edge:user:r1:g1:grant1
+edge:user:g1:i:rel1{provided: a % 7 == 0 : do : if a < 100 then a = a + 1 else a = 0 end}
+
+# event:start2
+# event:end2
+# event:req2
+# event:rel2
+# event:grant2
+
+int:1:0:10:0:b
+
+process:scheduler
+location:scheduler:q0{initial:}
+location:scheduler:r1
+# location:scheduler:r2
+location:scheduler:g1
+# location:scheduler:g2
+location:scheduler:s1
+# location:scheduler:s2
+location:scheduler:e1
+# location:scheduler:e2
+edge:scheduler:q0:q0:_sched{do : if b < 10 then b = b + 1 else b = 0 end}
+
+edge:scheduler:q0:r1:req1{provided: b % 5 == 0 : do : if b < 10 then b = b + 1 else b = 0 end}
+edge:scheduler:r1:g1:grant1
+edge:scheduler:g1:s1:start1
+edge:scheduler:s1:e1:end1
+edge:scheduler:e1:q0:rel1
+
+# edge:scheduler:g1:r2:req2
+# edge:scheduler:r1:r2:req2
+# edge:scheduler:s1:r2:req2
+# edge:scheduler:q0:r2:req2
+# edge:scheduler:r2:g2:grant2
+# edge:scheduler:g2:s2:start2
+# edge:scheduler:s2:e2:end2
+# edge:scheduler:e2:q0:rel2
+
+# edge:scheduler:g2:r1:req1
+# edge:scheduler:r2:r1:req1
+# edge:scheduler:s2:r1:req1
+
+int:1:0:100:0:ma
+int:1:0:100:0:mb
+int:1:0:2:0:task
+process:machine
+location:machine:q{initial:}
+location:machine:qerr{labels:err}
+edge:machine:q:q:_machine{do : if ma < 100 then ma = ma + 1 else ma = 0 end}
+edge:machine:q:q:_machine{do : if mb < 100 then mb = mb + 1 else mb = 0 end}
+edge:machine:q:q:start1{provided: task == 0 : do : task = 1}
+# edge:machine:q:q:start2{provided: task == 0 : do : task = 2}
+edge:machine:q:q:end1{provided: task == 1 && ma % 7 == 0 : do : task = 0; if ma < 100 then ma = ma + 1 else ma = 0 end}
+edge:machine:q:q:end1{provided: task == 1 && mb % 11 == 0 : do : task = 0; if mb < 100 then mb = mb + 1 else mb = 0 end}
+# edge:machine:q:q:end2{provided: task == 2 : do : task = 0}
+edge:machine:q:qerr:start1{provided: task != 0 }
+# edge:machine:q:qerr:start2{provided: task != 0 }
+edge:machine:qerr:qerr:err
+
+
+# "((G F (start1 | end1 | err)) & (G F (req1 | rel1 | grant1)) & ~(F rel1))"
+process:_hoa_
+location:_hoa_:qs0{initial::labels:live}
+location:_hoa_:qs1{}
+location:_hoa_:qs2{}
+location:_hoa_:qs3{}
+edge:_hoa_:qs0:qs3:grant1
+edge:_hoa_:qs0:qs3:req1
+edge:_hoa_:qs0:qs1:_machine
+edge:_hoa_:qs0:qs2:err
+edge:_hoa_:qs0:qs2:start1
+edge:_hoa_:qs0:qs2:end1
+edge:_hoa_:qs0:qs1:_user
+edge:_hoa_:qs1:qs3:grant1
+edge:_hoa_:qs1:qs3:req1
+edge:_hoa_:qs1:qs1:_machine
+edge:_hoa_:qs1:qs2:err
+edge:_hoa_:qs1:qs2:start1
+edge:_hoa_:qs1:qs2:end1
+edge:_hoa_:qs1:qs1:_user
+edge:_hoa_:qs2:qs3:grant1
+edge:_hoa_:qs2:qs3:req1
+edge:_hoa_:qs2:qs2:_machine
+edge:_hoa_:qs2:qs2:err
+edge:_hoa_:qs2:qs2:start1
+edge:_hoa_:qs2:qs2:end1
+edge:_hoa_:qs2:qs2:_user
+edge:_hoa_:qs3:qs3:grant1
+edge:_hoa_:qs3:qs3:req1
+edge:_hoa_:qs3:qs3:_machine
+edge:_hoa_:qs3:qs0:err
+edge:_hoa_:qs3:qs0:start1
+edge:_hoa_:qs3:qs0:end1
+edge:_hoa_:qs3:qs3:_user
+
+sync:user@grant1:scheduler@grant1:_hoa_@grant1
+sync:user@req1:scheduler@req1:_hoa_@req1
+sync:user@rel1:scheduler@rel1:_hoa_@rel1
+sync:machine@end1:scheduler@end1:_hoa_@end1
+sync:machine@start1:scheduler@start1:_hoa_@start1
+sync:user@_user:_hoa_@_user
+sync:machine@_machine:_hoa_@_machine
+sync:machine@err:_hoa_@err

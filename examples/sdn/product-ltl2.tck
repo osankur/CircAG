@@ -101,10 +101,10 @@ edge:Obs:changed:err:send
 edge:Obs:err:err:err
 
 
-## ~G( change -> F ack)
+## ~G( ask -> F go )
 process:_hoa_
 location:_hoa_:qs0{initial:}
-location:_hoa_:qs1{labels:nonlive}
+location:_hoa_:qs1{labels:live}
 location:_hoa_:qs2{}
 location:_hoa_:qs3{}
 location:_hoa_:qs4{}
@@ -112,98 +112,44 @@ edge:_hoa_:qs0:qs0:_c_idle
 edge:_hoa_:qs0:qs0:ack
 edge:_hoa_:qs0:qs0:err
 edge:_hoa_:qs0:qs0:ask
+edge:_hoa_:qs0:qs1:ask
 edge:_hoa_:qs0:qs0:send
 edge:_hoa_:qs0:qs0:_d_idle
 edge:_hoa_:qs0:qs0:_sup_idle
 edge:_hoa_:qs0:qs0:change
-edge:_hoa_:qs0:qs1:change
 edge:_hoa_:qs0:qs0:go
 edge:_hoa_:qs1:qs2:_c_idle
+edge:_hoa_:qs1:qs2:ack
 edge:_hoa_:qs1:qs2:err
 edge:_hoa_:qs1:qs3:ask
 edge:_hoa_:qs1:qs4:send
 edge:_hoa_:qs1:qs2:_d_idle
 edge:_hoa_:qs1:qs2:_sup_idle
 edge:_hoa_:qs1:qs4:change
-edge:_hoa_:qs1:qs3:go
 edge:_hoa_:qs2:qs2:_c_idle
+edge:_hoa_:qs2:qs2:ack
 edge:_hoa_:qs2:qs2:err
 edge:_hoa_:qs2:qs3:ask
 edge:_hoa_:qs2:qs4:send
 edge:_hoa_:qs2:qs2:_d_idle
 edge:_hoa_:qs2:qs2:_sup_idle
 edge:_hoa_:qs2:qs4:change
-edge:_hoa_:qs2:qs3:go
 edge:_hoa_:qs3:qs3:_c_idle
+edge:_hoa_:qs3:qs3:ack
 edge:_hoa_:qs3:qs3:err
 edge:_hoa_:qs3:qs3:ask
 edge:_hoa_:qs3:qs4:send
 edge:_hoa_:qs3:qs3:_d_idle
 edge:_hoa_:qs3:qs3:_sup_idle
 edge:_hoa_:qs3:qs4:change
-edge:_hoa_:qs3:qs3:go
 edge:_hoa_:qs4:qs4:_c_idle
+edge:_hoa_:qs4:qs4:ack
 edge:_hoa_:qs4:qs4:err
 edge:_hoa_:qs4:qs1:ask
 edge:_hoa_:qs4:qs4:send
 edge:_hoa_:qs4:qs4:_d_idle
 edge:_hoa_:qs4:qs4:_sup_idle
 edge:_hoa_:qs4:qs4:change
-edge:_hoa_:qs4:qs1:go
-
-## ~G( ask -> F go )
-# process:device
-# location:device:q{initial:}
-# edge:device:q:q:change
-# edge:device:q:q:send
-# process:_hoa_
-# location:_hoa_:qs0{initial:}
-# location:_hoa_:qs1{labels:nonlive}
-# location:_hoa_:qs2{}
-# location:_hoa_:qs3{}
-# location:_hoa_:qs4{}
-# edge:_hoa_:qs0:qs0:_c_idle
-# edge:_hoa_:qs0:qs0:ack
-# edge:_hoa_:qs0:qs0:err
-# edge:_hoa_:qs0:qs0:ask
-# edge:_hoa_:qs0:qs1:ask
-# edge:_hoa_:qs0:qs0:send
-# edge:_hoa_:qs0:qs0:_d_idle
-# edge:_hoa_:qs0:qs0:_sup_idle
-# edge:_hoa_:qs0:qs0:change
-# edge:_hoa_:qs0:qs0:go
-# edge:_hoa_:qs1:qs2:_c_idle
-# edge:_hoa_:qs1:qs2:ack
-# edge:_hoa_:qs1:qs2:err
-# edge:_hoa_:qs1:qs3:ask
-# edge:_hoa_:qs1:qs4:send
-# edge:_hoa_:qs1:qs2:_d_idle
-# edge:_hoa_:qs1:qs2:_sup_idle
-# edge:_hoa_:qs1:qs4:change
-# edge:_hoa_:qs2:qs2:_c_idle
-# edge:_hoa_:qs2:qs2:ack
-# edge:_hoa_:qs2:qs2:err
-# edge:_hoa_:qs2:qs3:ask
-# edge:_hoa_:qs2:qs4:send
-# edge:_hoa_:qs2:qs2:_d_idle
-# edge:_hoa_:qs2:qs2:_sup_idle
-# edge:_hoa_:qs2:qs4:change
-# edge:_hoa_:qs3:qs3:_c_idle
-# edge:_hoa_:qs3:qs3:ack
-# edge:_hoa_:qs3:qs3:err
-# edge:_hoa_:qs3:qs3:ask
-# edge:_hoa_:qs3:qs4:send
-# edge:_hoa_:qs3:qs3:_d_idle
-# edge:_hoa_:qs3:qs3:_sup_idle
-# edge:_hoa_:qs3:qs4:change
-# edge:_hoa_:qs4:qs4:_c_idle
-# edge:_hoa_:qs4:qs4:ack
-# edge:_hoa_:qs4:qs4:err
-# edge:_hoa_:qs4:qs1:ask
-# edge:_hoa_:qs4:qs4:send
-# edge:_hoa_:qs4:qs4:_d_idle
-# edge:_hoa_:qs4:qs4:_sup_idle
-# edge:_hoa_:qs4:qs4:change
 
 sync:device@send:Switch@send:Controller@send:Obs@send:_hoa_@send
 sync:Switch@ack:Controller@ack:Obs@ack:_hoa_@ack

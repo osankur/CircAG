@@ -90,12 +90,9 @@ class DFAAutomaticVerifier(
   /** Check the AG rule once for the current assumption alphabet and DFAs
    */
   override def applyAG(proveGlobalproperty: Boolean = true): AGResult = {
-
-    // A proof for a process must not depend on itself
     logger.debug(s"applyAG with alphabets: ${assumptions.map(_.alphabet)}")
     try {
       for (ta, i) <- system.processes.zipWithIndex do {
-        // DFAAssumeGuaranteeVerifier.checkInductivePremise(ta, proofSkeleton.processDependencies(i).map(assumptions(_)).toList, assumptions(i))
         this.checkInductivePremise(i) match {
           case None =>
             logger.debug(s"${GREEN}Premise ${i} passed${RESET}")
