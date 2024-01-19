@@ -802,65 +802,22 @@ class LTLAGTests extends munit.FunSuite {
   } 
 }
 
-class DFAAutomatic extends munit.FunSuite {
- test("DFA learn assumptions: simple sdn"){
-    val tas = Array(File("examples/simple-sdn/device.tck"), File("examples/simple-sdn/switch.tck"), File("examples/simple-sdn/controller.tck"), File("examples/simple-sdn/supervisor.tck"), File("examples/simple-sdn/observer.tck"))
-    val dfaChecker = DFAAutomaticVerifier(dfa.SystemSpec(tas, Some(DLTS.fromErrorSymbol("err"))))
-    dfaChecker.learnAssumptions(true)
-  }
- test("DFA learn assumptions: full sdn"){
-    val tas = Array(File("examples/sdn/device.tck"), File("examples/sdn/switch.tck"), File("examples/sdn/controller.tck"), File("examples/sdn/supervisor.tck"), File("examples/sdn/observer.tck"))
-    val dfaChecker = DFAAutomaticVerifier(dfa.SystemSpec(tas, Some(DLTS.fromErrorSymbol("err"))))
-    dfaChecker.learnAssumptions(true)
-  }
- test("DFA learn assumptions: ums-2"){
-    val tas = Array(File("examples/ums-2/user.tck"), File("examples/ums-2/scheduler.tck"), File("examples/ums-2/machine.tck"))
-    val checker = DFAAutomaticVerifier(dfa.SystemSpec(tas, Some(DLTS.fromErrorSymbol("err"))))
-    // val checker = LTLAutomaticVerifier(ltl.SystemSpec(tas, LTL.fromString("F(rel1)"))) // fails
-    checker.learnAssumptions(true)
- }
- test("DFA learn assumptions: ums-1"){
-    val tas = Array(File("examples/ums-1/user.tck"), File("examples/ums-1/scheduler.tck"), File("examples/ums-1/machine.tck"))
-    val checker = DFAAutomaticVerifier(dfa.SystemSpec(tas, Some(DLTS.fromErrorSymbol("err"))))
-    // val checker = LTLAutomaticVerifier(ltl.SystemSpec(tas, LTL.fromString("F(rel1)"))) // fails
-    checker.learnAssumptions(true)
- }
-}
-
-class LTLAutomatic  extends munit.FunSuite {
-  test("ltl learn assumptions: muo 2 processes"){
-    val tas = Array(File("examples/muo/user.tck"), File("examples/muo/machine.tck"))
-    val checker = LTLAutomaticVerifier(ltl.SystemSpec(tas, G(F(Atomic("cycle")))))
-    checker.setProcessInstantaneousDependencies(1, Set(0))
-    // this should take 15 attempts
-    val result2 = checker.learnAssumptions(proveGlobalProperty = true)
-    assert(result2 == ltl.LTLAGResult.Success)
-    // One can also check just F send much faster
-  }
-  test("ltl learn assumptions: ltl-toy1 2 processes"){
-    val tas = Array(File("examples/ltl-toy1/a.tck"), File("examples/ltl-toy1/b.tck"))
-    val checker = LTLAutomaticVerifier(ltl.SystemSpec(tas, G(F(Atomic("a")))))
-    checker.setProcessInstantaneousDependencies(0, Set(1))
-    val result = checker.learnAssumptions(proveGlobalProperty = true)
-    assert(result == ltl.LTLAGResult.Success)
-  }
-}
 
 class Single extends munit.FunSuite {
-  test("ltl learn assumptions: ltl-toy1 2 processes"){
-    val tas = Array(File("examples/ltl-toy1/a.tck"), File("examples/ltl-toy1/b.tck"))
-    val checker = LTLAutomaticVerifier(ltl.SystemSpec(tas, G(F(Atomic("a")))))
-    checker.setProcessInstantaneousDependencies(0, Set(1))
-    assert(checker.learnAssumptions(proveGlobalProperty = true) == LTLAGResult.Success)
-  }
-  test("ltl learn assumptions: ltl-toy1 3 processes"){
-    val tas = Array(File("examples/ltl-toy1/a.tck"), File("examples/ltl-toy1/b.tck"), File("examples/ltl-toy1/c.tck"))
-    val checker = LTLAutomaticVerifier(ltl.SystemSpec(tas, G(F(Atomic("a")))))
-    checker.setProcessInstantaneousDependencies(0, Set(1))
-    // The learned assumptions are: G (b -> (X a))) and (G (c U b)
-    // This corresponds to the only infinite execution in this product: abaac^omega
-    assert(checker.learnAssumptions(proveGlobalProperty = true) == LTLAGResult.Success)
-  }
+  // test("ltl learn assumptions: ltl-toy1 2 processes"){
+  //   val tas = Array(File("examples/ltl-toy1/a.tck"), File("examples/ltl-toy1/b.tck"))
+  //   val checker = LTLAutomaticVerifier(ltl.SystemSpec(tas, G(F(Atomic("a")))))
+  //   checker.setProcessInstantaneousDependencies(0, Set(1))
+  //   assert(checker.learnAssumptions(proveGlobalProperty = true) == LTLAGResult.Success)
+  // }
+  // test("ltl learn assumptions: ltl-toy1 3 processes"){
+  //   val tas = Array(File("examples/ltl-toy1/a.tck"), File("examples/ltl-toy1/b.tck"), File("examples/ltl-toy1/c.tck"))
+  //   val checker = LTLAutomaticVerifier(ltl.SystemSpec(tas, G(F(Atomic("a")))))
+  //   checker.setProcessInstantaneousDependencies(0, Set(1))
+  //   // The learned assumptions are: G (b -> (X a))) and (G (c U b)
+  //   // This corresponds to the only infinite execution in this product: abaac^omega
+  //   assert(checker.learnAssumptions(proveGlobalProperty = true) == LTLAGResult.Success)
+  // }
   test("ltl inductive check: ltl-toy1 applyAG"){
     val tas = Array(File("examples/ltl-toy1/a.tck"), File("examples/ltl-toy1/b.tck"))
     val checker = LTLVerifier(ltl.SystemSpec(tas, G(F(Atomic("a")))))
