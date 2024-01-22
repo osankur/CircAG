@@ -115,8 +115,8 @@ class SATLearner(name : String, alphabet : Alphabet, universal : Boolean, solver
       pw.write("\n")
     }
     pw.write("---\n")
-    // pw.write("G,F,!,|,&,->\n")
-    pw.write("G,F,!,|,&,->,X,U\n")
+    pw.write("G,F,!,|,&,->\n")
+    // pw.write("G,F,!,|,&,->,X,U\n")
     pw.close()
 
     solver match {
