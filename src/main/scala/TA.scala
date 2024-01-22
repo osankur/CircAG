@@ -82,13 +82,13 @@ class TA (
     val beginTime = System.nanoTime()    
     statistics.Counters.incrementCounter("model-checking")
     val modelFile =
-      Files.createTempFile(configuration.get().getTmpDirPath(), "circag-query", ".tck").toFile()
+      Files.createTempFile(configuration.get().tmpDirPath, "circag-query", ".tck").toFile()
     val pw = PrintWriter(modelFile)
     pw.write(this.toString())
     pw.close()
 
     val certFile =
-      Files.createTempFile(configuration.get().getTmpDirPath(), "circag-cert", ".cert").toFile()
+      Files.createTempFile(configuration.get().tmpDirPath, "circag-cert", ".cert").toFile()
     val cmd = "tck-reach -a reach %s -l %s -C symbolic -o %s"
             .format(modelFile.toString, label, certFile.toString)
 
@@ -264,7 +264,7 @@ class TA (
     val modelFile =
       Files
         .createTempFile(
-          configuration.get().getTmpDirPath(),
+          configuration.get().tmpDirPath,
           "circag-query",
           ".tck"
         )
@@ -276,7 +276,7 @@ class TA (
     val certFile =
       Files
         .createTempFile(
-          configuration.get().getTmpDirPath(),
+          configuration.get().tmpDirPath,
           "circag-cert",
           ".cert"
         )

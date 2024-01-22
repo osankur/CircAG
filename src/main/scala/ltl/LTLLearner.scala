@@ -103,7 +103,7 @@ class SATLearner(name : String, alphabet : Alphabet, universal : Boolean, solver
     val encNeg = negativeSamples.map(encodeLasso)
 
     val inputFile =
-      Files.createTempFile(configuration.get().getTmpDirPath(), "samples2LTL-query", ".trace").toFile()
+      Files.createTempFile(configuration.get().tmpDirPath, "samples2LTL-query", ".trace").toFile()
     val pw = PrintWriter(inputFile)
     for samples <- encPos do {
       pw.write(samples)  
@@ -115,7 +115,8 @@ class SATLearner(name : String, alphabet : Alphabet, universal : Boolean, solver
       pw.write("\n")
     }
     pw.write("---\n")
-    pw.write("G,F,!,|,&,->\n")
+    // pw.write("G,F,!,|,&,->\n")
+    pw.write("G,F,!,|,&,->,X,U\n")
     pw.close()
 
     solver match {

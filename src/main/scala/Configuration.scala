@@ -3,6 +3,7 @@ package fr.irisa.circag.configuration
 
 import java.io.File
 import java.nio.file._
+
 import collection.mutable.Buffer
 import fr.irisa.circag.Trace
 import fr.irisa.circag.dfa.DFALearningAlgorithm
@@ -28,28 +29,29 @@ case class Configuration(
     keepTmpFiles: Boolean = true,
     verbose: Boolean = false,
     verbose_MembershipQueries : Boolean = false,
-    tmpDirName: String = "/tmp/circag",
+    tmpDirPath : Path = Files.createTempDirectory("circag"),
+    // tmpDirName: String = "/tmp/circag",
     dumpAssumptions : Boolean = false,
     alphabetRefinement : Boolean = false,
     dfaLearningAlgorithm : DFALearningAlgorithm = DFALearningAlgorithm.RPNI,
     constraintStrategy : ConstraintStrategy = ConstraintStrategy.Eager,
     randomSeed : Int = 0
 ) {
-  private var tmpDirPath: Option[Path] = None
-  def getTmpDirPath(): Path = {
-    tmpDirPath match {
-      case None =>
-        val p = FileSystems.getDefault().getPath(tmpDirName);
-        p.toFile().mkdirs()
-        for(file <- p.toFile().listFiles()){
-          if (!file.isDirectory()) 
-            file.delete()
-        }
-        tmpDirPath = Some(p)
-        p
-      case Some(f) => f
-    }
-  }
+  // private var tmpDirPath: Option[Path] = None
+  // def getTmpDirPath(): Path = {
+  //   tmpDirPath match {
+  //     case None =>
+  //       val p = FileSystems.getDefault().getPath(tmpDirName);
+  //       p.toFile().mkdirs()
+  //       for(file <- p.toFile().listFiles()){
+  //         if (!file.isDirectory()) 
+  //           file.delete()
+  //       }
+  //       tmpDirPath = Some(p)
+  //       p
+  //     case Some(f) => f
+  //   }
+  // }
 }
 
 var globalConfiguration = Configuration()

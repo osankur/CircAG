@@ -258,23 +258,26 @@ class LTLVerifier(val system : SystemSpec) {
         val overallAlphabet = 
           processes
           .map(_.alphabet)
-          .foldLeft(Set[String]())((a,b) => a | b )
+          .foldLeft(Set[String]())((a,b) => a | b )        
         val rhs = And(Not(mainAssumption) :: instantaneousDeps.map(_._2))
         // logger.debug(s"Checking LTL formula (~mainAssumption & instantaneous): ${rhs}")
         val formulaAlphabet = rhs.getAlphabet
         val (p,c) = lasso
-        val alpha = (p.toSet ++ c.toSet ++ processAlphabet ++ formulaAlphabet).intersect(overallAlphabet)
         val pc = p ++ c
         val k0 = boundary:
           for i <- 0 to pc.size do {
             val newp = pc.drop(i)
-            // We make sure that the lasso and the LTL formula synchronizes every single letter
-            // by setting the alphabet of the lasso to its own letters + processAlphabet + letter appearing in the formula
-            val dlts = DLTS.fromLasso((newp, c), alphabet = Some(alpha))
-            // add symbols of the process being checked in the premise query to the alphabet of the lasso
-            val lassoTA = TA.fromLTS(dlts)
-            if lassoTA.checkLTL(rhs) == None then 
-              break(i)
+            // Skip if internal letter to avoid unnecessary computations
+            if i == 0 || overallAlphabet.contains(newp.head) then {
+              // We make sure that the lasso and the LTL formula synchronizes every single letter
+              // by setting the alphabet of the lasso to its own letters + processAlphabet + letter appearing in the formula
+              val alpha = newp.toSet ++ c.toSet ++ processAlphabet ++ formulaAlphabet
+              val dlts = DLTS.fromLasso((newp, c), alphabet = Some(alpha))
+              // add symbols of the process being checked in the premise query to the alphabet of the lasso
+              val lassoTA = TA.fromLTS(dlts)
+              if lassoTA.checkLTL(rhs) == None then 
+                break(i)
+            }
           }
           throw Exception(s"Failed to find the violation index of lasso ${lasso} and query ${query}")        
         logger.debug(s"Computing violation index: ${k0}")
