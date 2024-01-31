@@ -13,7 +13,7 @@ The assume-guarantee proof rules were originally described in the following pape
 
 - McMillan, Kenneth L. "A methodology for hardware verification using compositional model checking." Science of Computer Programming 37, no. 1-3 (2000): 279-309.
 
-We currently use the model checker (TChecker)[https://github.com/ticktac-project/tchecker] for all model checking queries. This has the advantage of being open source, but also having a simple input format supporting synchronized products of labeled transition systems (which is required by the proof rules). However, it is easy to extend the tool to other model checkers. There are plans to do this in the future.
+We currently use the model checker [TChecker](https://github.com/ticktac-project/tchecker) for all model checking queries. This has the advantage of being open source, but also having a simple input format supporting synchronized products of labeled transition systems (which is required by the proof rules). However, it is easy to extend the tool to other model checkers. There are plans to do this in the future.
 We use the [LearnLib](https://github.com/LearnLib/) for DFA learning and automata manipulation, and [Samples2LTL](https://github.com/ivan-gavran/samples2LTL)
 for learning LTL formulas.
 

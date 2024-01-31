@@ -81,12 +81,6 @@ object Main {
             case _ => c.copy(dfaLearningAlgorithm = DFALearningAlgorithm.RPNI)
           }})
           .text("DFA Learning algorithm (RPNI|SAT|UFSAT)"),
-        opt[String]("constraintStrategy")
-          .action({(x, c) => x match {
-            case "Disjunctive" => c.copy(constraintStrategy = dfa.ConstraintStrategy.Disjunctive)
-            case _ => c.copy(constraintStrategy = dfa.ConstraintStrategy.Eager)
-          }})
-          .text("DFA Learning algorithm (RPNI|SAT|UFSAT)"),
         cmd("product")
           .action((_, c) => c.copy(cmd = "product")),
         cmd("dfa")
