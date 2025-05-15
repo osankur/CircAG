@@ -45,16 +45,8 @@ class DFAAutomaticVerifier(
     }
   }
 
-  // def this(
-  //     ltsFiles: Array[File],
-  //     property: Option[DLTS],
-  //     dfaLearnerAlgorithm: DFALearningAlgorithm,
-  //     constraintStrategy : ConstraintStrategy
-  // ) = {
-  //   this(SystemSpec(ltsFiles, property), dfaLearnerAlgorithm, constraintStrategy)
-  // }
-
   protected val logger = LoggerFactory.getLogger("CircAG")
+
   protected var dfaGenerator =
     DFAGenerator.getGenerator(
       system,
@@ -138,7 +130,6 @@ class DFAAutomaticVerifier(
             } else if (!traceInP && cexAccepted) then {
               throw AGResult.GlobalPropertyViolation(cexTrace)
             }
-            // updateConstraints(i, cexTrace)
             dfaGenerator.refineByInductivePremiseCounterexample(i, cexTrace)
             if cexAccepted then {
               throw AGResult.AssumptionViolation(i, cexTrace)

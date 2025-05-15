@@ -76,8 +76,8 @@ A passive learning algorithm (RPNI or SAT) is used to learn assumption DFAs for 
 You can add the option `--visualizeDFA true` to see the assumption DFAs that were learned at the end of a successful verification.
 
 ### Other examples
-    java -jar CircAG.jar dfa --files "examples/toy/lts1.tck,examples/toy/lts2.tck,examples/toy/lts3.tck" --err "err"
-    java -jar CircAG.jar dfa --files "examples/seq-toy/lts0.tck,examples/seq-toy/lts1.tck,examples/seq-toy/lts2.tck,examples/seq-toy/lts3.tck" --err "err"
+    java -jar CircAG.jar dfa --dir examples/toy --err err
+    java -jar CircAG.jar dfa --dir examples/seq-toy --err err
     java -jar CircAG.jar dfa --files "examples/ums-2/machine.tck,examples/ums-2/scheduler.tck,examples/ums-2/user.tck" --err "err"
     java -jar CircAG.jar dfa --files "examples/simple-sdn/device.tck,examples/simple-sdn/switch.tck,examples/simple-sdn/controller.tck,examples/simple-sdn/supervisor.tck,examples/simple-sdn/observer.tck" --err "err"
     java -jar CircAG.jar dfa --files "examples/sdn/device.tck,examples/sdn/switch.tck,examples/sdn/controller.tck,examples/sdn/supervisor.tck,examples/sdn/observer.tck" --err "err"

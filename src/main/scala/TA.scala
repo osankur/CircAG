@@ -352,11 +352,9 @@ object TA{
       case regProcess(monitorProcessName) =>
         currentProcess = monitorProcessName
         ta.eventsOfProcesses += (monitorProcessName -> Set[String]())
-      // System.out.println("Now reading process: " + monitorProcessName)
       case regEdge(sync) =>
         ta.eventsOfProcesses.put(currentProcess,
           (ta.eventsOfProcesses(currentProcess) + sync))
-      // System.out.println("Adding sync: " + sync)
       case _ => ()
     }
     ta.core = lines.filter({

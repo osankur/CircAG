@@ -44,12 +44,22 @@ object Main {
         programName("CircAG"),
         head("circAG", "0.1"),
         opt[Seq[File]]("files")
-          .required()
           .valueName("<files>")
           .action(
             (x,c) =>
             c.copy(ltsFiles = x.toArray)
-          ),
+          )
+          .text("List of .tck files defining the system"),
+        opt[File]("dir")
+          .valueName("<dir>")
+          .action(
+            (x, c) =>
+              if !x.isDirectory() then {
+                throw Exception(s"Argument to option dir must be a directory")
+              }
+              c.copy(ltsFiles = x.listFiles.filter({f => f.getName().endsWith((".tck"))} ))
+          )
+          .text("Directory containing the .tck files defining the system"),
         opt[String]("err")
           .valueName("<err>")
           .action((x, c) => 
@@ -81,6 +91,14 @@ object Main {
             case _ => c.copy(dfaLearningAlgorithm = DFALearningAlgorithm.RPNI)
           }})
           .text("DFA Learning algorithm (RPNI|SAT|UFSAT)"),
+        opt[String]("constraintStrategy")
+          .action({(x, c) => x match {
+            case "Disjunctive" => 
+              c.copy(constraintStrategy = dfa.ConstraintStrategy.DisjunctiveSeparate, 
+                    dfaLearningAlgorithm = DFALearningAlgorithm.SAT)
+            case _ => c.copy(constraintStrategy = dfa.ConstraintStrategy.Eager)
+          }})
+          .text("Constraint strategy: Eager | Disjunctive"),
         cmd("product")
           .action((_, c) => c.copy(cmd = "product")),
         cmd("dfa")
@@ -95,6 +113,15 @@ object Main {
         case None => ()
         case Some(config) =>
           configuration.set(config)
+          logger.info(s"Command: ${config.cmd}")
+          logger.info(s"Files: ${config.ltsFiles.toSeq}")
+          if config.ltsFiles.isEmpty then {
+            throw Exception("Please provide input files with the --files or --dir options.")
+          }
+          config.ltlProperty match {
+            case None => ()
+            case Some(ltl) => logger.info(s"LTL property: ${ltl}")
+          }
           for file <- configuration.get().ltsFiles do {
             if (!file.exists()){
               throw Exception(("%sFile " + file.getAbsolutePath() + " does not exist%s").format(RED,RESET))
@@ -109,6 +136,11 @@ object Main {
               val product = TA.synchronousProduct(tas.toList)
               System.out.println(product.toString())
             case "dfa" =>
+                logger.info(s"DFA Learning Algorithm: ${config.dfaLearningAlgorithm}")
+                logger.info(s"DFA Learning Strategy: ${config.constraintStrategy}")
+                if config.err == "" then {
+                  throw Exception("Please provide an error event with the --err option")
+                }
                 dfa.DFAAutomaticVerifier(
                   dfa.SystemSpec(
                     configuration.get().ltsFiles, 
