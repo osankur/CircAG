@@ -8,6 +8,8 @@ import org.slf4j.LoggerFactory
 import io.AnsiColor._
 import scopt.OParser
 import java.io._
+import java.nio.file.Files
+
 import net.automatalib.words.Word
 import net.automatalib.words.Alphabet;
 import net.automatalib.words.impl.Alphabets;
@@ -106,11 +108,14 @@ object Main {
           }})
           .text("Constraint strategy: Eager | DisjunctiveSeparate | Disjunctive"),
         cmd("product")
-          .action((_, c) => c.copy(cmd = "product")),
+          .action((_, c) => c.copy(cmd = "product"))
+          .text("Compute the product of the given .tck files. If error labels are given, run TChecker to check the product."),
         cmd("dfa")
-          .action((_, c) => c.copy(cmd = "dfa")),
+          .action((_, c) => c.copy(cmd = "dfa"))
+          .text("Apply automatic AG for finite traces"),
         cmd("ltl")
           .action((_, c) => c.copy(cmd = "ltl"))
+          .text("Apply automatic AG for infinite traces")
       )
     }
     val beginTime = System.nanoTime()
@@ -138,9 +143,16 @@ object Main {
 
           config.cmd match {
             case "product" =>
-              val tas = configuration.get().ltsFiles.map(TA.fromFile(_))
+              val tas = configuration.get().ltsFiles.map(TA.fromFile(_))              
               val product = TA.synchronousProduct(tas.toList)
-              System.out.println(product.toString())
+              if config.err.size == 0 then {
+                System.out.println(product.toString())
+              } else {
+                product.checkReachability(config.err : _*) match {
+                  case None => logger.info(s"${GREEN}Safety holds in the product${RESET}")
+                  case Some(cex) => logger.info(s"${GREEN}Labels are reachable ${cex}${RESET}")
+                }
+              }
             case "dfa" =>
                 logger.info(s"DFA Learning Algorithm: ${config.dfaLearningAlgorithm}")
                 logger.info(s"DFA Learning Strategy: ${config.constraintStrategy}")

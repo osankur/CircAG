@@ -78,7 +78,7 @@ class TA (
    * 
    * @param label
    */
-  def checkReachability(label : String) : Option[Trace] = {
+  def checkReachability(labels : String*) : Option[Trace] = {
     val beginTime = System.nanoTime()    
     statistics.Counters.incrementCounter("model-checking")
     val modelFile =
@@ -86,6 +86,8 @@ class TA (
     val pw = PrintWriter(modelFile)
     pw.write(this.toString())
     pw.close()
+
+    val label = labels.mkString(",")
 
     val certFile =
       Files.createTempFile(configuration.get().tmpDirPath, "circag-cert", ".cert").toFile()
@@ -470,7 +472,12 @@ object TA{
   def synchronousProduct[S](ta : TA, dlts : List[LTS[S]], acceptingLabelSuffix : Option[String] = None, syncOnInternalEvents : Boolean = false) : TA = {
     val allNames = dlts.map(_.name) ++ ta.eventsOfProcesses.keys().toList
     if allNames.size > allNames.distinct.size then {
-      throw Exception("Attempting synchronous product of processes of the same name")
+      val repeatedNames = Buffer[String]()
+      for name <- allNames do {
+        if allNames.count(s => s == name) > 1 then 
+          repeatedNames.append(name)
+      }
+      throw Exception(s"Product computation failed: some processes have the same name: ${repeatedNames}")
     }
     val dltsTA = dlts.map({d => TA.fromLTS[S](d, acceptingLabelSuffix)})
     val jointAlphabet = 
@@ -515,12 +522,19 @@ object TA{
     def unionOfList[A](l : List[Set[A]]) : Set[A] = {
       l.foldLeft(Set[A]())({(a,b) => a | b})
     }
-    // println("Product of:")
-    // tas.foreach(ta => println(s"${ta.systemName} on alphabet ${ta.alphabet}"))
-    val allProcesses = unionOfList(tas.map(_.eventsOfProcesses.keys().toSet)).toList
+    val allProcessesSet = unionOfList(tas.map(_.eventsOfProcesses.keys().toSet)).toList
     val processCount = (tas.map(_.eventsOfProcesses.keys().size)).sum
-    if allProcesses.size < processCount then {
-      throw Exception("Attempted synchronous product of processes of the same name")
+    if allProcessesSet.size < processCount then {
+      val allProcesses = Buffer[String]()
+      tas.foreach(ta => 
+        allProcesses.appendAll(ta.eventsOfProcesses.keys())
+      )
+      val repeatedNames = Buffer[String]()
+      for name <- allProcesses do {
+        if allProcesses.count(s => s == name) > 1 then 
+          repeatedNames.append(name)
+      }
+      throw Exception(s"Synchronous product failed due to different processes having the same name: ${repeatedNames.distinct}")
     }
     val jointAlphabet = tas.foldLeft(Set[String]())((alph,ta) => alph | ta.alphabet)
     val jointInternalAlphabet = tas.foldLeft(Set[String]())((alph,ta) => alph | ta.internalAlphabet)

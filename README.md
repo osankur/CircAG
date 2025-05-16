@@ -51,11 +51,10 @@ To check out and test the samples2LTL and Scarlet submodules, run:
     git submodule update
     cd samples2ltl
     pip3 install -r requirements.txt
+
+You can test as follows:
+
     python3 samples2LTL.py --sat --traces traces/alt.trace
-    cd ../Scarlet
-    pip3 install -r requirements.txt
-    cd ..
-    python3 -m Scarlet.ltllearner
 
 
 ## License
