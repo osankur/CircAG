@@ -1,0 +1,16 @@
+system:server
+
+event:_idle
+event:fail
+event:recover
+event:err0
+event:err1
+event:err2
+
+process:main
+location:main:init{initial:}
+edge:main:init:init:_idle
+edge:main:init:init:recover
+edge:main:init:init:err0
+edge:main:init:init:err1
+edge:main:init:init:err2
