@@ -32,3 +32,4 @@ metals.sbt
 /.worksheet/
 
 CircAG.jar
+.circag_log

@@ -231,17 +231,16 @@ object DLTS {
   }
 
 
-  def fromErrorSymbol(symbol : Symbol, dltsName : String = "") : DLTS = {
-    require(symbol != "")
-    val alph = Alphabets.fromList(List(symbol))
-    val errDFA = AutomatonBuilders
-      .forDFA(FastDFA(alph))
-      .withInitial("q0")
-      .from("q0")
-      .on(symbol)
-      .to("q1")
-      .withAccepting("q0")
-      .create()
+  def fromErrorSymbol(symbols : Seq[Symbol], dltsName : String = "") : DLTS = {
+    require(symbols.size > 0)
+    val alph = Alphabets.fromList(symbols.toList)
+    val errDFA = FastDFA(alph)
+    val q0 = errDFA.addState(true)
+    val q1 = errDFA.addState(false)
+    errDFA.setInitial(q0, true)
+    for symbol <- symbols do {
+      errDFA.setTransition(q0, symbol, q1)
+    }
     DLTS(dltsName, errDFA, alph.toSet)
   }
 

@@ -73,7 +73,7 @@ All variables and clocks must have distinct names. These processes synchronize o
 The --err option is used to pass the label that defines the safety property: AG!err.
 
 A passive learning algorithm (RPNI or SAT) is used to learn assumption DFAs for each process separately. You can specify the passive DFA learning algorithm using the option `--dfaLearningAlgorithm RPNI` or `--dfaLearningAlgorithm SAT`. 
-You can add the option `--visualizeDFA true` to see the assumption DFAs that were learned at the end of a successful verification.
+You can add the option `--visualizeAssumptions true` to see the assumption DFAs that were learned at the end of a successful verification.
 
 ### Other examples
     java -jar CircAG.jar dfa --dir examples/toy --err err
@@ -106,7 +106,7 @@ Alternatively, just run `interactive.sh`.
 
 ## Debug level
 Use the following property while running the jar to set debug level to debug
-    
+
      -Dorg.slf4j.simpleLogger.defaultLogLevel=debug
 
 # Author

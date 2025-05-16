@@ -71,12 +71,15 @@ class DFAAutomaticVerifier(
   }
 
   def dumpAssumptions() : Unit = {
+    val dir = Paths.get(".", ".circag_log")
+    Files.createDirectories(dir)
     for i <- 0 until nbProcesses do {
       val tck = TA.fromLTS(assumptions(i))
-      val writer = PrintWriter(new File(s"_assumption${i}_${system.processes(i).systemName}"))
+      val writer = PrintWriter(new File(dir.toFile(), s"_assumption${i}_${system.processes(i).systemName}.tck"))
       writer.write(tck.toString())
       writer.close()
     }
+    logger.info(s"Assumptions written into directory ${dir.getFileName().toString()}")
   }
 
   /** Check the AG rule once for the current assumption alphabet and DFAs
@@ -87,10 +90,10 @@ class DFAAutomaticVerifier(
       for (ta, i) <- system.processes.zipWithIndex do {
         this.checkInductivePremise(i) match {
           case None =>
-            logger.debug(s"${GREEN}Premise ${i} passed${RESET}")
+            logger.debug(s"${GREEN}Premise ${i} for ${_system.processes(i).systemName} passed${RESET}")
           case Some(cexTrace) =>
             latestCex = cexTrace
-            logger.debug(s"${RED}Premise ${i} failed: ${cexTrace}${RESET}")
+            logger.debug(s"${RED}Premise ${i} for for ${_system.processes(i).systemName} failed: ${cexTrace}${RESET}")
             if (this.cexHistory(i).contains(cexTrace)) then {
               for j <- proofSkeleton.processDependencies(i) do {
                 println(
@@ -191,10 +194,15 @@ class DFAAutomaticVerifier(
         case AGResult.GlobalPropertyProofFail(cex) => ()
       }
     }
+    val sizes = assumptions.map(a => s"${a.name} -> ${a.dfa.size()}")
+    logger.info(s"Size of the learned assumptions: ${sizes}")
     if configuration.get().dumpAssumptions then dumpAssumptions()
+    if configuration.get().visualizeAssumptions then
     {
-      val sizes = assumptions.map(a => s"${a.name} -> ${a.dfa.size()}")
-      logger.info(s"Size of the learned assumptions: ${sizes}")
+      for process <- 0 until nbProcesses do {
+        logger.info(s"Displaying assumption for process ${system.processes(process).systemName} over alphabet: ${assumptions(process).alphabet}")
+        assumptions(process).visualize()
+      }
     }
     currentState
   }

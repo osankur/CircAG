@@ -24,7 +24,6 @@ import collection.JavaConverters._
 import scala.annotation.static
 import com.microsoft.z3
 
-
 import net.automatalib.automata.fsa.impl.FastDFA
 import net.automatalib.automata.fsa.impl.FastDFAState
 import net.automatalib.util.automata.fsa.DFAs 
@@ -60,12 +59,12 @@ object Main {
               c.copy(ltsFiles = x.listFiles.filter({f => f.getName().endsWith((".tck"))} ))
           )
           .text("Directory containing the .tck files defining the system"),
-        opt[String]("err")
+        opt[Seq[String]]("err")
           .valueName("<err>")
           .action((x, c) => 
-              c.copy(err = x)
+              c.copy(err = x.toList)
             )
-          .text("err is the label indicating an error; so that the property to be checked is 'G not err'."),
+          .text("list of labels considered to be an error; so that the property to be checked is 'G /\\_{e in err} e'."),
         opt[String]("ltlProperty")
           .valueName("<ltlProperty>")
           .action((x, c) => 
@@ -84,6 +83,10 @@ object Main {
           .action((x, c) => c.copy(dumpAssumptions = x))
           .valueName("(true|false)")
           .text("Dump the assumption DFAs or LTL formulas that were learned"),
+        opt[Boolean]("visualizeAssumptions")
+          .action((x, c) => c.copy(visualizeAssumptions = x))
+          .valueName("(true|false)")
+          .text("Visualize learned assumptions by a pop-up"),
         opt[String]("dfaLearningAlgorithm")
           .action({(x, c) => x match {
             case "SAT" => c.copy(dfaLearningAlgorithm = DFALearningAlgorithm.SAT)
@@ -91,7 +94,7 @@ object Main {
             case _ => c.copy(dfaLearningAlgorithm = DFALearningAlgorithm.RPNI)
           }})
           .text("DFA Learning algorithm (RPNI|SAT|UFSAT)"),
-        opt[String]("constraintStrategy")
+        opt[String]("strategy")
           .action({(x, c) => x match {
             case "Disjunctive" => 
               c.copy(constraintStrategy = dfa.ConstraintStrategy.Disjunctive, 
@@ -141,7 +144,8 @@ object Main {
             case "dfa" =>
                 logger.info(s"DFA Learning Algorithm: ${config.dfaLearningAlgorithm}")
                 logger.info(s"DFA Learning Strategy: ${config.constraintStrategy}")
-                if config.err == "" then {
+                logger.info(s"Error labels: ${config.err}")
+                if config.err.size == 0 then {
                   throw Exception("Please provide an error event with the --err option")
                 }
                 dfa.DFAAutomaticVerifier(

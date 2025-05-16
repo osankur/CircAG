@@ -29,9 +29,7 @@ class DFADisjunctiveGenerator(
     _proofSkeleton: DFAProofSkeleton,
     dfaLearnerAlgorithm: DFALearningAlgorithm
 ) extends DFAGenerator(_system, _proofSkeleton) {
-  if dfaLearnerAlgorithm != DFALearningAlgorithm.SAT then {
-    throw Exception(s"Disjunctive strategy is only supported with the SAT learning algorithm")
-  }
+  require(dfaLearnerAlgorithm == DFALearningAlgorithm.SAT)
 
   val logger = LoggerFactory.getLogger("CircAG")
 
@@ -74,48 +72,6 @@ class DFADisjunctiveGenerator(
       v
     }
   }
-
-  /** Add boolean expression to the solver with the following property: For each pair of
-    * traces w, w', if proj(w, alphabet) is a prefix of proj(w', alphabet), then
-    * var(w') -> var(w). Here w ranges over samples(process)(sampleIndex..-1) and
-    * w' ranges over samples(process)(0..sampleIndex-1).
-    * This ensures that the resulting assignments are compatible with prefix-closed automata.
-    *
-    * @param process
-    * @param sampleIndex
-    * @return
-    */
-  // private def updateTheoryConstraints(
-  //     process: Int,
-  //     sampleIndex: Int = 0
-  // ): Unit = {
-  //   // println(s"updateTheoryConstraints(process = $process). Process alphabet: ${system.processes(process).alphabet} Ass alphabet: ${proofSkeleton.assumptionAlphabets(process)}")
-  //   for i <- sampleIndex until samples(process).size do {
-  //     val projTrace_i = this
-  //       .samples(process)(i)
-  //       ._1
-  //       .filter(proofSkeleton.assumptionAlphabets(process).contains(_))
-  //     val vi = this.samples(process)(i)._2
-  //     for j <- 0 until i do {
-  //       val projTrace_j = this
-  //         .samples(process)(j)
-  //         ._1
-  //         .filter(proofSkeleton.assumptionAlphabets(process).contains(_))
-  //       val vj = this.samples(process)(j)._2
-  //       // System.out.println(s"Comparing ${samples(process)(i)._1} - ${samples(process)(j)._1}")
-  //       // System.out.println(s"Whose projections are: ${projTrace_i} - ${projTrace_j}")
-
-  //       if projTrace_i.startsWith(projTrace_j) then {
-  //         solver.add(z3ctx.mkImplies(vi, vj))
-  //         // System.out.println(s"\t $vi -> $vj (theory)")
-  //       }
-  //       if projTrace_j.startsWith(projTrace_i) then {
-  //         solver.add(z3ctx.mkImplies(vj, vi))
-  //         // System.out.println(s"\t   $vi <- $vj (theory)")
-  //       }
-  //     }
-  //   }
-  // }
 
   /** Reinitialize the solver and samples.
     */
@@ -267,10 +223,14 @@ class DFADisjunctiveGenerator(
   ): Option[Buffer[DLTS]] = {
     if fixedAssumptions.size > 0 then 
       throw Exception(s"${this.getClass.getName()} does not support fixed assumptions")
+    statistics.Counters.incrementCounter("DFA Generator")
+
     logger.debug(s"Constraints:")
     for ass <- solver.getAssertions() do{
       logger.debug(ass.toString())
     }
+    var beginTime = System.nanoTime()
+
     // Generate SAT query to guess nb.Processes automata of total size at most k
     //  States: 1..k; 
     //  Process i has states error_state(i-1)+1...error_state(i)
@@ -358,7 +318,6 @@ class DFADisjunctiveGenerator(
             assert(sizeExpr != null)
             val dfaSize = Integer.parseInt(sizeExpr.toString())
             val offset = Integer.parseInt(m.eval(error_state(process-1), false).toString()) + 1
-            logger.info(s"DFA for ${process} has size ${sizeExpr.toString()} and initial state: ${offset}")
           
             val listAlphabet = proofSkeleton.assumptionAlphabets(process).toList
             val newDFA =
@@ -372,8 +331,7 @@ class DFADisjunctiveGenerator(
                 newDFA.setTransition(states(s), alpha, states(next_state - offset))
               }
             }
-            val dlts = DLTS(s"assumption${process}", newDFA.pruned, proofSkeleton.assumptionAlphabets(process))
-            // dlts.visualize()
+            val dlts = DLTS(s"assumption_${process}_${proofSkeleton.system.processes(process).systemName}", newDFA.pruned, proofSkeleton.assumptionAlphabets(process))
             dlts
         )
         allDLTS = Some(all_dlts)
@@ -381,6 +339,7 @@ class DFADisjunctiveGenerator(
       solver.pop()
       k += 1
     }
+    statistics.Timers.incrementTimer("z3", (System.nanoTime() - beginTime))
     allDLTS
   }
 }
