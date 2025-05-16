@@ -34,7 +34,8 @@ case class Configuration(
     alphabetRefinement : Boolean = false,
     dfaLearningAlgorithm : DFALearningAlgorithm = DFALearningAlgorithm.RPNI,
     constraintStrategy : ConstraintStrategy = ConstraintStrategy.Eager,
-    randomSeed : Int = 0
+    randomSeed : Int = 0,
+    maxDFASize : Int = 128
 ) {
 }
 

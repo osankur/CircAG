@@ -55,7 +55,6 @@ class DFAEagerGenerator(
           s"assumption_${i}",
           proofSkeleton.assumptionAlphabets(i)
         )
-      case _ => throw Exception("Not implemented yet")
     }
   )
 

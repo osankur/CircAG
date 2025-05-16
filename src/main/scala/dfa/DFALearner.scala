@@ -39,7 +39,6 @@ enum DFALearningAlgorithm:
   case RPNI
   case SAT
   case UFSAT
-  case JointSAT
 
 trait DFALearner(name: String, alphabet: Alphabet) {
   def setPositiveSamples(samples: Set[Trace]) = {
@@ -394,7 +393,3 @@ class SATLearner(name: String, alphabet: Alphabet)
     }
   }
 }
-
-abstract class JointSATLearner(name: String, alphabet: Alphabet)
-    extends DFALearner(name, alphabet) {}
-

@@ -10,9 +10,15 @@ import org.slf4j.LoggerFactory
 import io.AnsiColor._
 import com.microsoft.z3
 
+import net.automatalib.words.impl.Alphabets;
+import net.automatalib.automata.fsa.impl.{
+  FastDFA
+}
+
 import fr.irisa.circag.statistics
 import fr.irisa.circag.configuration
 import fr.irisa.circag.{Trace, DLTS, Alphabet}
+import fr.irisa.circag.pruned
 
 /**
   * Disjunctive DFA generator which keeps a list of disjunctive constraints excluding previous counterexamples.
@@ -64,7 +70,7 @@ class DFADisjunctiveGenerator(
       toVars.put((process, trace), v)
       toIndexedTraces.put(v, (process, trace))
       samples(process).append((trace, v))
-      updateTheoryConstraints(process, samples(process).size - 1)
+      // updateTheoryConstraints(process, samples(process).size - 1)
       v
     }
   }
@@ -79,37 +85,37 @@ class DFADisjunctiveGenerator(
     * @param sampleIndex
     * @return
     */
-  private def updateTheoryConstraints(
-      process: Int,
-      sampleIndex: Int = 0
-  ): Unit = {
-    // println(s"updateTheoryConstraints(process = $process). Process alphabet: ${system.processes(process).alphabet} Ass alphabet: ${proofSkeleton.assumptionAlphabets(process)}")
-    for i <- sampleIndex until samples(process).size do {
-      val projTrace_i = this
-        .samples(process)(i)
-        ._1
-        .filter(proofSkeleton.assumptionAlphabets(process).contains(_))
-      val vi = this.samples(process)(i)._2
-      for j <- 0 until i do {
-        val projTrace_j = this
-          .samples(process)(j)
-          ._1
-          .filter(proofSkeleton.assumptionAlphabets(process).contains(_))
-        val vj = this.samples(process)(j)._2
-        // System.out.println(s"Comparing ${samples(process)(i)._1} - ${samples(process)(j)._1}")
-        // System.out.println(s"Whose projections are: ${projTrace_i} - ${projTrace_j}")
+  // private def updateTheoryConstraints(
+  //     process: Int,
+  //     sampleIndex: Int = 0
+  // ): Unit = {
+  //   // println(s"updateTheoryConstraints(process = $process). Process alphabet: ${system.processes(process).alphabet} Ass alphabet: ${proofSkeleton.assumptionAlphabets(process)}")
+  //   for i <- sampleIndex until samples(process).size do {
+  //     val projTrace_i = this
+  //       .samples(process)(i)
+  //       ._1
+  //       .filter(proofSkeleton.assumptionAlphabets(process).contains(_))
+  //     val vi = this.samples(process)(i)._2
+  //     for j <- 0 until i do {
+  //       val projTrace_j = this
+  //         .samples(process)(j)
+  //         ._1
+  //         .filter(proofSkeleton.assumptionAlphabets(process).contains(_))
+  //       val vj = this.samples(process)(j)._2
+  //       // System.out.println(s"Comparing ${samples(process)(i)._1} - ${samples(process)(j)._1}")
+  //       // System.out.println(s"Whose projections are: ${projTrace_i} - ${projTrace_j}")
 
-        if projTrace_i.startsWith(projTrace_j) then {
-          solver.add(z3ctx.mkImplies(vi, vj))
-          // System.out.println(s"\t $vi -> $vj (theory)")
-        }
-        if projTrace_j.startsWith(projTrace_i) then {
-          solver.add(z3ctx.mkImplies(vj, vi))
-          // System.out.println(s"\t   $vi <- $vj (theory)")
-        }
-      }
-    }
-  }
+  //       if projTrace_i.startsWith(projTrace_j) then {
+  //         solver.add(z3ctx.mkImplies(vi, vj))
+  //         // System.out.println(s"\t $vi -> $vj (theory)")
+  //       }
+  //       if projTrace_j.startsWith(projTrace_i) then {
+  //         solver.add(z3ctx.mkImplies(vj, vi))
+  //         // System.out.println(s"\t   $vi <- $vj (theory)")
+  //       }
+  //     }
+  //   }
+  // }
 
   /** Reinitialize the solver and samples.
     */
@@ -259,7 +265,123 @@ class DFADisjunctiveGenerator(
   override def generateAssumptions(
       fixedAssumptions: Map[Int, DLTS] = Map()
   ): Option[Buffer[DLTS]] = {
-    None
+    if fixedAssumptions.size > 0 then 
+      throw Exception(s"${this.getClass.getName()} does not support fixed assumptions")
+    logger.debug(s"Constraints:")
+    for ass <- solver.getAssertions() do{
+      logger.debug(ass.toString())
+    }
+    // Generate SAT query to guess nb.Processes automata of total size at most k
+    //  States: 1..k; 
+    //  Process i has states error_state(i-1)+1...error_state(i)
+    //  (The first one is the init, and the last one is the error state)
+    var k = 2 * nbProcesses
+    var allDLTS : Option[Buffer[DLTS]] = None
+
+    while allDLTS == None && k < configuration.get().maxDFASize do {
+      solver.push()
+      // val prefixes = Buffer.tabulate(this.nbProcesses)(_ => Set[Trace]())
+      // State reached in process when reading given trace:
+      val states_at = Buffer.tabulate(this.nbProcesses)(_ => HashMap[Trace, z3.IntExpr]())
+      for process <- 0 until nbProcesses do {
+        for (w, varw) <- samples(process) do {
+          val proj_w = w.filter(proofSkeleton.assumptionAlphabets(process).contains(_))
+          for i <- 0 to proj_w.size do {
+            val prefix = proj_w.dropRight(i)
+            // prefixes(process) = prefixes(process).incl(prefix)
+            states_at(process).put(prefix, z3ctx.mkIntConst(s"q${process}${prefix.toString()}"))
+          }
+        }
+      }
+
+      val error_state = HashMap[Int, z3.IntExpr]()
+      for i <- -1 until nbProcesses do {
+        error_state.put(i, z3ctx.mkIntConst(s"error(${i})"))
+      }
+
+      // (process, sigma) is mapped to a next-state function N -> N
+      val next = Buffer.tabulate(this.nbProcesses)(_ => HashMap[String, z3.FuncDecl[com.microsoft.z3.ArithSort]]())
+
+      solver.add(z3ctx.mkEq(error_state(-1), z3ctx.mkInt(0)))
+      for i <- -1 until nbProcesses-1 do {
+        // error_state(i) + 2 <= error_state(i+1)
+        solver.add(z3ctx.mkLe(z3ctx.mkAdd(error_state(i), z3ctx.mkInt(2)), error_state(i+1)))
+      }
+      solver.add(z3ctx.mkEq(error_state(nbProcesses-1), z3ctx.mkInt(k)))
+      for process <- 0 to nbProcesses-1 do {
+        for sigma <- proofSkeleton.assumptionAlphabets(process) do {
+          next(process).put(sigma, z3ctx.mkFuncDecl(s"next${process}_${sigma}", z3ctx.mkIntSort(), z3ctx.mkIntSort()))
+          for q <- 1 to k do {
+            // error_state(i-1) < q <= error_state(i) -> error_state(i-1) < next(i)(sigma) <= error_state(i)
+            val q_in_i = z3ctx.mkAnd(z3ctx.mkLe(z3ctx.mkInt(q), error_state(process)), z3ctx.mkGt(z3ctx.mkInt(q), error_state(process-1)))          
+            solver.add(z3ctx.mkImplies(q_in_i, z3ctx.mkLe(z3ctx.mkApp(next(process)(sigma), z3ctx.mkInt(q)), error_state(process))))
+            solver.add(z3ctx.mkImplies(q_in_i, z3ctx.mkGt(z3ctx.mkApp(next(process)(sigma), z3ctx.mkInt(q)), error_state(process-1))))
+          }
+        }
+      }
+      for process <- 0 until nbProcesses do {
+        // Set initial states
+        solver.add(z3ctx.mkEq(states_at(process)(List()), z3ctx.mkAdd(error_state(process-1), z3ctx.mkInt(1))))
+
+        // Make error absorbing
+        for sigma <- proofSkeleton.assumptionAlphabets(process) do {
+          solver.add(z3ctx.mkEq(error_state(process), z3ctx.mkApp(next(process)(sigma), error_state(process))))
+        }
+
+        // If w and w.sigma are both in prefixes of process, then 
+        // the next_{process, sigma}( states_at(w) ) = states_at(w.sigma)
+        for (w, state_w) <- states_at(process) do {
+          for sigma <- proofSkeleton.assumptionAlphabets(process) do {
+            val wsigma = w.appended(sigma)
+            if states_at(process).contains(wsigma) then {
+              solver.add(z3ctx.mkEq(z3ctx.mkApp(next(process)(sigma), state_w), states_at(process)(wsigma)))
+            }
+          }
+        }
+        // (process, w) <=> states_at(w) is accepting
+        for (w, accept_w) <- samples(process) do {
+          val proj_w = w.filter(proofSkeleton.assumptionAlphabets(process).contains(_))
+          solver.add(z3ctx.mkIff(accept_w, z3ctx.mkNot(z3ctx.mkEq(states_at(process)(proj_w), error_state(process)))))
+        }
+      }
+      logger.debug(s"Assertions:")
+      for ass <- solver.getAssertions() do {
+        logger.debug(ass.toString())
+      }
+      if solver.check() == z3.Status.SATISFIABLE then {
+        val m = solver.getModel()
+        // logger.debug(s"Model: ${m}")
+        val all_dlts = Buffer.tabulate[DLTS](nbProcesses)(
+          process =>
+            val m = solver.getModel()
+            val sizeExpr = m.eval(z3ctx.mkSub(error_state(process), error_state(process-1)), false)
+            assert(sizeExpr != null)
+            val dfaSize = Integer.parseInt(sizeExpr.toString())
+            val offset = Integer.parseInt(m.eval(error_state(process-1), false).toString()) + 1
+            logger.info(s"DFA for ${process} has size ${sizeExpr.toString()} and initial state: ${offset}")
+          
+            val listAlphabet = proofSkeleton.assumptionAlphabets(process).toList
+            val newDFA =
+              new FastDFA(Alphabets.fromList(listAlphabet))
+            val states =
+              (0 until dfaSize).map(i => newDFA.addState(i < dfaSize - 1))
+            newDFA.setInitial(states(0), true)
+            for s <- 0 until dfaSize do {
+              for alpha <- listAlphabet do {
+                val next_state = Integer.parseInt(m.eval(z3ctx.mkApp(next(process)(alpha), z3ctx.mkInt(s+offset)), false).toString())
+                newDFA.setTransition(states(s), alpha, states(next_state - offset))
+              }
+            }
+            val dlts = DLTS(s"assumption${process}", newDFA.pruned, proofSkeleton.assumptionAlphabets(process))
+            // dlts.visualize()
+            dlts
+        )
+        allDLTS = Some(all_dlts)
+      }
+      solver.pop()
+      k += 1
+    }
+    allDLTS
   }
 }
 

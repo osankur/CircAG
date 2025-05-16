@@ -94,11 +94,14 @@ object Main {
         opt[String]("constraintStrategy")
           .action({(x, c) => x match {
             case "Disjunctive" => 
-              c.copy(constraintStrategy = dfa.ConstraintStrategy.DisjunctiveSeparate, 
+              c.copy(constraintStrategy = dfa.ConstraintStrategy.Disjunctive, 
                     dfaLearningAlgorithm = DFALearningAlgorithm.SAT)
-            case _ => c.copy(constraintStrategy = dfa.ConstraintStrategy.Eager)
+            case "DisjunctiveSeparate" => 
+              c.copy(constraintStrategy = dfa.ConstraintStrategy.DisjunctiveSeparate)
+            case "Eager" => 
+              c.copy(constraintStrategy = dfa.ConstraintStrategy.Eager)
           }})
-          .text("Constraint strategy: Eager | Disjunctive"),
+          .text("Constraint strategy: Eager | DisjunctiveSeparate | Disjunctive"),
         cmd("product")
           .action((_, c) => c.copy(cmd = "product")),
         cmd("dfa")
