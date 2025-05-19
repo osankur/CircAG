@@ -426,10 +426,6 @@ class LTLDisjunctiveGenerator(_system : SystemSpec, _proofSkeleton : LTLProofSke
               }
           })
       })
-      // println("Generated:")
-      // println(s"Minterm: ${currentAssignment}")
-      // println(s"Positive samples: ${positiveSamples}")
-      // println(s"Negative samples: ${negativeSamples}")
 
       statistics.Timers.incrementTimer("z3", (System.nanoTime() - beginTime))
       solver.pop()
@@ -516,7 +512,6 @@ class LTLDisjunctiveGenerator(_system : SystemSpec, _proofSkeleton : LTLProofSke
             }
           }) 
       :_*)
-    // println(s"refineConstraintByFinal: ${constraint}")
     solver.add(constraint)
   }
 
@@ -551,7 +546,7 @@ class LTLDisjunctiveGenerator(_system : SystemSpec, _proofSkeleton : LTLProofSke
                       blockCurrentAssignment()
                       throw UnsatAssumption()
                     case Some(ltl) => 
-                      // logger.debug(s"Samples2LTL generated formula ${ltl} for ${i}")
+                      logger.debug(s"Samples2LTL generated formula ${ltl} for ${i}")
                       ltl
                   }
                 }

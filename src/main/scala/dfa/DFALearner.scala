@@ -368,9 +368,6 @@ class SATLearner(name: String, alphabet: Alphabet)
           System.nanoTime() - beginTime
         )
         val dlts = getDLTS()
-        // System.out.println(s"Pos:${positiveSamples}")
-        // System.out.println(s"Neg:${negativeSamples}")
-        // dlts.visualize()
         this.positiveSamples.foreach(
           tr => if !(dlts.dfa.accepts(tr)) then {
             System.out.println(s"Pos not accepted:${tr}")

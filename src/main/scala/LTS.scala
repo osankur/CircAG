@@ -106,7 +106,6 @@ object DLTS {
     for i <- 1 to dfa.size() do {
       newStates.append(liftedDFA.addState())
     }
-    // System.out.println(s"liftedDFA size: ${liftedDFA.size}, alphabet size: ${liftedDFA.getInputAlphabet()}")
     dfa.getInitialStates().foreach({s =>liftedDFA.setInitialState(newStates(s.getId()))})
     for s <- dfa.getStates() do {
       liftedDFA.setAccepting(newStates(s.getId()), dfa.isAccepting(s))
@@ -115,7 +114,6 @@ object DLTS {
       }
       for sigma <- alphabet do {
         for sprime <- dfa.getSuccessors(s, sigma) do {
-          // System.out.println(s"${(s,s.getId())} -> ${sprime} by ${sigma}")
           liftedDFA.setTransition(newStates(s.getId()), sigma, newStates(sprime.getId()))
         }
       }
@@ -157,11 +155,6 @@ object DLTS {
               cdfa.removeAllTransitions(s)
             }
           )
-        // System.out.println(cdfa.getInputAlphabet())
-        // System.out.println(s"${dlts.name} before lift-stripping for alphabet ${extendedAlphabet}")
-        // Visualization.visualize(dlts.dfa, Alphabets.fromList(dlts.alphabet.toList))
-        // System.out.println(s"${dlts.name} after lift-stripping")
-        // Visualization.visualize(liftedDLTS.dfa, Alphabets.fromList(liftedDLTS.alphabet.toList))
         liftedDLTS
     }
   }
@@ -411,23 +404,6 @@ object DLTS {
           }
         }
       )
-    // def isAcceptingReachable(s: Int): Boolean = {
-    //   val visited = Array.fill(newDFA.size)(false)
-    //   def dfs(s: Int): Boolean = {
-    //     if newDFA.isAccepting(s) then {
-    //       true
-    //     } else if !visited(s) then {
-    //       visited(s) = true
-    //       // System.out.println(alphabet.toSeq.map(newDFA.getSuccessors(s, _)))
-    //       alphabet.toSeq
-    //         .map(newDFA.getSuccessors(s, _).exists({ dfs(_) }))
-    //         .exists({ x => x })
-    //     } else {
-    //       false
-    //     }
-    //   }
-    //   dfs(s)
-    // }
     newDFA
       .getStates()
       .filter(!newDFA.isAccepting(_))

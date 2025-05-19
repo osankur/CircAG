@@ -185,16 +185,10 @@ class Interactive(
         dfaVerifier.setAssumption(processID, dlts)
         invalidateDFAProofState(processID)
     }
-    // def setDFAAssumptionDependencies(processID : Int, deps : Set[Int]) : Unit = {
-    //     dfaVerifier.proofSkeleton.setProcessDependencies(processID, deps)
-    // }
     def setDFAGlobalProperty(dlts : DLTS) : Unit = {
         dfaPropertyProofState = DFAProofState.Unknown
         dfaVerifier.setGlobalProperty(dlts)
     }
-    // def setDFAGlobalPropertyDependencies(deps : Set[Int]) : Unit = {
-    //     dfaVerifier.proofSkeleton.setPropertyDependencies(deps)
-    // }
     /**
       * Show the state of the proof
       */
