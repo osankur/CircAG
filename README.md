@@ -2,7 +2,7 @@
 This is an automatic assume-guarantee model checker using either DFA assumptions to check properties over finite traces or LTL assumptions
 over infinite traces. Both algorithms are described in the following paper:
 
-- Ocan Sankur. Automatic Assume-Guarantee Reasoning for Safety andLiveness Using Passive Learning. 2024.
+- Ocan Sankur. Automatic Assume-Guarantee Reasoning for Safety and Liveness Using Passive Learning. Formal Methods in System Design. 2025.
 
 The tool can be used in two modes. First, it offers a fully automatic algorithm which learns assumptions to apply the assume-guarantee rule and prove (or disprove) the desired property.
 Moreover, the API can be used in the Scala console interactively to prove properties on systems with manually selected assumptions. It is also possible to specify some of the assumptions, and let the algorithm learn the rest of them.
@@ -13,9 +13,9 @@ The assume-guarantee proof rules were originally described in the following pape
 
 - McMillan, Kenneth L. "A methodology for hardware verification using compositional model checking." Science of Computer Programming 37, no. 1-3 (2000): 279-309.
 
-We currently use the model checker (TChecker)[https://github.com/ticktac-project/tchecker] for all model checking queries. This has the advantage of being open source, but also having a simple input format supporting synchronized products of labeled transition systems (which is required by the proof rules). However, it is easy to extend the tool to other model checkers. There are plans to do this in the future.
-We use the [LearnLib](https://github.com/LearnLib/) for DFA learning and automata manipulation, and [Samples2LTL](https://github.com/ivan-gavran/samples2LTL)
-for learning LTL formulas.
+We currently use the model checker [TChecker](https://github.com/ticktac-project/tchecker) for all model checking queries. This has the advantage of being open source, but also having a simple input format supporting synchronized products of labeled transition systems (which is required by the proof rules). However, it is easy to extend the tool to other model checkers. There are plans to do this in the future.
+
+We use the [LearnLib](https://github.com/LearnLib/) for DFA learning and automata manipulation, and [Samples2LTL](https://github.com/ivan-gavran/samples2LTL) for learning LTL formulas.
 
 ## Dependencies and Installation
 You need

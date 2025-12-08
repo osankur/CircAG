@@ -30,28 +30,12 @@ case class Configuration(
     verbose: Boolean = false,
     verbose_MembershipQueries : Boolean = false,
     tmpDirPath : Path = Files.createTempDirectory("circag"),
-    // tmpDirName: String = "/tmp/circag",
     dumpAssumptions : Boolean = false,
     alphabetRefinement : Boolean = false,
     dfaLearningAlgorithm : DFALearningAlgorithm = DFALearningAlgorithm.RPNI,
     constraintStrategy : ConstraintStrategy = ConstraintStrategy.Eager,
     randomSeed : Int = 0
 ) {
-  // private var tmpDirPath: Option[Path] = None
-  // def getTmpDirPath(): Path = {
-  //   tmpDirPath match {
-  //     case None =>
-  //       val p = FileSystems.getDefault().getPath(tmpDirName);
-  //       p.toFile().mkdirs()
-  //       for(file <- p.toFile().listFiles()){
-  //         if (!file.isDirectory()) 
-  //           file.delete()
-  //       }
-  //       tmpDirPath = Some(p)
-  //       p
-  //     case Some(f) => f
-  //   }
-  // }
 }
 
 var globalConfiguration = Configuration()

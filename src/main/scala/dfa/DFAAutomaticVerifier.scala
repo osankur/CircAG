@@ -45,15 +45,6 @@ class DFAAutomaticVerifier(
     }
   }
 
-  // def this(
-  //     ltsFiles: Array[File],
-  //     property: Option[DLTS],
-  //     dfaLearnerAlgorithm: DFALearningAlgorithm,
-  //     constraintStrategy : ConstraintStrategy
-  // ) = {
-  //   this(SystemSpec(ltsFiles, property), dfaLearnerAlgorithm, constraintStrategy)
-  // }
-
   protected val logger = LoggerFactory.getLogger("CircAG")
   protected var dfaGenerator =
     DFAGenerator.getGenerator(

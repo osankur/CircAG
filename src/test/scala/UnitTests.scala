@@ -69,8 +69,6 @@ class Z3Tests extends munit.FunSuite {
   test("z3 enum sort"){
     val cfg = HashMap[String, String]()
     cfg.put("model", "true");
-    // cfg.put("proof", "true");
-    // cfg.put("unsat_core", "true")
     val ctx = Context(cfg);      
     val solver3 = ctx.mkSolver()
     val enumSort = ctx.mkEnumSort("T", Array[String]("a","b","c") : _*);
@@ -99,10 +97,6 @@ class Z3Tests extends munit.FunSuite {
     val solver = ctx.mkSolver()
     solver.add(e)
     assert(solver.check(vary) == Status.UNSATISFIABLE)
-    // System.out.println(solver.getProof())
-    // for ass <- solver.getUnsatCore() do {
-    //   System.out.println(ass)
-    // }    
   }
 }
 
@@ -125,12 +119,6 @@ class TAandLTSTests extends munit.FunSuite {
   }
 
   test("Lasso graph parsing optimizations"){
-    // val tck_output = """digraph _hoa_ {
-    //   0 [initial="true", intval="", labels="", vloc="<qs0>", zone="()"]
-    //   1 [final="true", intval="", labels="_hoa__ltl_acc_", vloc="<qs3>", zone="()"]
-    //   0 -> 1 [guard="", reset="", src_invariant="", tgt_invariant="", vedge="<_hoa_@a>"]
-    //   1 -> 1 [guard="", reset="", src_invariant="", tgt_invariant="", vedge="<_hoa_@a>"]
-    //   }"""
     val tck_output1 = """digraph _hoa_ {
       0 [final="true", intval="", labels="", vloc="<qs0>", zone="()"]
       1 [final="true", intval="", labels="", vloc="<qs0>", zone="()"]
@@ -578,7 +566,6 @@ class DFAAAG extends munit.FunSuite {
    val aut : DFA[java.lang.Integer, String] =
       AutomatonBuilders
         .newDFA(inputs2)
-        // .forDFA(FastDFA(inputs2))
         .withInitial("q0")
         .from("q0")
         .on("start1")
@@ -786,7 +773,6 @@ class LTLAGTests extends munit.FunSuite {
     println(learner.getLTL())
   }
   test("ltl inductive check: ltl-toy1 a b"){
-    // val ass = List("G ((a -> X !a) & !c)", "G F b")
     val ass = List("G ((a -> X !a))", "G F b")
     val ltlf = ass.map(LTL.fromString)
     System.out.println(s"LTL assumptions: ${ltlf}")
@@ -804,20 +790,6 @@ class LTLAGTests extends munit.FunSuite {
 
 
 class Single extends munit.FunSuite {
-  // test("ltl learn assumptions: ltl-toy1 2 processes"){
-  //   val tas = Array(File("examples/ltl-toy1/a.tck"), File("examples/ltl-toy1/b.tck"))
-  //   val checker = LTLAutomaticVerifier(ltl.SystemSpec(tas, G(F(Atomic("a")))))
-  //   checker.setProcessInstantaneousDependencies(0, Set(1))
-  //   assert(checker.learnAssumptions(proveGlobalProperty = true) == LTLAGResult.Success)
-  // }
-  // test("ltl learn assumptions: ltl-toy1 3 processes"){
-  //   val tas = Array(File("examples/ltl-toy1/a.tck"), File("examples/ltl-toy1/b.tck"), File("examples/ltl-toy1/c.tck"))
-  //   val checker = LTLAutomaticVerifier(ltl.SystemSpec(tas, G(F(Atomic("a")))))
-  //   checker.setProcessInstantaneousDependencies(0, Set(1))
-  //   // The learned assumptions are: G (b -> (X a))) and (G (c U b)
-  //   // This corresponds to the only infinite execution in this product: abaac^omega
-  //   assert(checker.learnAssumptions(proveGlobalProperty = true) == LTLAGResult.Success)
-  // }
   test("ltl inductive check: ltl-toy1 applyAG"){
     val tas = Array(File("examples/ltl-toy1/a.tck"), File("examples/ltl-toy1/b.tck"))
     val checker = LTLVerifier(ltl.SystemSpec(tas, G(F(Atomic("a")))))
@@ -837,24 +809,6 @@ class Single extends munit.FunSuite {
 }
 
 class A extends munit.FunSuite {
-  //  test("buchi automata for sdn and ums"){
-  //     // val ta = TA.fromFile(File("examples/sdn/a.tck"))
-  //     // val bta = ta.buchiIntersection(NLTS.fromLTL("((G F (go | ask)) & (G F (change | send)) & ~(G(ask -> F go)))", None),"acc")
-  //     // println(bta)
-  //     val ta = TA.fromFile(File("examples/ums-1/a.tck"))
-  //     // val bta = ta.buchiIntersection(NLTS.fromLTL("((G F (start1 | end1 | err)) & (G F (req1 | rel1 | grant1)) & ~(G(start1 -> F end1)))", None),"acc")
-  //     val bta = ta.buchiIntersection(NLTS.fromLTL("((G F (start1 | end1 | err)) & (G F (req1 | rel1 | grant1)) & ~(F rel1))", None),"acc")
-  //     // val ta = TA.fromFile(File("examples/ums-1/a.tck"))
-  //     // val bta = ta.buchiIntersection(NLTS.fromLTL("((G F (start1 | end1 | start2 | end2 | err)) & (G F (req1 | rel1 | grant1 | req2 | grant2 | rel2)) & ~(G(start1 -> F end1)))", None),"acc")
-  //     // val bta = ta.buchiIntersection(NLTS.fromLTL("((G F (start1 | end1 | start2 | end2 | err)) & (G F (req1 | rel1 | grant1 | req2 | grant2 | rel2)) & ~(F rel1))", None),"acc")
-  //     println(bta)
-  //   }    
-//  test("DFA learn assumptions: ums-1"){
-//     val tas = Array(File("examples/ums-1/user.tck"), File("examples/ums-1/scheduler.tck"), File("examples/ums-1/machine.tck"))
-//     val checker = DFAAutomaticVerifier(dfa.SystemSpec(tas, Some(DLTS.fromErrorSymbol("err"))))
-//     // val checker = LTLAutomaticVerifier(ltl.SystemSpec(tas, LTL.fromString("F(rel1)"))) // fails
-//     checker.learnAssumptions(true)
-//   }
   test("CEX Parsing from String"){
     val tck_output = """
       digraph _premise_scheduler {

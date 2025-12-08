@@ -10,9 +10,6 @@ import fr.irisa.circag.ltl._
 enum DFAProofState:
     override def toString() : String = {
         this match {
-            // case DFAProofState.Unknown => s"${AnsiColor.BLUE}?${AnsiColor.RESET}"
-            // case DFAProofState.Proved => s"${AnsiColor.GREEN}\u2713${AnsiColor.RESET}"
-            // case DFAProofState.Disproved(cex) => s"${AnsiColor.RED}X (${cex}) ${AnsiColor.RESET}"
             case DFAProofState.Unknown => s"?"
             case DFAProofState.Proved => s"\u2705"
             case DFAProofState.PremiseSucceeded => s"(\u2705)?"
@@ -185,16 +182,12 @@ class Interactive(
         dfaVerifier.setAssumption(processID, dlts)
         invalidateDFAProofState(processID)
     }
-    // def setDFAAssumptionDependencies(processID : Int, deps : Set[Int]) : Unit = {
-    //     dfaVerifier.proofSkeleton.setProcessDependencies(processID, deps)
-    // }
+
     def setDFAGlobalProperty(dlts : DLTS) : Unit = {
         dfaPropertyProofState = DFAProofState.Unknown
         dfaVerifier.setGlobalProperty(dlts)
     }
-    // def setDFAGlobalPropertyDependencies(deps : Set[Int]) : Unit = {
-    //     dfaVerifier.proofSkeleton.setPropertyDependencies(deps)
-    // }
+
     /**
       * Show the state of the proof
       */

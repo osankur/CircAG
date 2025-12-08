@@ -289,8 +289,6 @@ class DFADisjunctiveGenerator(
         then {
           solver.add(v)
         } else {
-          // System.out.println(s"Ass ${i} accepts word: ${(trace.filter(proofSkeleton.assumptionAlphabets(i)))}: ${dlts.dfa.accepts(trace.filter(proofSkeleton.assumptionAlphabets(i)))}")
-          // dlts.visualize()
           solver.add(z3ctx.mkNot(v))
         }
       }
@@ -298,9 +296,6 @@ class DFADisjunctiveGenerator(
     var beginTime = System.nanoTime()
     if (solver.check() == z3.Status.UNSATISFIABLE) {
       statistics.Timers.incrementTimer("z3", (System.nanoTime() - beginTime))
-      for ass <- solver.getAssertions() do {
-        println(ass)
-      }
       solver.pop()
       None
     } else {
@@ -348,7 +343,6 @@ class DFADisjunctiveGenerator(
       process: Int,
       sampleIndex: Int = 0
   ): Unit = {
-    // println(s"updateTheoryConstraints(process = $process). Process alphabet: ${system.processes(process).alphabet} Ass alphabet: ${proofSkeleton.assumptionAlphabets(process)}")
     for i <- sampleIndex until samples(process).size do {
       val projTrace_i = this
         .samples(process)(i)
@@ -361,16 +355,12 @@ class DFADisjunctiveGenerator(
           ._1
           .filter(proofSkeleton.assumptionAlphabets(process).contains(_))
         val vj = this.samples(process)(j)._2
-        // System.out.println(s"Comparing ${samples(process)(i)._1} - ${samples(process)(j)._1}")
-        // System.out.println(s"Whose projections are: ${projTrace_i} - ${projTrace_j}")
 
         if projTrace_i.startsWith(projTrace_j) then {
           solver.add(z3ctx.mkImplies(vi, vj))
-          // System.out.println(s"\t $vi -> $vj (theory)")
         }
         if projTrace_j.startsWith(projTrace_i) then {
           solver.add(z3ctx.mkImplies(vj, vi))
-          // System.out.println(s"\t   $vi <- $vj (theory)")
         }
       }
     }

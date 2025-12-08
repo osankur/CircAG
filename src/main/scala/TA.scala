@@ -93,7 +93,6 @@ class TA (
             .format(modelFile.toString, label, certFile.toString)
 
     TA.logger.debug(s"${BLUE}${cmd}${RESET}")
-    // System.out.println(cmd)
 
     val output = cmd.!!
     val cex = scala.io.Source.fromFile(certFile).getLines().toList
@@ -151,7 +150,7 @@ class TA (
   /**
     * Compute TA with a Buchi acceptance condition which recognizes the intersection of lts and this.
     * 
-    * Because the model checker is base on accepting states and not accepting labels, we need to make sure
+    * Because the model checker is based on accepting states and not accepting labels, we need to make sure
     * to exclude inf runs in which the lts stays forever in an accepting state (and not take any transition).
     * This the case e.g. if the lts is a^\omega an if the other process reads, say, \tau^\omega.
     * To do this, 
@@ -352,11 +351,9 @@ object TA{
       case regProcess(monitorProcessName) =>
         currentProcess = monitorProcessName
         ta.eventsOfProcesses += (monitorProcessName -> Set[String]())
-      // System.out.println("Now reading process: " + monitorProcessName)
       case regEdge(sync) =>
         ta.eventsOfProcesses.put(currentProcess,
           (ta.eventsOfProcesses(currentProcess) + sync))
-      // System.out.println("Adding sync: " + sync)
       case _ => ()
     }
     ta.core = lines.filter({
@@ -517,8 +514,6 @@ object TA{
     def unionOfList[A](l : List[Set[A]]) : Set[A] = {
       l.foldLeft(Set[A]())({(a,b) => a | b})
     }
-    // println("Product of:")
-    // tas.foreach(ta => println(s"${ta.systemName} on alphabet ${ta.alphabet}"))
     val allProcesses = unionOfList(tas.map(_.eventsOfProcesses.keys().toSet)).toList
     val processCount = (tas.map(_.eventsOfProcesses.keys().size)).sum
     if allProcesses.size < processCount then {
@@ -555,23 +550,18 @@ object TA{
       cexDescription.foreach({
         case regState(i, content) => 
           // content contains the following attributes: final, initial, intval, labels, vloc, zone
-          // println(s"Read state $i with content: $content")
           states.put(i.toInt, content)
         case regEdge(src,tgt,syncList) => 
           val singleSync = syncList.split(",").map(_.split("@")(1)).toSet//.intersect(events)
           if (singleSync.size == 1){
             val a = singleSync.toArray
-            // word.append(a(0))
             edges.put(src.trim.toInt, (a(0), tgt.trim.toInt))
-            // parents.put(tgt.trim.toInt, src.trim.toInt)
-            // println(s"Added ${(tgt.trim.toInt, src.trim.toInt)}")
-            // println(s"parents: ${parents}")
           } else if (singleSync.size > 1){
             throw FailedTAModelChecking("The counterexample trace has a transition with syncs containing more than one letter of the alphabet:\n" + syncList)
           } else {
             // Ignore internal transition
           }
-        case line => //println(s"Ignoring line ${line}")
+        case line =>
       })
       (states,edges)
   }
