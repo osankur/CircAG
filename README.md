@@ -14,8 +14,8 @@ The assume-guarantee proof rules were originally described in the following pape
 - McMillan, Kenneth L. "A methodology for hardware verification using compositional model checking." Science of Computer Programming 37, no. 1-3 (2000): 279-309.
 
 We currently use the model checker [TChecker](https://github.com/ticktac-project/tchecker) for all model checking queries. This has the advantage of being open source, but also having a simple input format supporting synchronized products of labeled transition systems (which is required by the proof rules). However, it is easy to extend the tool to other model checkers. There are plans to do this in the future.
-
-We use the [LearnLib](https://github.com/LearnLib/) for DFA learning and automata manipulation, and [Samples2LTL](https://github.com/ivan-gavran/samples2LTL) for learning LTL formulas.
+We use the [LearnLib](https://github.com/LearnLib/) for DFA learning and automata manipulation, and [Samples2LTL](https://github.com/ivan-gavran/samples2LTL)
+for learning LTL formulas.
 
 ## Dependencies and Installation
 You need
@@ -51,11 +51,10 @@ To check out and test the samples2LTL and Scarlet submodules, run:
     git submodule update
     cd samples2ltl
     pip3 install -r requirements.txt
+
+You can test as follows:
+
     python3 samples2LTL.py --sat --traces traces/alt.trace
-    cd ../Scarlet
-    pip3 install -r requirements.txt
-    cd ..
-    python3 -m Scarlet.ltllearner
 
 
 ## License
@@ -73,11 +72,11 @@ All variables and clocks must have distinct names. These processes synchronize o
 The --err option is used to pass the label that defines the safety property: AG!err.
 
 A passive learning algorithm (RPNI or SAT) is used to learn assumption DFAs for each process separately. You can specify the passive DFA learning algorithm using the option `--dfaLearningAlgorithm RPNI` or `--dfaLearningAlgorithm SAT`. 
-You can add the option `--visualizeDFA true` to see the assumption DFAs that were learned at the end of a successful verification.
+You can add the option `--visualizeAssumptions true` to see the assumption DFAs that were learned at the end of a successful verification.
 
 ### Other examples
-    java -jar CircAG.jar dfa --files "examples/toy/lts1.tck,examples/toy/lts2.tck,examples/toy/lts3.tck" --err "err"
-    java -jar CircAG.jar dfa --files "examples/seq-toy/lts0.tck,examples/seq-toy/lts1.tck,examples/seq-toy/lts2.tck,examples/seq-toy/lts3.tck" --err "err"
+    java -jar CircAG.jar dfa --dir examples/toy --err err
+    java -jar CircAG.jar dfa --dir examples/seq-toy --err err
     java -jar CircAG.jar dfa --files "examples/ums-2/machine.tck,examples/ums-2/scheduler.tck,examples/ums-2/user.tck" --err "err"
     java -jar CircAG.jar dfa --files "examples/simple-sdn/device.tck,examples/simple-sdn/switch.tck,examples/simple-sdn/controller.tck,examples/simple-sdn/supervisor.tck,examples/simple-sdn/observer.tck" --err "err"
     java -jar CircAG.jar dfa --files "examples/sdn/device.tck,examples/sdn/switch.tck,examples/sdn/controller.tck,examples/sdn/supervisor.tck,examples/sdn/observer.tck" --err "err"
@@ -106,7 +105,7 @@ Alternatively, just run `interactive.sh`.
 
 ## Debug level
 Use the following property while running the jar to set debug level to debug
-    
+
      -Dorg.slf4j.simpleLogger.defaultLogLevel=debug
 
 # Author

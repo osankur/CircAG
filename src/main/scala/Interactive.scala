@@ -182,12 +182,10 @@ class Interactive(
         dfaVerifier.setAssumption(processID, dlts)
         invalidateDFAProofState(processID)
     }
-
     def setDFAGlobalProperty(dlts : DLTS) : Unit = {
         dfaPropertyProofState = DFAProofState.Unknown
         dfaVerifier.setGlobalProperty(dlts)
     }
-
     /**
       * Show the state of the proof
       */

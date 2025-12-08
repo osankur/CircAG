@@ -540,6 +540,7 @@ class LTLDisjunctiveGenerator(_system : SystemSpec, _proofSkeleton : LTLProofSke
                       blockCurrentAssignment()
                       throw UnsatAssumption()
                     case Some(ltl) => 
+                      logger.debug(s"Samples2LTL generated formula ${ltl} for ${i}")
                       ltl
                   }
                 }

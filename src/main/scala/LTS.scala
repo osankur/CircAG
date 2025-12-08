@@ -106,7 +106,6 @@ object DLTS {
     for i <- 1 to dfa.size() do {
       newStates.append(liftedDFA.addState())
     }
-    // System.out.println(s"liftedDFA size: ${liftedDFA.size}, alphabet size: ${liftedDFA.getInputAlphabet()}")
     dfa.getInitialStates().foreach({s =>liftedDFA.setInitialState(newStates(s.getId()))})
     for s <- dfa.getStates() do {
       liftedDFA.setAccepting(newStates(s.getId()), dfa.isAccepting(s))
@@ -115,7 +114,6 @@ object DLTS {
       }
       for sigma <- alphabet do {
         for sprime <- dfa.getSuccessors(s, sigma) do {
-          // System.out.println(s"${(s,s.getId())} -> ${sprime} by ${sigma}")
           liftedDFA.setTransition(newStates(s.getId()), sigma, newStates(sprime.getId()))
         }
       }
@@ -225,17 +223,16 @@ object DLTS {
   }
 
 
-  def fromErrorSymbol(symbol : Symbol, dltsName : String = "") : DLTS = {
-    require(symbol != "")
-    val alph = Alphabets.fromList(List(symbol))
-    val errDFA = AutomatonBuilders
-      .forDFA(FastDFA(alph))
-      .withInitial("q0")
-      .from("q0")
-      .on(symbol)
-      .to("q1")
-      .withAccepting("q0")
-      .create()
+  def fromErrorSymbol(symbols : Seq[Symbol], dltsName : String = "") : DLTS = {
+    require(symbols.size > 0)
+    val alph = Alphabets.fromList(symbols.toList)
+    val errDFA = FastDFA(alph)
+    val q0 = errDFA.addState(true)
+    val q1 = errDFA.addState(false)
+    errDFA.setInitial(q0, true)
+    for symbol <- symbols do {
+      errDFA.setTransition(q0, symbol, q1)
+    }
     DLTS(dltsName, errDFA, alph.toSet)
   }
 

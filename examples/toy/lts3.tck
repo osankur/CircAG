@@ -1,0 +1,12 @@
+system:lts3
+event:d
+event:e
+event:err
+
+process:lts3
+location:lts3:q1{initial:}
+location:lts3:q2
+location:lts3:q3
+edge:lts3:q1:q1:e
+edge:lts3:q1:q2:d
+edge:lts3:q2:q2:err

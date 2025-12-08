@@ -1,0 +1,39 @@
+system:client1
+
+event:fail
+event:recover
+
+event:err1
+event:s0
+event:r1
+event:s1
+event:r2
+
+event:_tau
+int:1:0:64:0:a1
+int:1:0:64:0:b1
+
+
+process:client1
+location:client1:init{initial:}
+location:client1:failed
+location:client1:sent
+location:client1:received
+location:client1:err{labels:err1}
+edge:client1:init:init:_tau{do : if a1 < 64 then a1 = a1 + 1 else a1 = 0 end}
+edge:client1:init:init:_tau{do : if b1 < 64 then b1 = b1 + 1 else b1 = 0 end}
+
+edge:client1:init:failed:fail
+edge:client1:failed:init:recover
+
+edge:client1:failed:failed:r2
+
+
+edge:client1:init:received:s0
+edge:client1:received:init:r1
+
+edge:client1:init:sent:s1{provided : a1 == 0}
+edge:client1:sent:init:r2{provided : b1 == 0}
+
+edge:client1:init:err:r2
+edge:client1:err:err:err1

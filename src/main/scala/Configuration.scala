@@ -23,7 +23,7 @@ object FSM {
 case class Configuration(
     cmd : String = "",
     ltsFiles : Array[File] = Array[File](),
-    err: String = "",
+    err: List[String] = List(),
     ltlProperty : Option[String] = None,
     ltsFormat: FSM.FSMFormat = FSM.FSMFormat.TCheckerTA,
     keepTmpFiles: Boolean = true,
@@ -31,10 +31,12 @@ case class Configuration(
     verbose_MembershipQueries : Boolean = false,
     tmpDirPath : Path = Files.createTempDirectory("circag"),
     dumpAssumptions : Boolean = false,
+    visualizeAssumptions : Boolean = false,
     alphabetRefinement : Boolean = false,
     dfaLearningAlgorithm : DFALearningAlgorithm = DFALearningAlgorithm.RPNI,
     constraintStrategy : ConstraintStrategy = ConstraintStrategy.Eager,
-    randomSeed : Int = 0
+    randomSeed : Int = 0,
+    maxDFASize : Int = 128
 ) {
 }
 

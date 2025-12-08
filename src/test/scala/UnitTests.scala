@@ -372,7 +372,7 @@ class DFAAAG extends munit.FunSuite {
         .withAccepting("q0")
         .create();
 
-    val ver = dfa.DFAAutomaticVerifier(dfa.SystemSpec(Array(File("examples/simple-ums/user.tck"), File("examples/simple-ums/scheduler.tck"), File("examples/simple-ums/machine.tck")), Some(DLTS.fromErrorSymbol("err"))))
+    val ver = dfa.DFAAutomaticVerifier(dfa.SystemSpec(Array(File("examples/simple-ums/user.tck"), File("examples/simple-ums/scheduler.tck"), File("examples/simple-ums/machine.tck")), Some(DLTS.fromErrorSymbol(List("err")))))
     ver.setAssumption(0, DLTS("user", gUser, gUser.getInputAlphabet().toSet))
     ver.setAssumption(1, DLTS("sched", gSched, gSched.getInputAlphabet().toSet))
     ver.setAssumption(2, DLTS("machine", gMachine, gMachine.getInputAlphabet().toSet))
@@ -508,7 +508,7 @@ class DFAAAG extends munit.FunSuite {
     assert(errDFA.pruned.isPrunedSafety)
     assert(gUser.isPrunedSafety)
     assert(gUser.isSafety)
-    val ver = dfa.DFAAutomaticVerifier(dfa.SystemSpec(Array(File("examples/simple-ums/user.tck"), File("examples/simple-ums/scheduler.tck"), File("examples/simple-ums/machine.tck")), Some(DLTS.fromErrorSymbol("err"))))
+    val ver = dfa.DFAAutomaticVerifier(dfa.SystemSpec(Array(File("examples/simple-ums/user.tck"), File("examples/simple-ums/scheduler.tck"), File("examples/simple-ums/machine.tck")), Some(DLTS.fromErrorSymbol(List("err")))))
     ver.setAssumption(0, DLTS("user", gUser, gUser.getInputAlphabet().toSet))
     ver.setAssumption(1, DLTS("sched", gSched, gSched.getInputAlphabet().toSet))
     ver.setAssumption(2, DLTS("machine", gMachine, gMachine.getInputAlphabet().toSet))
@@ -522,9 +522,9 @@ class DFAAAG extends munit.FunSuite {
 
   test("toy: with SAT, UFSAT, RPNI"){
     val files = Array(File("examples/toy/lts1.tck"),File("examples/toy/lts2.tck"),File("examples/toy/lts3.tck"))
-    val verSAT = dfa.DFAAutomaticVerifier(dfa.SystemSpec(files, Some(DLTS.fromErrorSymbol("err"))), dfa.DFALearningAlgorithm.SAT)
-    val verUFSAT = dfa.DFAAutomaticVerifier(dfa.SystemSpec(files, Some(DLTS.fromErrorSymbol("err"))), dfa.DFALearningAlgorithm.UFSAT)
-    val verRPNI = dfa.DFAAutomaticVerifier(dfa.SystemSpec(files, Some(DLTS.fromErrorSymbol("err"))), dfa.DFALearningAlgorithm.RPNI)
+    val verSAT = dfa.DFAAutomaticVerifier(dfa.SystemSpec(files, Some(DLTS.fromErrorSymbol(List("err")))), dfa.DFALearningAlgorithm.SAT)
+    val verUFSAT = dfa.DFAAutomaticVerifier(dfa.SystemSpec(files, Some(DLTS.fromErrorSymbol(List("err")))), dfa.DFALearningAlgorithm.UFSAT)
+    val verRPNI = dfa.DFAAutomaticVerifier(dfa.SystemSpec(files, Some(DLTS.fromErrorSymbol(List("err")))), dfa.DFALearningAlgorithm.RPNI)
     assert(verUFSAT.learnAssumptions() == AGResult.Success)
     assert(verSAT.learnAssumptions() == AGResult.Success)
     assert(verRPNI.learnAssumptions() == AGResult.Success)
@@ -532,19 +532,19 @@ class DFAAAG extends munit.FunSuite {
 
   test("seq-toy"){
     val files = Array(File("examples/seq-toy/lts0.tck"),File("examples/seq-toy/lts1.tck"),File("examples/seq-toy/lts2.tck"))
-    val verUFSAT =  dfa.DFAAutomaticVerifier(dfa.SystemSpec(files, Some(DLTS.fromErrorSymbol("err"))), dfa.DFALearningAlgorithm.SAT)
-    val verSAT =  dfa.DFAAutomaticVerifier(dfa.SystemSpec(files, Some(DLTS.fromErrorSymbol("err"))), dfa.DFALearningAlgorithm.SAT)
-    val verRPNI = dfa.DFAAutomaticVerifier(dfa.SystemSpec(files, Some(DLTS.fromErrorSymbol("err"))), dfa.DFALearningAlgorithm.RPNI)
+    val verUFSAT =  dfa.DFAAutomaticVerifier(dfa.SystemSpec(files, Some(DLTS.fromErrorSymbol(List("err")))), dfa.DFALearningAlgorithm.SAT)
+    val verSAT =  dfa.DFAAutomaticVerifier(dfa.SystemSpec(files, Some(DLTS.fromErrorSymbol(List("err")))), dfa.DFALearningAlgorithm.SAT)
+    val verRPNI = dfa.DFAAutomaticVerifier(dfa.SystemSpec(files, Some(DLTS.fromErrorSymbol(List("err")))), dfa.DFALearningAlgorithm.RPNI)
     assert(verRPNI.learnAssumptions() != AGResult.Success)
     assert(verSAT.learnAssumptions() != AGResult.Success)
     assert(verUFSAT.learnAssumptions() != AGResult.Success)
 
     val files2 = Array(File("examples/seq-toy/lts0.tck"),File("examples/seq-toy/lts1.tck"),File("examples/seq-toy/lts2.tck"),File("examples/seq-toy/lts3.tck"))
-    val ver2SAT = dfa.DFAAutomaticVerifier(dfa.SystemSpec(files2, Some(DLTS.fromErrorSymbol("err"))), dfa.DFALearningAlgorithm.SAT)
+    val ver2SAT = dfa.DFAAutomaticVerifier(dfa.SystemSpec(files2, Some(DLTS.fromErrorSymbol(List("err")))), dfa.DFALearningAlgorithm.SAT)
     assert(ver2SAT.learnAssumptions() == AGResult.Success)
-    val ver2UFSAT = dfa.DFAAutomaticVerifier(dfa.SystemSpec(files2, Some(DLTS.fromErrorSymbol("err"))), dfa.DFALearningAlgorithm.SAT)
+    val ver2UFSAT = dfa.DFAAutomaticVerifier(dfa.SystemSpec(files2, Some(DLTS.fromErrorSymbol(List("err")))), dfa.DFALearningAlgorithm.SAT)
     assert(ver2UFSAT.learnAssumptions() == AGResult.Success)
-    val ver2RPNI = dfa.DFAAutomaticVerifier(dfa.SystemSpec(files2, Some(DLTS.fromErrorSymbol("err"))), dfa.DFALearningAlgorithm.RPNI)
+    val ver2RPNI = dfa.DFAAutomaticVerifier(dfa.SystemSpec(files2, Some(DLTS.fromErrorSymbol(List("err")))), dfa.DFALearningAlgorithm.RPNI)
     assert(ver2RPNI.learnAssumptions() == AGResult.Success)
   }
 
@@ -809,6 +809,24 @@ class Single extends munit.FunSuite {
 }
 
 class A extends munit.FunSuite {
+  //  test("buchi automata for sdn and ums"){
+  //     // val ta = TA.fromFile(File("examples/sdn/a.tck"))
+  //     // val bta = ta.buchiIntersection(NLTS.fromLTL("((G F (go | ask)) & (G F (change | send)) & ~(G(ask -> F go)))", None),"acc")
+  //     // println(bta)
+  //     val ta = TA.fromFile(File("examples/ums-1/a.tck"))
+  //     // val bta = ta.buchiIntersection(NLTS.fromLTL("((G F (start1 | end1 | err)) & (G F (req1 | rel1 | grant1)) & ~(G(start1 -> F end1)))", None),"acc")
+  //     val bta = ta.buchiIntersection(NLTS.fromLTL("((G F (start1 | end1 | err)) & (G F (req1 | rel1 | grant1)) & ~(F rel1))", None),"acc")
+  //     // val ta = TA.fromFile(File("examples/ums-1/a.tck"))
+  //     // val bta = ta.buchiIntersection(NLTS.fromLTL("((G F (start1 | end1 | start2 | end2 | err)) & (G F (req1 | rel1 | grant1 | req2 | grant2 | rel2)) & ~(G(start1 -> F end1)))", None),"acc")
+  //     // val bta = ta.buchiIntersection(NLTS.fromLTL("((G F (start1 | end1 | start2 | end2 | err)) & (G F (req1 | rel1 | grant1 | req2 | grant2 | rel2)) & ~(F rel1))", None),"acc")
+  //     println(bta)
+  //   }    
+//  test("DFA learn assumptions: ums-1"){
+//     val tas = Array(File("examples/ums-1/user.tck"), File("examples/ums-1/scheduler.tck"), File("examples/ums-1/machine.tck"))
+//     val checker = DFAAutomaticVerifier(dfa.SystemSpec(tas, Some(DLTS.fromErrorSymbol(List("err")))))
+//     // val checker = LTLAutomaticVerifier(ltl.SystemSpec(tas, LTL.fromString("F(rel1)"))) // fails
+//     checker.learnAssumptions(true)
+//   }
   test("CEX Parsing from String"){
     val tck_output = """
       digraph _premise_scheduler {

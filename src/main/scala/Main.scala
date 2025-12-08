@@ -8,6 +8,8 @@ import org.slf4j.LoggerFactory
 import io.AnsiColor._
 import scopt.OParser
 import java.io._
+import java.nio.file.Files
+
 import net.automatalib.words.Word
 import net.automatalib.words.Alphabet;
 import net.automatalib.words.impl.Alphabets;
@@ -23,7 +25,6 @@ import scala.collection.immutable
 import collection.JavaConverters._
 import scala.annotation.static
 import com.microsoft.z3
-
 
 import net.automatalib.automata.fsa.impl.FastDFA
 import net.automatalib.automata.fsa.impl.FastDFAState
@@ -44,18 +45,28 @@ object Main {
         programName("CircAG"),
         head("circAG", "0.1"),
         opt[Seq[File]]("files")
-          .required()
           .valueName("<files>")
           .action(
             (x,c) =>
             c.copy(ltsFiles = x.toArray)
-          ),
-        opt[String]("err")
+          )
+          .text("List of .tck files defining the system"),
+        opt[File]("dir")
+          .valueName("<dir>")
+          .action(
+            (x, c) =>
+              if !x.isDirectory() then {
+                throw Exception(s"Argument to option dir must be a directory")
+              }
+              c.copy(ltsFiles = x.listFiles.filter({f => f.getName().endsWith((".tck"))} ))
+          )
+          .text("Directory containing the .tck files defining the system"),
+        opt[Seq[String]]("err")
           .valueName("<err>")
           .action((x, c) => 
-              c.copy(err = x)
+              c.copy(err = x.toList)
             )
-          .text("err is the label indicating an error; so that the property to be checked is 'G not err'."),
+          .text("list of labels considered to be an error; so that the property to be checked is 'G /\\_{e in err} e'."),
         opt[String]("ltlProperty")
           .valueName("<ltlProperty>")
           .action((x, c) => 
@@ -74,6 +85,10 @@ object Main {
           .action((x, c) => c.copy(dumpAssumptions = x))
           .valueName("(true|false)")
           .text("Dump the assumption DFAs or LTL formulas that were learned"),
+        opt[Boolean]("visualizeAssumptions")
+          .action((x, c) => c.copy(visualizeAssumptions = x))
+          .valueName("(true|false)")
+          .text("Visualize learned assumptions by a pop-up"),
         opt[String]("dfaLearningAlgorithm")
           .action({(x, c) => x match {
             case "SAT" => c.copy(dfaLearningAlgorithm = DFALearningAlgorithm.SAT)
@@ -81,18 +96,26 @@ object Main {
             case _ => c.copy(dfaLearningAlgorithm = DFALearningAlgorithm.RPNI)
           }})
           .text("DFA Learning algorithm (RPNI|SAT|UFSAT)"),
-        opt[String]("constraintStrategy")
+        opt[String]("strategy")
           .action({(x, c) => x match {
-            case "Disjunctive" => c.copy(constraintStrategy = dfa.ConstraintStrategy.Disjunctive)
-            case _ => c.copy(constraintStrategy = dfa.ConstraintStrategy.Eager)
+            case "Disjunctive" => 
+              c.copy(constraintStrategy = dfa.ConstraintStrategy.Disjunctive, 
+                    dfaLearningAlgorithm = DFALearningAlgorithm.SAT)
+            case "DisjunctiveSeparate" => 
+              c.copy(constraintStrategy = dfa.ConstraintStrategy.DisjunctiveSeparate)
+            case "Eager" => 
+              c.copy(constraintStrategy = dfa.ConstraintStrategy.Eager)
           }})
-          .text("DFA Learning algorithm (RPNI|SAT|UFSAT)"),
+          .text("Constraint strategy: Eager | DisjunctiveSeparate | Disjunctive"),
         cmd("product")
-          .action((_, c) => c.copy(cmd = "product")),
+          .action((_, c) => c.copy(cmd = "product"))
+          .text("Compute the product of the given .tck files. If error labels are given, run TChecker to check the product."),
         cmd("dfa")
-          .action((_, c) => c.copy(cmd = "dfa")),
+          .action((_, c) => c.copy(cmd = "dfa"))
+          .text("Apply automatic AG for finite traces"),
         cmd("ltl")
           .action((_, c) => c.copy(cmd = "ltl"))
+          .text("Apply automatic AG for infinite traces")
       )
     }
     val beginTime = System.nanoTime()
@@ -101,6 +124,15 @@ object Main {
         case None => ()
         case Some(config) =>
           configuration.set(config)
+          logger.info(s"Command: ${config.cmd}")
+          logger.info(s"Files: ${config.ltsFiles.toSeq}")
+          if config.ltsFiles.isEmpty then {
+            throw Exception("Please provide input files with the --files or --dir options.")
+          }
+          config.ltlProperty match {
+            case None => ()
+            case Some(ltl) => logger.info(s"LTL property: ${ltl}")
+          }
           for file <- configuration.get().ltsFiles do {
             if (!file.exists()){
               throw Exception(("%sFile " + file.getAbsolutePath() + " does not exist%s").format(RED,RESET))
@@ -111,10 +143,23 @@ object Main {
 
           config.cmd match {
             case "product" =>
-              val tas = configuration.get().ltsFiles.map(TA.fromFile(_))
+              val tas = configuration.get().ltsFiles.map(TA.fromFile(_))              
               val product = TA.synchronousProduct(tas.toList)
-              System.out.println(product.toString())
+              if config.err.size == 0 then {
+                System.out.println(product.toString())
+              } else {
+                product.checkReachability(config.err : _*) match {
+                  case None => logger.info(s"${GREEN}Safety holds in the product${RESET}")
+                  case Some(cex) => logger.info(s"${GREEN}Labels are reachable ${cex}${RESET}")
+                }
+              }
             case "dfa" =>
+                logger.info(s"DFA Learning Algorithm: ${config.dfaLearningAlgorithm}")
+                logger.info(s"DFA Learning Strategy: ${config.constraintStrategy}")
+                logger.info(s"Error labels: ${config.err}")
+                if config.err.size == 0 then {
+                  throw Exception("Please provide an error event with the --err option")
+                }
                 dfa.DFAAutomaticVerifier(
                   dfa.SystemSpec(
                     configuration.get().ltsFiles, 

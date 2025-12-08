@@ -1,0 +1,12 @@
+system:lts1
+event:a
+event:b
+event:c
+
+process:lts1
+location:lts1:q1{initial:}
+location:lts1:q2
+location:lts1:q3
+edge:lts1:q1:q2:a
+edge:lts1:q2:q3:b
+edge:lts1:q3:q1:c
