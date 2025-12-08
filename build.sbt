@@ -1,4 +1,4 @@
-val scala3Version = "3.7"
+val scala3Version = "3.3.3"
 
 resolvers += Resolver.mavenLocal
 resolvers += "artemis" at "https://artifacts.itemis.cloud/repository/maven-mps"

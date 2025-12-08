@@ -384,7 +384,7 @@ class DFAAAG extends munit.FunSuite {
         .withAccepting("q0")
         .create();
 
-    val ver = dfa.DFAAutomaticVerifier(dfa.SystemSpec(Array(File("examples/simple-ums/user.tck"), File("examples/simple-ums/scheduler.tck"), File("examples/simple-ums/machine.tck")), Some(DLTS.fromErrorSymbol("err"))))
+    val ver = dfa.DFAAutomaticVerifier(dfa.SystemSpec(Array(File("examples/simple-ums/user.tck"), File("examples/simple-ums/scheduler.tck"), File("examples/simple-ums/machine.tck")), Some(DLTS.fromErrorSymbol(List("err")))))
     ver.setAssumption(0, DLTS("user", gUser, gUser.getInputAlphabet().toSet))
     ver.setAssumption(1, DLTS("sched", gSched, gSched.getInputAlphabet().toSet))
     ver.setAssumption(2, DLTS("machine", gMachine, gMachine.getInputAlphabet().toSet))
@@ -520,7 +520,7 @@ class DFAAAG extends munit.FunSuite {
     assert(errDFA.pruned.isPrunedSafety)
     assert(gUser.isPrunedSafety)
     assert(gUser.isSafety)
-    val ver = dfa.DFAAutomaticVerifier(dfa.SystemSpec(Array(File("examples/simple-ums/user.tck"), File("examples/simple-ums/scheduler.tck"), File("examples/simple-ums/machine.tck")), Some(DLTS.fromErrorSymbol("err"))))
+    val ver = dfa.DFAAutomaticVerifier(dfa.SystemSpec(Array(File("examples/simple-ums/user.tck"), File("examples/simple-ums/scheduler.tck"), File("examples/simple-ums/machine.tck")), Some(DLTS.fromErrorSymbol(List("err")))))
     ver.setAssumption(0, DLTS("user", gUser, gUser.getInputAlphabet().toSet))
     ver.setAssumption(1, DLTS("sched", gSched, gSched.getInputAlphabet().toSet))
     ver.setAssumption(2, DLTS("machine", gMachine, gMachine.getInputAlphabet().toSet))
