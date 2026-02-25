@@ -1,4 +1,4 @@
-val scala3Version = "3.3.3"
+val scala3Version = "3.3.7"
 
 resolvers += Resolver.mavenLocal
 resolvers += "artemis" at "https://artifacts.itemis.cloud/repository/maven-mps"
@@ -8,6 +8,10 @@ val jarName = "CircAG.jar"
 assembly/assemblyJarName := jarName
 assembly/mainClass := Some("fr.irisa.circag.Main")
 assembly / assemblyOutputPath := file(s"./${(assembly/assemblyJarName).value}")
+// use the default source layout (src/main/scala for Compile, src/test/scala for Test)
+// the previous override caused test sources to be compiled in the main scope, which
+// prevents Test-scoped dependencies (like munit) from being available.
+// Compile / scalaSource := baseDirectory.value / "src"
 
 lazy val root = project
   .in(file("."))
@@ -15,7 +19,7 @@ lazy val root = project
     name := "circAG",
     version := "0.1",
     scalaVersion := scala3Version,
-    libraryDependencies ++= Seq("org.scalameta" %% "munit" % "0.7.29" % Test,
+    libraryDependencies ++= Seq("org.scalameta" %% "munit" % "1.0.4" % Test,
 		// "org.sosy-lab" %% "java-smt" % "3.14.3" from "https://repo1.maven.org/maven2/org/sosy-lab/java-smt/3.14.3/java-smt-3.14.3.jar",
 		// "org.sosy-lab" %% "common" % "0.3000-529-g6152d88" from "https://repo1.maven.org/maven2/org/sosy-lab/common/0.3000-529-g6152d88/common-0.3000-529-g6152d88.jar",
 		// "de.uni-freiburg.informatik.ultimate" %% "smtinterpol" % "2.5-1242-g5c50fb6d" from "https://repo1.maven.org/maven2/de/uni-freiburg/informatik/ultimate/smtinterpol/2.5-1242-g5c50fb6d/smtinterpol-2.5-1242-g5c50fb6d.jar",
@@ -29,7 +33,8 @@ lazy val root = project
 		"org.slf4j" % "slf4j-api" % "1.7.9",
         "org.slf4j" % "slf4j-simple" % "1.7.9",
 		"tools.aqua" % "z3-turnkey" % "4.11.2",
-		"jhoafparser" % "jhoafparser" % "1.1.1"
+		"jhoafparser" % "jhoafparser" % "1.1.1",
+		"org.scala-lang" %% "toolkit" % "0.7.0"
   		)
   	)
 cancelable in Global := true

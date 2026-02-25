@@ -19,9 +19,9 @@ for learning LTL formulas.
 
 ## Dependencies and Installation
 You need
-- Scala 3.3
+- Scala 3.3.7
 - Java 1.7
-- sbt 1.8
+- sbt 1.12
 - maven
   
 And the executables of the following must be on your path:
@@ -36,7 +36,7 @@ Other dependencies will be installed by sbt.
 
 Once you have all this, execute the following in the `lib` directory. This installs the provided hoaf parser library into the maven repository.
 
-    mvn install:install-file -Dfile=jhoafparser-1.1.1.jar -DgroupId=jhoafparser -DartifactId=jhoafparser -Dversion=1.1.1 -Dpackaging=jar -DgeneratePom=true
+    mvn install:install-file -Dfile=lib/jhoafparser-1.1.1.jar -DgroupId=jhoafparser -DartifactId=jhoafparser -Dversion=1.1.1 -Dpackaging=jar -DgeneratePom=true
 
 Then run the following in the main directory
 

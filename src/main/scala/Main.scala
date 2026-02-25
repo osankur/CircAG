@@ -101,6 +101,9 @@ object Main {
             case "Disjunctive" => 
               c.copy(constraintStrategy = dfa.ConstraintStrategy.Disjunctive, 
                     dfaLearningAlgorithm = DFALearningAlgorithm.SAT)
+            case "LoggingDisjunctive" => 
+              c.copy(constraintStrategy = dfa.ConstraintStrategy.LoggingDisjunctive, 
+                    dfaLearningAlgorithm = DFALearningAlgorithm.SAT)
             case "DisjunctiveSeparate" => 
               c.copy(constraintStrategy = dfa.ConstraintStrategy.DisjunctiveSeparate)
             case "Eager" => 

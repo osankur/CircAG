@@ -1,6 +1,6 @@
 package fr.irisa.circag
 
-
+import munit._
 import net.automatalib.serialization.saf.SAFSerializationDFA 
 import net.automatalib.serialization.aut.AUTWriter 
 

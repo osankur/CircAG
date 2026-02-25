@@ -33,3 +33,5 @@ metals.sbt
 
 CircAG.jar
 .circag_log
+.ipynb*
+.VS*

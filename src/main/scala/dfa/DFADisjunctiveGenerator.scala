@@ -343,5 +343,3 @@ class DFADisjunctiveGenerator(
     allDLTS
   }
 }
-
-
