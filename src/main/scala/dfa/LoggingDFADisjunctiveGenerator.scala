@@ -11,7 +11,7 @@ import fr.irisa.circag.pruned
 case class Instance(atomic_propositions: List[String], 
   nb_formulas : Int, 
   traces : List[Trace], 
-  constraints : List[Map[String, List[(Int, Int)]]]) derives ReadWriter
+  constraints : List[Map[String, List[List[Int]]]]) derives ReadWriter
 
 def writeToFile(instance : Instance, file : String) : Unit = {
   val dir = os.pwd / "output"
@@ -20,7 +20,7 @@ def writeToFile(instance : Instance, file : String) : Unit = {
 }
 
 /**
-  * A logging wrapper to the above.
+  * A logging wrapper for DFADisjunctiveGenerator.
   */
 class LoggingDFADisjunctiveGenerator(
     system : SystemSpec,
@@ -28,38 +28,32 @@ class LoggingDFADisjunctiveGenerator(
     _dfaLearnerAlgorithm: DFALearningAlgorithm
 ) extends DFADisjunctiveGenerator(system, _proofSkeleton, _dfaLearnerAlgorithm) {
 
-  val constraints : Buffer[(Trace, Option[Int])] = Buffer()
+  val traces = HashMap[Trace, Int]()
+  val constraints = Buffer[Map[String, List[List[Int]]]]()
   var query_count = 0
+
+  private def getTraceIndex(trace : Trace) : Int = {
+    traces.getOrElseUpdate(trace, traces.size)
+  }
 
   private def getInstance() : Instance = {
     val alphabet = system.processes
       .map(p => p.alphabet)
       .foldLeft(Set.empty[String])((x, y) => x | y)
-    val traces = constraints.map(x => x._1)
-    val indexed_constraints = 
-      constraints
-        .zipWithIndex
-        .map({ x => x match {
-          case ((_, None),i) => 
-            val lhs = (0 until system.nbProcesses)
-              .map{ j => (i, j)}
-              .toList
-            HashMap("left_predicates" -> lhs, "right_predicate" -> List())
-          case ((_, Some(k)), i) =>
-            val lhs = (0 until system.nbProcesses)
-              .filter(j => j != k)
-              .map{ j => (i, j)}
-              .toList
-            val rhs = List((i, k))
-            HashMap("left_predicates" -> lhs, "right_predicate" -> rhs)
-        }
-      }).toList
-    Instance(alphabet.toList, system.nbProcesses, traces.toList, indexed_constraints)
+    val c : List[Map[String, List[List[Int]]]] = constraints.toList
+    Instance(alphabet.toList, system.nbProcesses, traces.keys.toList, c)
   }
 
 
   override def refineByFinalPremiseCounterexample(trace: Trace) : Unit = {
-    constraints.append((trace, None))
+    val lhs = 
+      (0 until system.nbProcesses)
+      .map{ i => 
+          List(getTraceIndex(trace.filter(system.processes(i).alphabet.contains)), 
+          i)
+        }
+      .toList
+    constraints.append(HashMap("left_predicates" -> lhs, "right_predicate" -> List()))
     super.refineByFinalPremiseCounterexample(trace)
   }
 
@@ -73,7 +67,15 @@ class LoggingDFADisjunctiveGenerator(
   }
 
   override def refineByInductivePremiseCounterexample(processID : Int, cexTrace : Trace) : Unit = {
-    constraints.append((cexTrace, Some(processID)))
-    super.refineByInductivePremiseCounterexample(processID, cexTrace)
+    val preds = 
+      (0 until system.nbProcesses)
+      .map{ i => 
+          List(getTraceIndex(cexTrace.dropRight(1).filter(system.processes(i).alphabet.contains)), 
+          i)
+        }
+    val lhs = preds.filter(x => x(1) != processID).toList
+    val rhs = List(List(getTraceIndex(cexTrace.filter(system.processes(processID).alphabet.contains)), processID))
+    constraints.append(HashMap("left_predicates" -> lhs, "right_predicate" -> rhs))
+    super.refineByInductivePremiseCounterexample(processID, cexTrace);
   }
 }

@@ -128,7 +128,6 @@ class DFADisjunctiveGenerator(
 
         val newConstr =
           z3ctx.mkOr(z3ctx.mkOr(lhs: _*), varOfIndexedTrace(process, trace))
-        logger.debug(s"New constraint ${newConstr}")
         solver.add(newConstr)
       case 22 =>
         val prefix = trace.dropRight(1)
@@ -154,7 +153,6 @@ class DFADisjunctiveGenerator(
           )
         val newConstr = z3ctx.mkOr(term1, term2)
         solver.add(newConstr)
-        logger.debug(s"Adding ${newConstr}")
       case 29 =>
         val prefix = trace.dropRight(1)
         val term1 =
@@ -180,15 +178,12 @@ class DFADisjunctiveGenerator(
           )
         val newConstraint = z3ctx.mkOr(term1, term2)
         solver.add(newConstraint)
-        logger.debug(s"New constraint default ${newConstraint}")
     }
-    logger.debug(s"Number of constraints ${solver.getAssertions().size}")
   }
 
   override def refineByFinalPremiseCounterexample(trace: Trace): Unit = {
     breakable{
       for j <- 0 until nbProcesses do {
-          logger.debug(s"Checking if proj of ${trace} to j-th ass alphabet is accepted by process ${j}")
           if system.processes(j).checkTraceMembership(trace, Some(proofSkeleton.assumptionAlphabets(j))) == None then {
             break
           }
@@ -203,9 +198,7 @@ class DFADisjunctiveGenerator(
           .toSeq: _*
       )
     )
-    logger.debug(s"Adding constraint ${newConstraint}")
     solver.add(newConstraint)
-    logger.debug(s"Number of constraints: ${solver.getAssertions().size}")
   }
 
   /** Generate assumptions satisfying the constraints, except that those
@@ -225,10 +218,6 @@ class DFADisjunctiveGenerator(
       throw Exception(s"${this.getClass.getName()} does not support fixed assumptions")
     statistics.Counters.incrementCounter("DFA Generator")
 
-    logger.debug(s"Constraints:")
-    for ass <- solver.getAssertions() do{
-      logger.debug(ass.toString())
-    }
     var beginTime = System.nanoTime()
 
     // Generate SAT query to guess nb.Processes automata of total size at most k
@@ -304,13 +293,8 @@ class DFADisjunctiveGenerator(
           solver.add(z3ctx.mkIff(accept_w, z3ctx.mkNot(z3ctx.mkEq(states_at(process)(proj_w), error_state(process)))))
         }
       }
-      logger.debug(s"Assertions:")
-      for ass <- solver.getAssertions() do {
-        logger.debug(ass.toString())
-      }
       if solver.check() == z3.Status.SATISFIABLE then {
         val m = solver.getModel()
-        // logger.debug(s"Model: ${m}")
         val all_dlts = Buffer.tabulate[DLTS](nbProcesses)(
           process =>
             val m = solver.getModel()
