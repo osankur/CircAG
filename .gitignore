@@ -35,3 +35,5 @@ CircAG.jar
 .circag_log
 .ipynb*
 .VS*
+.scalafmt.conf
+.sbtopts

@@ -229,7 +229,6 @@ class DFADisjunctiveGenerator(
 
     while allDLTS == None && k < configuration.get().maxDFASize do {
       solver.push()
-      // val prefixes = Buffer.tabulate(this.nbProcesses)(_ => Set[Trace]())
       // State reached in process when reading given trace:
       val states_at = Buffer.tabulate(this.nbProcesses)(_ => HashMap[Trace, z3.IntExpr]())
       for process <- 0 until nbProcesses do {
@@ -237,7 +236,6 @@ class DFADisjunctiveGenerator(
           val proj_w = w.filter(proofSkeleton.assumptionAlphabets(process).contains(_))
           for i <- 0 to proj_w.size do {
             val prefix = proj_w.dropRight(i)
-            // prefixes(process) = prefixes(process).incl(prefix)
             states_at(process).put(prefix, z3ctx.mkIntConst(s"q${process}${prefix.toString()}"))
           }
         }

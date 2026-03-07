@@ -25,7 +25,7 @@ import com.microsoft.z3
 import fr.irisa.circag.statistics
 import fr.irisa.circag.configuration
 import fr.irisa.circag.{Trace, Lasso, DLTS, Alphabet}
-import fr.irisa.circag.{pruned, filter, suffix, semanticEquals, size}
+import fr.irisa.circag.{pruned, filter, suffix, semanticEquals}
 
 
 enum LTLLearningAlgorithm:

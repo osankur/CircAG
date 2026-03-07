@@ -493,7 +493,7 @@ extension(lasso : Lasso){
       (List(), c.drop((k - p.size) % c.size))
     }
   }
-  def size : Int = {
+  def lassoSize : Int = {
     lasso._1.size + lasso._2.size
   }
   /**
