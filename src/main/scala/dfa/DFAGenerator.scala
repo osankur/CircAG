@@ -25,7 +25,7 @@ import fr.irisa.circag.{Trace, DLTS, Alphabet}
   *     L(g_j)). Otherwise, add w_{alpha_i} |= L(g_i).
   */
 enum ConstraintStrategy:
-  case LoggingDisjunctive
+  case Bolt
   case DisjunctiveSeparate
   case Disjunctive
   case Eager
@@ -92,8 +92,8 @@ object DFAGenerator {
         DFADisjunctiveSeparateGenerator(system, proofSkeleton, dfaLearnerAlgorithm)
       case ConstraintStrategy.Disjunctive => 
         DFADisjunctiveGenerator(system, proofSkeleton, dfaLearnerAlgorithm)
-      case ConstraintStrategy.LoggingDisjunctive => 
-        LoggingDFADisjunctiveGenerator(system, proofSkeleton, dfaLearnerAlgorithm)
+      case ConstraintStrategy.Bolt => 
+        DFABoltGenerator(system, proofSkeleton, dfaLearnerAlgorithm)
       case ConstraintStrategy.Eager => DFAEagerGenerator(system, proofSkeleton, dfaLearnerAlgorithm)
     }
   }
