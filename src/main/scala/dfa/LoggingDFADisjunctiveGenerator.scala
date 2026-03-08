@@ -21,6 +21,13 @@ class LoggingDFADisjunctiveGenerator(
   val constraints = Buffer[Map[String, List[List[Int]]]]()
   var query_count = 0
 
+  private def logToFile(instance : Instance, file : String) : Unit = {
+    val dir = os.pwd / "output"
+    os.makeDir.all(dir)
+    os.write.over(dir / file, write(instance))
+  }
+
+
   private def getTraceIndex(trace : Trace) : Int = {
     traces.getOrElseUpdate(trace, traces.size)
   }
@@ -50,7 +57,7 @@ class LoggingDFADisjunctiveGenerator(
       fixedAssumptions: Map[Int, DLTS] = Map()
   ): Option[Buffer[DLTS]] = { 
     val instance = getInstance()
-    writeToFile(instance, s"query$query_count.json")
+    logToFile(instance, s"query$query_count.json")
     query_count += 1
     super.generateAssumptions(fixedAssumptions)
   }

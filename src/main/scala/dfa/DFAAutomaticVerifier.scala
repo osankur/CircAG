@@ -177,7 +177,8 @@ class DFAAutomaticVerifier(
       statistics.Counters.incrementCounter("iteration")
       var newAss = dfaGenerator.generateAssumptions(fixedAssumptionsMap)
       newAss match {
-        case Some(newAss) => this.assumptions = newAss
+        case Some(newAss) => 
+          this.assumptions = newAss
         case None         => throw DFAUnsatisfiableConstraints()
       }
       currentState = this.applyAG(proveGlobalProperty)

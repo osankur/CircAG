@@ -645,7 +645,6 @@ object NLTS {
   def copy(nlts : NLTS) : NLTS = {
     val dfa = nlts.dfa
     val statesMap = HashMap[FastNFAState,FastNFAState]()
-    // val statesMap = HashMap((dfa.getInitialState(), FastNFAState(0,false)))
     val alphabet = dfa.getInputAlphabet()
     val newNFA = new FastNFA(alphabet)
     dfa
@@ -841,10 +840,12 @@ object NLTS {
     }
     header.getStartStates().foreach(_.foreach({ i => nfa.setInitial(newStates(i), true) }))
     for (s,i) <- newStates.zipWithIndex do {
-        if(aut.getStoredState(i).getAccSignature() != null) then
+        if(aut.getStoredState(i).getAccSignature() != null) then {
             nfa.setAccepting(s, true)
+        }
         
-        if (aut.getEdgesWithLabel(i) != null) then for edge <- aut.getEdgesWithLabel(i) do {
+        if (aut.getEdgesWithLabel(i) != null) then 
+          for edge <- aut.getEdgesWithLabel(i) do {
             assert(edge.getConjSuccessors().size == 1)
             val succ = edge.getConjSuccessors().head
             val labels = singletonValuations(edge.getLabelExpr())

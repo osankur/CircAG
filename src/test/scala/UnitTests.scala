@@ -683,6 +683,27 @@ class LTLAGTests extends munit.FunSuite {
     assert(nlts.dfa.accepts(List("a","a")))
     assert(!nlts.dfa.accepts(List("a","a","b")))
   }
+
+  test("hoa for ltlf2dfa") {
+    val hoa_string = """
+      HOA: v1
+      name: "1"
+      States: 2
+      Start: 0
+      AP: 0
+      acc-name: Buchi
+      Acceptance: 1 Inf(0)
+      properties: trans-labels explicit-labels trans-acc colored complete
+      properties: deterministic
+      --BODY--
+      State: 0
+      [t] 1 {0}
+      State: 1
+      [t] 1 {0}
+      --END--
+    """
+    val hoa = DLTS.fromHOAString(hoa_string)
+  }
   test("violation index"){
     val tas = Array(File("examples/ltl-toy1/a.tck"), File("examples/ltl-toy1/b.tck"))
     val checker = LTLAutomaticVerifier(ltl.SystemSpec(tas, G(F(Atomic("a")))))
