@@ -290,6 +290,18 @@ class DFAVerifier(val system: SystemSpec) {
       case ex: AGResult => ex
     }
   }
+  def dumpAssumptions() : Unit = {
+    val dir = Paths.get(".", ".circag_log")
+    Files.createDirectories(dir)
+    for i <- 0 until nbProcesses do {
+      val tck = TA.fromLTS(assumptions(i))
+      val writer = PrintWriter(new File(dir.toFile(), s"_assumption${i}_${system.processes(i).systemName}.tck"))
+      writer.write(tck.toString())
+      writer.close()
+    }
+    logger.info(s"Assumptions written into directory ${dir.getFileName().toString()}")
+  }
+
   // Latest cex encountered in any premise check. This is for debugging.
   protected var latestCex = List[String]()
 }

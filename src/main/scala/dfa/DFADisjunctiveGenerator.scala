@@ -68,7 +68,6 @@ class DFADisjunctiveGenerator(
       toVars.put((process, trace), v)
       toIndexedTraces.put(v, (process, trace))
       samples(process).append((trace, v))
-      // updateTheoryConstraints(process, samples(process).size - 1)
       v
     }
   }
@@ -109,7 +108,7 @@ class DFADisjunctiveGenerator(
     }
   }
 
-  private def addDisjunctiveConstraint(process: Int, trace: Trace, constraintType: Int): Unit = {
+  protected def addDisjunctiveConstraint(process: Int, trace: Trace, constraintType: Int): Unit = {
     constraintType match {
       case 34 =>
         assert(trace.size > 0)

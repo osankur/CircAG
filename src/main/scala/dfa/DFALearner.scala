@@ -59,6 +59,11 @@ trait DFALearner(name: String, alphabet: Alphabet) {
   protected var negativeSamples: Set[Trace] = Set()
 }
 
+/**
+ * Compute DFA separating given positive and negative samples using RPNI.
+ * The returned DFA is obtained by further removing non-accepting states
+ * so that it is prefix-closed.
+ */
 class RPNILearner(name: String, alphabet: Alphabet)
     extends DFALearner(name, alphabet) {
   override def getDLTS(): DLTS = {

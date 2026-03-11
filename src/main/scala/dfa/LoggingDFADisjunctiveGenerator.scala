@@ -42,14 +42,15 @@ class LoggingDFADisjunctiveGenerator(
 
 
   override def refineByFinalPremiseCounterexample(trace: Trace) : Unit = {
-    val lhs = 
-      (0 until system.nbProcesses)
-      .map{ i => 
-          List(getTraceIndex(trace.filter(system.processes(i).alphabet.contains)), 
-          i)
-        }
-      .toList
-    constraints.append(HashMap("left_predicates" -> lhs, "right_predicate" -> List()))
+    val lhs = Buffer[List[Int]]()
+    for i <- 0 until system.nbProcesses do {
+      logger.debug(s"Alphabet($i) = ${system.processes(i).alphabet}")
+      val projTrace = trace.filter(system.processes(i).alphabet.contains)
+      if projTrace.size > 0 then 
+        lhs.append(List(getTraceIndex(projTrace), i))
+    }
+    if lhs.size > 0 then
+      constraints.append(HashMap("left_predicates" -> lhs.toList, "right_predicate" -> List()))
     super.refineByFinalPremiseCounterexample(trace)
   }
 
@@ -63,15 +64,23 @@ class LoggingDFADisjunctiveGenerator(
   }
 
   override def refineByInductivePremiseCounterexample(processID : Int, cexTrace : Trace) : Unit = {
-    val preds = 
-      (0 until system.nbProcesses)
-      .map{ i => 
-          List(getTraceIndex(cexTrace.dropRight(1).filter(system.processes(i).alphabet.contains)), 
-          i)
-        }
-    val lhs = preds.filter(x => x(1) != processID).toList
-    val rhs = List(List(getTraceIndex(cexTrace.filter(system.processes(processID).alphabet.contains)), processID))
-    constraints.append(HashMap("left_predicates" -> lhs, "right_predicate" -> rhs))
-    super.refineByInductivePremiseCounterexample(processID, cexTrace);
+    val lhs = Buffer[List[Int]]()
+    for i <- 0 until system.nbProcesses if i != processID do {
+      val projTrace = cexTrace.dropRight(1).filter(system.processes(i).alphabet.contains)
+      // if projTrace is empty then the predicate is true trivially, so nothing is added to lhs
+      if projTrace.size > 0 then {
+        val elem =List(getTraceIndex(projTrace), i)
+        lhs.append(elem)
+      }
+    }
+    val rightProjTrace = cexTrace.filter(system.processes(processID).alphabet.contains)
+    // if the rightProjTrace is empty, then the predicate is true trivially, so no constraint needs to be added at all
+    if rightProjTrace.size > 0 then {
+      val rhs = List(List(getTraceIndex(rightProjTrace), processID))
+      constraints.append(HashMap("left_predicates" -> lhs.toList, "right_predicate" -> rhs))
+    }
+    // The [refineByInductivePremiseCounterexample] function has optimizations which means the resulting query is not Horn in general.
+    // The following adds the non-optimized Horn clause.
+    super.addDisjunctiveConstraint(processID, cexTrace, 34)
   }
 }

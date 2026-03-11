@@ -61,6 +61,7 @@ import com.microsoft.z3.enumerations.Z3_lbool
 import fr.irisa.circag.ltl._
 import fr.irisa.circag.dfa._
 import fr.irisa.circag.ltl.LTL
+import fr.irisa.circag.{pruned, toFastDFA}
 
 
 
@@ -684,26 +685,7 @@ class LTLAGTests extends munit.FunSuite {
     assert(!nlts.dfa.accepts(List("a","a","b")))
   }
 
-  test("hoa for ltlf2dfa") {
-    val hoa_string = """
-      HOA: v1
-      name: "1"
-      States: 2
-      Start: 0
-      AP: 0
-      acc-name: Buchi
-      Acceptance: 1 Inf(0)
-      properties: trans-labels explicit-labels trans-acc colored complete
-      properties: deterministic
-      --BODY--
-      State: 0
-      [t] 1 {0}
-      State: 1
-      [t] 1 {0}
-      --END--
-    """
-    val hoa = DLTS.fromHOAString(hoa_string)
-  }
+
   test("violation index"){
     val tas = Array(File("examples/ltl-toy1/a.tck"), File("examples/ltl-toy1/b.tck"))
     val checker = LTLAutomaticVerifier(ltl.SystemSpec(tas, G(F(Atomic("a")))))
@@ -857,25 +839,301 @@ class Single extends munit.FunSuite {
   }
 }
 
+class LTLF extends munit.FunSuite {
+  test("hoa for ltlf2dfa") {
+    val hoa_string = """
+      HOA: v1
+      name: "Ferr -> change"
+      States: 4
+      Start: 0
+      AP: 2 "err" "change"
+      acc-name: Buchi
+      Acceptance: 1 Inf(0)
+      properties: trans-labels explicit-labels trans-acc complete
+      properties: deterministic
+      --BODY--
+      State: 0
+      [!0&!1] 1 {0}
+      [0&!1] 2
+      [1] 3 {0}
+      State: 1
+      [!0] 1 {0}
+      [0] 2
+      State: 2
+      [t] 2
+      State: 3
+      [t] 3 {0}
+      --END--
+    """
+    val alphabet : fr.irisa.circag.Alphabet = Set("err", "send", "ack", "change")
+    val hoa = DLTS.fromHOAStringWithAcceptingTransitions(hoa_string, Some(alphabet))
+    assert(hoa.dfa.accepts(List("change", "ack")))
+    assert(hoa.dfa.accepts(List("ack", "ack")))
+    assert(hoa.dfa.accepts(List("ack", "send")))
+    assert(!hoa.dfa.accepts(List("ack", "send", "err")))
+    assert(!hoa.dfa.accepts(List("err", "ack", "send")))
+  }  
+  test("f2"){
+    val hoa_string = 
+      """
+      HOA: v1
+      name: "X!send <-> (ack R !err)"
+      States: 7
+      Start: 0
+      AP: 3 "send" "ack" "err"
+      acc-name: Buchi
+      Acceptance: 1 Inf(0)
+      properties: trans-labels explicit-labels trans-acc deterministic
+      --BODY--
+      State: 0
+      [!1&!2] 1 {0}
+      [2] 2
+      [1&!2] 3 {0}
+      State: 1
+      [!0&!1&!2] 4 {0}
+      [0&!1&!2] 5
+      [!0&1&!2 | 0&2] 6 {0}
+      State: 2
+      [0] 6 {0}
+      State: 3
+      [!0] 6 {0}
+      State: 4
+      [!1&!2] 4 {0}
+      [1&!2] 6 {0}
+      State: 5
+      [!1&!2] 5
+      [2] 6 {0}
+      State: 6
+      [t] 6 {0}
+      --END--
+      """
+    val alphabet : fr.irisa.circag.Alphabet = Set("err", "send", "ack", "change")
+    val hoa = DLTS.fromHOAStringWithAcceptingTransitions(hoa_string, Some(alphabet))
+    assert(hoa.dfa.accepts(List("ack", "change", "send", "err")))
+  }
+  test("f3"){
+    val hoa_string = """
+      HOA: v1
+      name: "X[!]1 <-> (Ferr <-> (change R Xsend))"
+      States: 12
+      Start: 0
+      AP: 3 "err" "change" "send"
+      acc-name: Buchi
+      Acceptance: 1 Inf(0)
+      properties: trans-labels explicit-labels trans-acc deterministic
+      --BODY--
+      State: 0
+      [!0&!1] 1 {0}
+      [!0&1] 2 {0}
+      [0&!1] 3
+      [0&1] 4
+      State: 1
+      [!0&!2] 5 {0}
+      [!0&!1&2] 6
+      [!0&1&2] 7
+      [0&!1&2] 8 {0}
+      [0&1&2] 9 {0}
+      State: 2
+      [!0&!2] 5 {0}
+      [!0&2] 10
+      [0&2] 11 {0}
+      State: 3
+      [!1&2] 8 {0}
+      [1&2] 9 {0}
+      State: 4
+      [2] 11 {0}
+      State: 5
+      [!0] 5 {0}
+      State: 6
+      [!0&!2] 5 {0}
+      [!0&!1&2] 6
+      [!0&1&2] 7
+      [0&!1&2] 8 {0}
+      [0&1&2] 9 {0}
+      State: 7
+      [!0&!2] 5 {0}
+      [!0&2] 10
+      [0&2] 11 {0}
+      State: 8
+      [!1&2] 8 {0}
+      [1&2] 9 {0}
+      State: 9
+      [2] 11 {0}
+      State: 10
+      [!0] 10
+      [0] 11 {0}
+      State: 11
+      [t] 11 {0}
+      --END--
+      """    
+    val alphabet : fr.irisa.circag.Alphabet = Set("err", "send", "ack", "change")
+    val hoa = DLTS.fromHOAStringWithAcceptingTransitions(hoa_string, Some(alphabet))
+    assert(hoa.dfa.accepts(List("change", "send", "err")))
+  }
+  test("f4"){
+    val hoa_string = """
+      HOA: v1
+      name: "(ack R Xsend) <-> (err <-> FX[!]ack)"
+      States: 10
+      Start: 0
+      AP: 3 "ack" "send" "err"
+      acc-name: Buchi
+      Acceptance: 1 Inf(0)
+      properties: trans-labels explicit-labels trans-acc deterministic
+      --BODY--
+      State: 0
+      [!0&!2] 1 {0}
+      [!0&2] 2
+      [0&!2] 3 {0}
+      [0&2] 4
+      State: 1
+      [!0&1] 1 {0}
+      [!0&!1] 5
+      [0&1] 6
+      [0&!1] 9 {0}
+      State: 2
+      [!0&1] 2
+      [!0&!1] 7 {0}
+      [0&1] 8 {0}
+      State: 3
+      [!0&!1] 5
+      [!0&1] 7 {0}
+      [0&!1] 9 {0}
+      State: 4
+      [!0&1] 5
+      [!0&!1] 7 {0}
+      [0&1] 9 {0}
+      State: 5
+      [!0] 5
+      [0] 9 {0}
+      State: 6
+      [!1] 9 {0}
+      State: 7
+      [!0] 7 {0}
+      State: 8
+      [1] 9 {0}
+      State: 9
+      [t] 9 {0}
+      --END--
+      """
+    val hoa_string2 = """
+      HOA: v1
+      name: "((ack & !change) R Xsend) <-> (err <-> FX[!]ack)"
+      States: 12
+      Start: 0
+      AP: 4 "ack" "change" "send" "err"
+      acc-name: Buchi
+      Acceptance: 1 Inf(0)
+      properties: trans-labels explicit-labels trans-acc deterministic
+      --BODY--
+      State: 0
+      [!0&!3 | 1&!3] 1 {0}
+      [!0&3 | 1&3] 2
+      [0&!1&!3] 3 {0}
+      [0&!1&3] 4
+      State: 1
+      [!0&2] 1 {0}
+      [!0&!2] 5
+      [0&!1&2] 6
+      [0&1&2] 7
+      [0&!2] 11 {0}
+      State: 2
+      [!0&2] 2
+      [!0&!2] 8 {0}
+      [0&!1&2] 9 {0}
+      [0&1&2] 10 {0}
+      State: 3
+      [!0&!2] 5
+      [!0&2] 8 {0}
+      [0&!2] 11 {0}
+      State: 4
+      [!0&2] 5
+      [!0&!2] 8 {0}
+      [0&2] 11 {0}
+      State: 5
+      [!0] 5
+      [0] 11 {0}
+      State: 6
+      [!2] 11 {0}
+      State: 7
+      [0&!1&2] 6
+      [!0&2 | 1&2] 7
+      [!2] 11 {0}
+      State: 8
+      [!0] 8 {0}
+      State: 9
+      [2] 11 {0}
+      State: 10
+      [0&!1&2] 9 {0}
+      [!0&2 | 1&2] 10 {0}
+      State: 11
+      [t] 11 {0}
+      --END--
+    """
+    val alphabet : fr.irisa.circag.Alphabet = Set("err", "ack", "send", "change")
+    val hoa = DLTS.fromHOAStringWithAcceptingTransitions(hoa_string, Some(alphabet))
+    val hoa2 = DLTS.fromHOAStringWithAcceptingTransitions(hoa_string, Some(alphabet))
+    // hoa.visualize()
+    // FIXME Does the following assertion fails because change is not part of the alphabet in hoa_string?
+    // assert(hoa2.dfa.accepts(List("send", "change", "send", "err")))
+  }
+  test ("f4"){
+    val hoa_string = """
+      HOA: v1
+      name: "Gack | (Fchange R Fsend)"
+      States: 7
+      Start: 0
+      AP: 3 "ack" "change" "send"
+      acc-name: Buchi
+      Acceptance: 1 Inf(0)
+      properties: trans-labels explicit-labels trans-acc complete
+      properties: deterministic
+      --BODY--
+      State: 0
+      [0&!1&!2] 0 {0}
+      [!0&!1&!2] 1
+      [!0&!1&2] 2 {0}
+      [!0&1&!2] 3
+      [0&!1&2] 4 {0}
+      [0&1&!2] 5 {0}
+      [1&2] 6 {0}
+      State: 1
+      [!1&!2] 1
+      [!1&2] 2 {0}
+      [1&!2] 3
+      [1&2] 6 {0}
+      State: 2
+      [!1&!2] 2
+      [!1&2] 2 {0}
+      [1] 6 {0}
+      State: 3
+      [!2] 3
+      [2] 6 {0}
+      State: 4
+      [!0&!1&!2] 2
+      [!0&!1&2] 2 {0}
+      [0&!1] 4 {0}
+      [1] 6 {0}
+      State: 5
+      [!0&!2] 3
+      [0&!2] 5 {0}
+      [2] 6 {0}
+      State: 6
+      [t] 6 {0}
+      --END--
+    """    
+    val alphabet : fr.irisa.circag.Alphabet = Set("err", "ack", "send", "change")
+    val hoa = DLTS.fromHOAStringWithAcceptingTransitions(hoa_string, Some(alphabet))
+    // hoa.visualize()
+    assert(hoa.dfa.accepts(List("change", "send", "err")))
+    val pclosed = DLTS(name = "pclosed_hoa", dfa = DLTS.makePrefixClosed(hoa.dfa, alphabet, false), alphabet = alphabet)
+    val pruned_pclosed = DLTS(name = "pruned_pclosed_hoa", dfa = pclosed.dfa.pruned, alphabet = alphabet)
+    // The following holds because the prefix closure is empty
+    assert(!pruned_pclosed.dfa.accepts(List("change", "send", "err")))
+  }
+}
+
 class A extends munit.FunSuite {
-  //  test("buchi automata for sdn and ums"){
-  //     // val ta = TA.fromFile(File("examples/sdn/a.tck"))
-  //     // val bta = ta.buchiIntersection(NLTS.fromLTL("((G F (go | ask)) & (G F (change | send)) & ~(G(ask -> F go)))", None),"acc")
-  //     // println(bta)
-  //     val ta = TA.fromFile(File("examples/ums-1/a.tck"))
-  //     // val bta = ta.buchiIntersection(NLTS.fromLTL("((G F (start1 | end1 | err)) & (G F (req1 | rel1 | grant1)) & ~(G(start1 -> F end1)))", None),"acc")
-  //     val bta = ta.buchiIntersection(NLTS.fromLTL("((G F (start1 | end1 | err)) & (G F (req1 | rel1 | grant1)) & ~(F rel1))", None),"acc")
-  //     // val ta = TA.fromFile(File("examples/ums-1/a.tck"))
-  //     // val bta = ta.buchiIntersection(NLTS.fromLTL("((G F (start1 | end1 | start2 | end2 | err)) & (G F (req1 | rel1 | grant1 | req2 | grant2 | rel2)) & ~(G(start1 -> F end1)))", None),"acc")
-  //     // val bta = ta.buchiIntersection(NLTS.fromLTL("((G F (start1 | end1 | start2 | end2 | err)) & (G F (req1 | rel1 | grant1 | req2 | grant2 | rel2)) & ~(F rel1))", None),"acc")
-  //     println(bta)
-  //   }    
-//  test("DFA learn assumptions: ums-1"){
-//     val tas = Array(File("examples/ums-1/user.tck"), File("examples/ums-1/scheduler.tck"), File("examples/ums-1/machine.tck"))
-//     val checker = DFAAutomaticVerifier(dfa.SystemSpec(tas, Some(DLTS.fromErrorSymbol(List("err")))))
-//     // val checker = LTLAutomaticVerifier(ltl.SystemSpec(tas, LTL.fromString("F(rel1)"))) // fails
-//     checker.learnAssumptions(true)
-//   }
   test("CEX Parsing from String"){
     val tck_output = """
       digraph _premise_scheduler {

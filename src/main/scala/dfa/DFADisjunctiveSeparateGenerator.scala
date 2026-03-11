@@ -18,6 +18,8 @@ import fr.irisa.circag.{Trace, DLTS, Alphabet}
   * Disjunctive DFA generator which keeps a list of disjunctive constraints excluding previous counterexamples.
   * When DFAs are to be generated, a satisfying assumption is first obtained, and each DFA is separately computed satisfying these samples.
   * A different set of samples can be extracted at the next iteration.
+  * 
+  * This always generates prefixed-closed DFAs.
   */
 class DFADisjunctiveSeparateGenerator(
     _system : SystemSpec,
@@ -171,7 +173,6 @@ class DFADisjunctiveSeparateGenerator(
       process: Int,
       sampleIndex: Int = 0
   ): Unit = {
-    // println(s"updateTheoryConstraints(process = $process). Process alphabet: ${system.processes(process).alphabet} Ass alphabet: ${proofSkeleton.assumptionAlphabets(process)}")
     for i <- sampleIndex until samples(process).size do {
       val projTrace_i = this
         .samples(process)(i)
