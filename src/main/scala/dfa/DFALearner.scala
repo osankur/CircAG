@@ -29,8 +29,7 @@ import net.automatalib.automata.fsa.impl.{
 import com.microsoft.z3
 
 import fr.irisa.circag.{Trace, DLTS, Alphabet}
-import fr.irisa.circag.pruned
-import fr.irisa.circag.toFastDFA
+import fr.irisa.circag.{pruned, makeNonPrefixClosedStatesAbsorving, toFastDFA}
 import fr.irisa.circag.statistics
 
 /** Algorithm to be used to learn DFA.
@@ -85,8 +84,7 @@ class RPNILearner(name: String, alphabet: Alphabet)
         )
         val dlts = DLTS(
           name,
-          dfa = DLTS.makePrefixClosed(
-            initialModel.toFastDFA,
+          initialModel.toFastDFA.makeNonPrefixClosedStatesAbsorving(
             alphabet,
             removeNonAcceptingStates = true
           ),

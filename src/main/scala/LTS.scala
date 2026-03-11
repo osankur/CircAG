@@ -427,73 +427,6 @@ object DLTS {
       )
     DLTS(name, newDFA, alph.toSet)
   }
-
-  /** @brief
-    *   Make the DFA prefix-closed by removing all transitions from
-    *   non-accepting states; and removing non-accepting states if
-    *   removeNonAcceptingStates is true
-    *
-    * @param dfa
-    * @param alphabet
-    * @param removeNonAcceptingStates
-    * @return
-    */
-  def makePrefixClosed(
-      dfa: FastDFA[String],
-      alphabet: Set[String],
-      removeNonAcceptingStates: Boolean = false
-  ): FastDFA[String] = {
-    val statesMap = HashMap((dfa.getInitialState(), FastDFAState(0, false)))
-    val newDFA =
-      new FastDFA(Alphabets.fromList(alphabet.toList))
-    dfa
-      .getStates()
-      .foreach({ state =>
-        statesMap.put(state, newDFA.addState(dfa.isAccepting(state)))
-      })
-    newDFA.setInitial(statesMap(dfa.getInitialState()), true)
-    dfa
-      .getStates()
-      .foreach(
-        { s =>
-          for a <- alphabet do {
-            dfa
-              .getSuccessors(s, a)
-              .foreach(
-                { snext =>
-                  newDFA.setTransition(statesMap(s), a, statesMap(snext))
-                }
-              )
-          }
-        }
-      )
-    newDFA
-      .getStates()
-      .filter(!newDFA.isAccepting(_))
-      .foreach({ s =>
-        newDFA.removeAllTransitions(s)
-      })
-    if (removeNonAcceptingStates) then {
-      var rm = false
-      for sigma <- newDFA.getInputAlphabet() do {
-        newDFA
-          .getStates()
-          .foreach(
-            { s =>
-              newDFA
-                .getSuccessors(s, sigma)
-                .foreach({ sn =>
-                  if !newDFA.isAccepting(sn) then {
-                    newDFA.removeAllTransitions(s, sigma)
-                    rm = true
-                  }
-                })
-            }
-          )
-      }
-    }
-    newDFA
-  }
 }
 
 extension (dfa: CompactDFA[String]) {
@@ -668,6 +601,41 @@ extension (dfa: FastDFA[String]) {
     dfa.getStates().filter(!dfa.isAccepting(_)).forall(!isAcceptingReachable(_))
   }
 
+  /**
+    * Make all states from which an accepting state is reachable accepting
+    */
+  def augmentToPrefixClosed = {
+    val visited = Array.fill(dfa.size)(false)
+    val reachable = Array.fill(dfa.size)(false)
+    def isAcceptingReachable(s: FastDFAState): Boolean = {
+      def checkAcceptingReachable(s: FastDFAState): Boolean = {
+        if dfa.isAccepting(s) then {
+          reachable(s.getId()) = true
+          visited(s.getId()) = true
+          true
+        } else if !visited(s.getId()) then {
+          visited(s.getId()) = true
+          val verdict = 
+            dfa
+              .getInputAlphabet()
+              .toSeq
+              .map(dfa.getSuccessors(s, _).exists({ checkAcceptingReachable(_) }))
+          reachable(s.getId) = verdict.exists{ x => x}
+          reachable(s.getId)
+        } else {
+          reachable(s.getId())
+        }
+      }
+      checkAcceptingReachable(s)
+    }
+    for s <- dfa.getStates() do {
+      isAcceptingReachable(s)
+    }
+    for s <- dfa.getStates() do {
+      dfa.setAccepting(s, reachable(s.getId()))
+    }
+  }
+
   /** Copy the DFA by removing all non-accepting states and associated
     * transitions
     *
@@ -706,6 +674,72 @@ extension (dfa: FastDFA[String]) {
     }
     newDFA
   }
+
+  /** @brief
+    *   Make the DFA prefix-closed by removing all transitions from
+    *   non-accepting states; and removing non-accepting states if
+    *   removeNonAcceptingStates is true
+    *
+    * @param dfa
+    * @param alphabet
+    * @param removeNonAcceptingStates
+    * @return
+    */
+  def makeNonPrefixClosedStatesAbsorving(
+      alphabet: Set[String],
+      removeNonAcceptingStates: Boolean = false
+  ): FastDFA[String] = {
+    val statesMap = HashMap((dfa.getInitialState(), FastDFAState(0, false)))
+    val newDFA =
+      new FastDFA(Alphabets.fromList(alphabet.toList))
+    dfa
+      .getStates()
+      .foreach({ state =>
+        statesMap.put(state, newDFA.addState(dfa.isAccepting(state)))
+      })
+    newDFA.setInitial(statesMap(dfa.getInitialState()), true)
+    dfa
+      .getStates()
+      .foreach(
+        { s =>
+          for a <- alphabet do {
+            dfa
+              .getSuccessors(s, a)
+              .foreach(
+                { snext =>
+                  newDFA.setTransition(statesMap(s), a, statesMap(snext))
+                }
+              )
+          }
+        }
+      )
+    newDFA
+      .getStates()
+      .filter(!newDFA.isAccepting(_))
+      .foreach({ s =>
+        newDFA.removeAllTransitions(s)
+      })
+    if (removeNonAcceptingStates) then {
+      var rm = false
+      for sigma <- newDFA.getInputAlphabet() do {
+        newDFA
+          .getStates()
+          .foreach(
+            { s =>
+              newDFA
+                .getSuccessors(s, sigma)
+                .foreach({ sn =>
+                  if !newDFA.isAccepting(sn) then {
+                    newDFA.removeAllTransitions(s, sigma)
+                    rm = true
+                  }
+                })
+            }
+          )
+      }
+    }
+    newDFA
+  }  
 }
 
 object NLTS {

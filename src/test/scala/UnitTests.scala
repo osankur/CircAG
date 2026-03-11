@@ -1126,10 +1126,109 @@ class LTLF extends munit.FunSuite {
     val hoa = DLTS.fromHOAStringWithAcceptingTransitions(hoa_string, Some(alphabet))
     // hoa.visualize()
     assert(hoa.dfa.accepts(List("change", "send", "err")))
-    val pclosed = DLTS(name = "pclosed_hoa", dfa = DLTS.makePrefixClosed(hoa.dfa, alphabet, false), alphabet = alphabet)
+    val pclosed = DLTS(name = "pclosed_hoa", dfa = hoa.dfa.makeNonPrefixClosedStatesAbsorving(alphabet, false), alphabet = alphabet)
     val pruned_pclosed = DLTS(name = "pruned_pclosed_hoa", dfa = pclosed.dfa.pruned, alphabet = alphabet)
     // The following holds because the prefix closure is empty
     assert(!pruned_pclosed.dfa.accepts(List("change", "send", "err")))
+  }
+  test("augmentToPrefixClosed"){
+    val hoa_string = """HOA: v1
+      name: "F(send <-> Ferr)"
+      States: 4
+      Start: 0
+      AP: 2 "send" "err"
+      acc-name: Buchi
+      Acceptance: 1 Inf(0)
+      properties: trans-labels explicit-labels trans-acc complete
+      properties: deterministic
+      --BODY--
+      State: 0
+      [!0&1] 0
+      [!0&!1] 1 {0}
+      [0&!1] 2
+      [0&1] 3 {0}
+      State: 1
+      [!0&1] 0
+      [!0&!1] 1 {0}
+      [0] 3 {0}
+      State: 2
+      [0&!1] 2
+      [!0 | 1] 3 {0}
+      State: 3
+      [t] 3 {0}
+      --END--"""
+    val alphabet : fr.irisa.circag.Alphabet = Set("err", "ack", "send", "change")
+    val hoa = DLTS.fromHOAStringWithAcceptingTransitions(hoa_string, Some(alphabet))
+    assert(!hoa.dfa.accepts(List("send")))
+    hoa.dfa.augmentToPrefixClosed
+    assert(hoa.dfa.accepts(List("send")))
+
+  }
+  test("f5"){
+    // This test shows that augmentToPrefixClosed should not be used on DFAs returned by bolt
+    val hoa_string = """HOA: v1
+      name: "send <-> GFsend"
+      States: 3
+      Start: 0
+      AP: 1 "send"
+      acc-name: Buchi
+      Acceptance: 1 Inf(0)
+      properties: trans-labels explicit-labels trans-acc complete
+      properties: deterministic
+      --BODY--
+      State: 0
+      [!0] 1 {0}
+      [0] 2 {0}
+      State: 1
+      [0] 1
+      [!0] 1 {0}
+      State: 2
+      [!0] 2
+      [0] 2 {0}
+      --END--"""
+    val alphabet : fr.irisa.circag.Alphabet = Set("err", "ack", "send", "change")
+    val hoa = DLTS.fromHOAStringWithAcceptingTransitions(hoa_string, Some(alphabet))
+    // hoa.visualize()
+    assert(!hoa.dfa.accepts(List("change", "send")))
+    hoa.dfa.augmentToPrefixClosed
+    // hoa.visualize()
+    assert(hoa.dfa.accepts(List("change", "send")))
+  }
+  test("f6"){
+    val hoa_string = """HOA: v1
+      name: "Ferr <-> (change & X[!]send)"
+      States: 6
+      Start: 0
+      AP: 3 "err" "change" "send"
+      acc-name: Buchi
+      Acceptance: 1 Inf(0)
+      properties: trans-labels explicit-labels trans-acc deterministic
+      --BODY--
+      State: 0
+      [!0&!1] 1 {0}
+      [!0&1] 2 {0}
+      [0&1] 3
+      State: 1
+      [!0] 1 {0}
+      State: 2
+      [!0&!2] 1 {0}
+      [!0&2] 4
+      [0&2] 5 {0}
+      State: 3
+      [2] 5 {0}
+      State: 4
+      [!0] 4
+      [0] 5 {0}
+      State: 5
+      [t] 5 {0}
+      --END--"""
+    val alphabet : fr.irisa.circag.Alphabet = Set("err", "ack", "send", "change")
+    val hoa = DLTS.fromHOAStringWithAcceptingTransitions(hoa_string, Some(alphabet))
+    hoa.visualize()
+    assert(hoa.dfa.accepts(List("change", "send", "err")))
+    val pc_hoa = DLTS("pc", hoa.dfa.makeNonPrefixClosedStatesAbsorving(alphabet, false), alphabet)
+    pc_hoa.visualize()
+    assert(!pc_hoa.dfa.accepts(List("change", "send", "err")))
   }
 }
 

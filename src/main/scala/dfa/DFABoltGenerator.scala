@@ -17,9 +17,10 @@ import java.io.PrintWriter
 import fr.irisa.circag.statistics
 import fr.irisa.circag.configuration
 import fr.irisa.circag.{Trace, DLTS, Alphabet}
-import fr.irisa.circag.{pruned, isSafety}
+import fr.irisa.circag.{pruned, isSafety, augmentToPrefixClosed, makeNonPrefixClosedStatesAbsorving}
 import fr.irisa.circag.ltl.MalformedLTL
 import fr.irisa.circag.TA
+import fr.irisa.circag.configuration
 
 def stringOfConstraint(c : Map[String, List[List[Int]]], instance : Instance) : String = {
   val lhs = 
@@ -54,7 +55,8 @@ case class Instance(atomic_propositions: List[String],
  * Use external tool Bolt to generate LTLf assumptions respecting given (Horn) constraints.
  * LTLf formulas are translated to DFAs using Spot.
  * 
- * FIXME Automatic learning can fail using this generator currently since resulting DFAs are not always prefix-closed.
+ * For each trace that appears for phi_i, we impose that its prefixes are accepted if it is itself accepted.
+ * This, plus making nonAcceptingStates absorbing seems to make DFA prefix-closed, while still satisfying all constraints.
  */
 class DFABoltGenerator(
     system : SystemSpec,
@@ -83,8 +85,8 @@ class DFABoltGenerator(
         .map { l =>
           val t = traces(l(0))
           val b = assumptions(l(1)).dfa.accepts(t)
-          if b then logger.debug(s"$t |= ${ltl_formulas(l(1))}")
-          else logger.debug(s"$t |/= ${ltl_formulas(l(1))}")
+          // if b then logger.debug(s"$t |= ${ltl_formulas(l(1))}")
+          // else logger.debug(s"$t |/= ${ltl_formulas(l(1))}")
           b
         }
       if lhs.forall(p => p) && !rhs.forall(p => p) then {
@@ -104,23 +106,21 @@ class DFABoltGenerator(
 
   private def getTraceIndex(trace : Trace, processID : Int) : (Int, Int) = {
     val itrace = traces.getOrElseUpdate(trace, traces.size)
-    // If the trace is new for processID, then add prefix-closure constraints
     if !tracesPerProcess(processID).contains(trace) then {
-      for old_trace <- tracesPerProcess(processID) if old_trace.size > 0 do {
-        if old_trace.startsWith(trace) then {
-          val lhs = List(getTraceIndex(old_trace, processID).toList)
-          val rhs = List(List(itrace, processID))
-          // old_trace |= phi_processID -> trace |= phi_processID
-          constraints.append(HashMap("left_predicates" -> lhs, "right_predicate" -> rhs))
-        }
-        if trace.startsWith(old_trace) then {
-          val rhs = List(getTraceIndex(old_trace, processID).toList)
-          val lhs = List(List(itrace, processID))
-          // trace |= phi_processID -> old_trace |= phi_processID
-          constraints.append(HashMap("left_predicates" -> lhs, "right_predicate" -> rhs))
-        }
+      // let p denote the largest prefix of trace that is already in the database
+      // For all prefixes p <= p'.sigma <= trace, add the constraint
+      //  p'.sigma |= phi_processID -> p' |= phi_processID
+      var large = trace
+      var small = trace.dropRight(1)
+      while !tracesPerProcess(processID).contains(large) && small.size > 0 do {
+        tracesPerProcess(processID).append(large)
+        val lhs = List(getTraceIndex(large, processID).toList)
+        val rhs = List(getTraceIndex(small, processID).toList)
+        // large |= phi_processID -> small |= phi_processID
+        constraints.append(HashMap("left_predicates" -> lhs, "right_predicate" -> rhs))
+        large = small
+        small = small.dropRight(1)
       }
-      tracesPerProcess(processID).append(trace)
     }
     (itrace, processID)
   }
@@ -142,10 +142,10 @@ class DFABoltGenerator(
   ): Option[Buffer[DLTS]] = { 
     val instance = getInstance()
     logger.debug(instance.toString())
-    val tmpFile = os.temp(prefix=s"query${query_count}_", suffix = ".json")
+    val tmpFile = os.temp(prefix=s"query${query_count}_", suffix = ".json", deleteOnExit = !configuration.get().keepTmpFiles)
     query_count += 1
     os.write.over(tmpFile, write(instance))
-    logger.debug(s"Query ${query_count} with traces: ${instance.traces}")
+    logger.debug(s"Query ${query_count}...")
     val cmd = s"bolt -u ${tmpFile.toString()} 5 5 horn-search 10 sat"
     logger.debug(s"${BLUE}${cmd}${RESET}")
     val output = cmd.!!
@@ -170,17 +170,9 @@ class DFABoltGenerator(
         val dlts = DLTS.fromHOAStringWithAcceptingTransitions(hoa_string, Some(system.processes(i).alphabet))
         // But we want the mpty word to be always accepted:
         dlts.dfa.setAccepting(dlts.dfa.getInitialState(), true)
-        val pc_dlts = DLTS.makePrefixClosed(dlts.dfa, dlts.alphabet, false)
-        val pruned = DLTS(s"${dlts.name}${i}", pc_dlts.pruned, dlts.alphabet)
-        if !dlts.dfa.isSafety then {
-          logger.error(s"Displaying non-safety DFA for $i")
-          dlts.visualize()
-          logger.error(s"Displaying its prefix-closure: ")
-          DLTS("pc_dlts", pc_dlts, dlts.alphabet).visualize()
-          logger.error(s"Displaying its pruning: ")
-          pruned.visualize()
-          assert(false)
-        }
+        val pc_dfa = dlts.dfa.makeNonPrefixClosedStatesAbsorving(system.processes(i).alphabet, false)
+        val pruned = DLTS(s"${dlts.name}${i}", pc_dfa.pruned, dlts.alphabet)
+        assert(pruned.dfa.isSafety)
         pruned
       }
       .toBuffer

@@ -37,3 +37,5 @@ CircAG.jar
 .VS*
 .scalafmt.conf
 .sbtopts
+examples/logs
+output/
