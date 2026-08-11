@@ -187,7 +187,6 @@ object DLTS {
       .foreach({ (sigma, i) =>
         dfa.setTransition(newStates(i), sigma, newStates(i + 1))
       })
-    // dfa.setAccepting(projTace.size, true)
     DLTS("_trace_", dfa, alph)
   }
 
@@ -282,15 +281,12 @@ object DLTS {
       line match {
         case regProcess(_) => ()
         case regEdge(pr, src, tgt, event) => ()
-          // System.out.println(s"Edge ${pr} ${src} ${tgt} ${event}")
         case regLocation(pr, loc) => 
-          // System.out.println(s" ${pr} ${loc} ")
           statesMap.put(loc, dfa.addState(true))
           if line.contains("initial:") then {
             dfa.setInitial(statesMap(loc), true)
           }
         case _ => ()
-          // System.out.println(s"Cannot parse line: ${line}")
       }
     )
     content.foreach( line =>
@@ -335,14 +331,10 @@ object DLTS {
       }
     }
     while(addIdentifier()){}
-    logger.debug(s"Modified regexp: ${modifiedRegexp}")
     val aut = BricsNFA(dk.brics.automaton.RegExp(modifiedRegexp).toAutomaton())
     val dfa = NFAs.determinize(aut, Alphabets.characters('A', 'z'))
     val alph = Alphabets.fromList(names.values.toList)
 
-    // val localAlph = Alphabets.fromList()
-    // Visualization.visualize(dfa,Alphabets.characters('a', 'b'))
-    
     val newDFA = FastDFA(alph)
     val newStates = Buffer[FastDFAState]()
     dfa
@@ -565,7 +557,6 @@ extension(dfa : FastDFA[String]){
           false
         } else if !visited(s.getId()) then {
           visited(s.getId()) = true
-          // System.out.println(alphabet.toSeq.map(newDFA.getSuccessors(s, _)))
           dfa.getInputAlphabet().toSeq
             .map(dfa.getSuccessors(s, _).forall({ dfs(_) }))
             .forall({ x => x })
@@ -591,7 +582,6 @@ extension(dfa : FastDFA[String]){
           true
         } else if !visited(s.getId()) then {
           visited(s.getId()) = true
-          // System.out.println(alphabet.toSeq.map(newDFA.getSuccessors(s, _)))
           dfa.getInputAlphabet().toSeq
             .map(dfa.getSuccessors(s, _).exists({ checkAcceptingReachable(_) }))
             .exists({ x => x })

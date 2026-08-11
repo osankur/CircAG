@@ -2,7 +2,7 @@
 This is an automatic assume-guarantee model checker using either DFA assumptions to check properties over finite traces or LTL assumptions
 over infinite traces. Both algorithms are described in the following paper:
 
-- Ocan Sankur. Automatic Assume-Guarantee Reasoning for Safety andLiveness Using Passive Learning. 2024.
+- Ocan Sankur. Automatic Assume-Guarantee Reasoning for Safety and Liveness Using Passive Learning. Formal Methods in System Design. 2025.
 
 The tool can be used in two modes. First, it offers a fully automatic algorithm which learns assumptions to apply the assume-guarantee rule and prove (or disprove) the desired property.
 Moreover, the API can be used in the Scala console interactively to prove properties on systems with manually selected assumptions. It is also possible to specify some of the assumptions, and let the algorithm learn the rest of them.

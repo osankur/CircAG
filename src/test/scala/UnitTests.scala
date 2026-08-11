@@ -69,8 +69,6 @@ class Z3Tests extends munit.FunSuite {
   test("z3 enum sort"){
     val cfg = HashMap[String, String]()
     cfg.put("model", "true");
-    // cfg.put("proof", "true");
-    // cfg.put("unsat_core", "true")
     val ctx = Context(cfg);      
     val solver3 = ctx.mkSolver()
     val enumSort = ctx.mkEnumSort("T", Array[String]("a","b","c") : _*);
@@ -120,12 +118,6 @@ class TAandLTSTests extends munit.FunSuite {
   }
 
   test("Lasso graph parsing optimizations"){
-    // val tck_output = """digraph _hoa_ {
-    //   0 [initial="true", intval="", labels="", vloc="<qs0>", zone="()"]
-    //   1 [final="true", intval="", labels="_hoa__ltl_acc_", vloc="<qs3>", zone="()"]
-    //   0 -> 1 [guard="", reset="", src_invariant="", tgt_invariant="", vedge="<_hoa_@a>"]
-    //   1 -> 1 [guard="", reset="", src_invariant="", tgt_invariant="", vedge="<_hoa_@a>"]
-    //   }"""
     val tck_output1 = """digraph _hoa_ {
       0 [final="true", intval="", labels="", vloc="<qs0>", zone="()"]
       1 [final="true", intval="", labels="", vloc="<qs0>", zone="()"]
@@ -572,7 +564,6 @@ class DFAAAG extends munit.FunSuite {
    val aut : DFA[java.lang.Integer, String] =
       AutomatonBuilders
         .newDFA(inputs2)
-        // .forDFA(FastDFA(inputs2))
         .withInitial("q0")
         .from("q0")
         .on("start1")
@@ -766,7 +757,6 @@ class LTLAGTests extends munit.FunSuite {
     val neg = Set((List("c"),List("c")))
   }
   test("ltl inductive check: ltl-toy1 a b"){
-    // val ass = List("G ((a -> X !a) & !c)", "G F b")
     val ass = List("G ((a -> X !a))", "G F b")
     val ltlf = ass.map(LTL.fromString)
     val tas = Array(File("examples/ltl-toy1/a.tck"), File("examples/ltl-toy1/b.tck"))

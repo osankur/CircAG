@@ -10,9 +10,6 @@ import fr.irisa.circag.ltl._
 enum DFAProofState:
     override def toString() : String = {
         this match {
-            // case DFAProofState.Unknown => s"${AnsiColor.BLUE}?${AnsiColor.RESET}"
-            // case DFAProofState.Proved => s"${AnsiColor.GREEN}\u2713${AnsiColor.RESET}"
-            // case DFAProofState.Disproved(cex) => s"${AnsiColor.RED}X (${cex}) ${AnsiColor.RESET}"
             case DFAProofState.Unknown => s"?"
             case DFAProofState.Proved => s"\u2705"
             case DFAProofState.PremiseSucceeded => s"(\u2705)?"

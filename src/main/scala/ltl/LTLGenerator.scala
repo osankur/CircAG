@@ -393,15 +393,11 @@ class LTLDisjunctiveGenerator(_system : SystemSpec, _proofSkeleton : LTLProofSke
       }
     }
 
-    // println("Generating assignment")
-    // for ass <- solver.getAssertions() do
-    //   println(ass)
-
     var beginTime = System.nanoTime()
     if(solver.check() == z3.Status.UNSATISFIABLE){
       statistics.Timers.incrementTimer("z3", (System.nanoTime() - beginTime))
       solver.pop()
-      // println("Constraints are unsat")
+      logger.debug(f"Constraints are unsat")
       None
     } else {
       val m = solver.getModel()
@@ -426,7 +422,6 @@ class LTLDisjunctiveGenerator(_system : SystemSpec, _proofSkeleton : LTLProofSke
               }
           })
       })
-
       statistics.Timers.incrementTimer("z3", (System.nanoTime() - beginTime))
       solver.pop()
       Some(positiveSamples, negativeSamples)
@@ -471,7 +466,7 @@ class LTLDisjunctiveGenerator(_system : SystemSpec, _proofSkeleton : LTLProofSke
           // rho, k0 |= phi_i'
           val main = varOfIndexedTrace(_processID, lasso.suffix(violationIndex))
           z3ctx.mkOr(ncDeps, cDeps, instDeps, main)
-        println(s"refineConstraintByQuery violationIndex=${violationIndex}: ${constraint}")
+        logger.debug(s"refineConstraintByQuery violationIndex=${violationIndex}: ${constraint}")
         solver.add(constraint)
 
       case NonCircularPremiseQuery(_processID, dependencies, mainAssumption, fairness) => 
@@ -492,7 +487,6 @@ class LTLDisjunctiveGenerator(_system : SystemSpec, _proofSkeleton : LTLProofSke
             }
           }).toList
         val constraint = z3ctx.mkOr(main, z3ctx.mkOr(deps : _*))
-        // println(s"refineConstraintByQuery: ${constraint}")
         solver.add(constraint)
     }
   }
@@ -542,11 +536,10 @@ class LTLDisjunctiveGenerator(_system : SystemSpec, _proofSkeleton : LTLProofSke
                     case None => 
                       // There is no LTL formula for separating these samples
                       // Block the current assignment, and try again with another assignment
-                      println(s"No solution for ${i}. Blocking assignment ${currentAssignment}")
+                      logger.debug(s"No solution for ${i}. Blocking assignment ${currentAssignment}")
                       blockCurrentAssignment()
                       throw UnsatAssumption()
                     case Some(ltl) => 
-                      logger.debug(s"Samples2LTL generated formula ${ltl} for ${i}")
                       ltl
                   }
                 }
