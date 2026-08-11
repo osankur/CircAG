@@ -1,0 +1,18 @@
+digraph machine {
+  subgraph cluster_machine {
+    label="machine";
+    machine_q[label="q", initial=""];
+    machine_qerr[label="qerr", labels="err"];
+    machine_q -> machine_q[label="start1", provided="task == 0", do="task = 1"];
+    machine_q -> machine_q[label="end1", provided="task == 1", do="task = 0"];
+    machine_q -> machine_qerr[label="start1", provided="task != 0"];
+    machine_qerr -> machine_qerr[label="err"];
+  }
+  subgraph cluster_synchronizations {
+    label="Synchronizations";
+    node[shape="none"];
+    "
+    ";
+  }
+}
+

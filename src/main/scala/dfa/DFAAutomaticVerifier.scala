@@ -70,18 +70,6 @@ class DFAAutomaticVerifier(
     this.proofSkeleton.setAssumptionAlphabet(processID, alphabet);
   }
 
-  def dumpAssumptions() : Unit = {
-    val dir = Paths.get(".", ".circag_log")
-    Files.createDirectories(dir)
-    for i <- 0 until nbProcesses do {
-      val tck = TA.fromLTS(assumptions(i))
-      val writer = PrintWriter(new File(dir.toFile(), s"_assumption${i}_${system.processes(i).systemName}.tck"))
-      writer.write(tck.toString())
-      writer.close()
-    }
-    logger.info(s"Assumptions written into directory ${dir.getFileName().toString()}")
-  }
-
   /** Check the AG rule once for the current assumption alphabet and DFAs
    */
   override def applyAG(proveGlobalproperty: Boolean = true): AGResult = {
@@ -145,11 +133,13 @@ class DFAAutomaticVerifier(
       if system.property == None || !proveGlobalproperty then
         throw AGResult.Success
       this.checkFinalPremise() match {
-        case None =>          
+        case None =>
+          logger.debug(s"${GREEN}Final premise passed${RESET}")
           AGResult.Success
         case Some(cexTrace) =>
           latestCex = cexTrace
           // If all processes contain proj(cexTrace), then return false, otherwise continue
+          logger.debug(s"${RED}Final premise failed: ${cexTrace}${RESET}")
           dfaGenerator.refineByFinalPremiseCounterexample(cexTrace)
           throw AGResult.GlobalPropertyProofFail(cexTrace)
       }
@@ -177,7 +167,8 @@ class DFAAutomaticVerifier(
       statistics.Counters.incrementCounter("iteration")
       var newAss = dfaGenerator.generateAssumptions(fixedAssumptionsMap)
       newAss match {
-        case Some(newAss) => this.assumptions = newAss
+        case Some(newAss) => 
+          this.assumptions = newAss
         case None         => throw DFAUnsatisfiableConstraints()
       }
       currentState = this.applyAG(proveGlobalProperty)

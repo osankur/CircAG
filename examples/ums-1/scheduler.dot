@@ -1,0 +1,22 @@
+digraph scheduler {
+  subgraph cluster_scheduler {
+    label="scheduler";
+    scheduler_q0[label="q0", initial=""];
+    scheduler_r1[label="r1"];
+    scheduler_g1[label="g1"];
+    scheduler_s1[label="s1"];
+    scheduler_e1[label="e1"];
+    scheduler_q0 -> scheduler_r1[label="req1"];
+    scheduler_r1 -> scheduler_g1[label="grant1"];
+    scheduler_g1 -> scheduler_s1[label="start1"];
+    scheduler_s1 -> scheduler_e1[label="end1"];
+    scheduler_e1 -> scheduler_q0[label="rel1"];
+  }
+  subgraph cluster_synchronizations {
+    label="Synchronizations";
+    node[shape="none"];
+    "
+    ";
+  }
+}
+

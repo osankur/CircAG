@@ -1,0 +1,6 @@
+system:lts0
+event:a
+
+process:lts0
+location:lts0:q0{initial:}
+edge:lts0:q0:q0:a

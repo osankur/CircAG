@@ -25,8 +25,10 @@ import fr.irisa.circag.{Trace, DLTS, Alphabet}
   *     L(g_j)). Otherwise, add w_{alpha_i} |= L(g_i).
   */
 enum ConstraintStrategy:
+  case Bolt
   case DisjunctiveSeparate
   case Disjunctive
+  case LoggingDisjunctive
   case Eager
 
 /** Stores constraints on assumptions, and generates them by first solving these constraints. 
@@ -91,6 +93,10 @@ object DFAGenerator {
         DFADisjunctiveSeparateGenerator(system, proofSkeleton, dfaLearnerAlgorithm)
       case ConstraintStrategy.Disjunctive => 
         DFADisjunctiveGenerator(system, proofSkeleton, dfaLearnerAlgorithm)
+      case ConstraintStrategy.Bolt => 
+        DFABoltGenerator(system, proofSkeleton, dfaLearnerAlgorithm)
+      case ConstraintStrategy.LoggingDisjunctive => 
+        LoggingDFADisjunctiveGenerator(system, proofSkeleton, dfaLearnerAlgorithm)
       case ConstraintStrategy.Eager => DFAEagerGenerator(system, proofSkeleton, dfaLearnerAlgorithm)
     }
   }

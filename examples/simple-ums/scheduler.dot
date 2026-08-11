@@ -1,0 +1,37 @@
+digraph scheduler {
+  subgraph cluster_scheduler {
+    label="scheduler";
+    scheduler_q0[label="q0", initial=""];
+    scheduler_r1[label="r1"];
+    scheduler_r2[label="r2"];
+    scheduler_g1[label="g1"];
+    scheduler_g2[label="g2"];
+    scheduler_s1[label="s1"];
+    scheduler_s2[label="s2"];
+    scheduler_e1[label="e1"];
+    scheduler_e2[label="e2"];
+    scheduler_q0 -> scheduler_r1[label="req1"];
+    scheduler_r1 -> scheduler_g1[label="grant1"];
+    scheduler_g1 -> scheduler_s1[label="start1"];
+    scheduler_s1 -> scheduler_e1[label="end1"];
+    scheduler_e1 -> scheduler_q0[label="rel1"];
+    scheduler_g1 -> scheduler_r2[label="req2"];
+    scheduler_r1 -> scheduler_r2[label="req2"];
+    scheduler_s1 -> scheduler_r2[label="req2"];
+    scheduler_q0 -> scheduler_r2[label="req2"];
+    scheduler_r2 -> scheduler_g2[label="grant2"];
+    scheduler_g2 -> scheduler_s2[label="start2"];
+    scheduler_s2 -> scheduler_e2[label="end2"];
+    scheduler_e2 -> scheduler_q0[label="rel2"];
+    scheduler_g2 -> scheduler_r1[label="req1"];
+    scheduler_r2 -> scheduler_r1[label="req1"];
+    scheduler_s2 -> scheduler_r1[label="req1"];
+  }
+  subgraph cluster_synchronizations {
+    label="Synchronizations";
+    node[shape="none"];
+    "
+    ";
+  }
+}
+

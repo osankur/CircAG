@@ -1,0 +1,18 @@
+digraph user {
+  subgraph cluster_user {
+    label="user";
+    user_i[label="i", initial=""];
+    user_r1[label="r1"];
+    user_g1[label="g1"];
+    user_i -> user_r1[label="req1"];
+    user_r1 -> user_g1[label="grant1"];
+    user_g1 -> user_i[label="rel1"];
+  }
+  subgraph cluster_synchronizations {
+    label="Synchronizations";
+    node[shape="none"];
+    "
+    ";
+  }
+}
+

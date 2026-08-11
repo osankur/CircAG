@@ -43,5 +43,9 @@ metals.sbt
 
 CircAG.jar
 .circag_log
-
-.ipynb*/*
+.ipynb*
+.VS*
+.scalafmt.conf
+.sbtopts
+examples/logs
+output/

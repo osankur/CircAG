@@ -18,10 +18,10 @@ We use the [LearnLib](https://github.com/LearnLib/) for DFA learning and automat
 for learning LTL formulas.
 
 ## Dependencies and Installation
-The following must be installed with your system package manager.
-- Scala 3.3+
-- Java 17+
-- sbt 1.10+
+You need
+- Scala 3.3.7
+- Java 1.7
+- sbt 1.12
 - maven
 
 We further need the following executables and libraries which will be installed by running the `install.sh` script:
@@ -59,6 +59,8 @@ The --err option is used to pass the label that defines the safety property: AG!
 
 A passive learning algorithm (RPNI or SAT) is used to learn assumption DFAs for each process separately. You can specify the passive DFA learning algorithm using the option `--dfaLearningAlgorithm RPNI` or `--dfaLearningAlgorithm SAT`. 
 You can add the option `--visualizeAssumptions true` to see the assumption DFAs that were learned at the end of a successful verification.
+
+In this setting, all DFA assumptions must be prefix-closed and pruned (all states must be accepting - so they are not, in general, complete).
 
 ### Other examples
     java -jar CircAG.jar dfa --dir examples/toy --err err

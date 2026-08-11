@@ -68,7 +68,6 @@ class DFADisjunctiveGenerator(
       toVars.put((process, trace), v)
       toIndexedTraces.put(v, (process, trace))
       samples(process).append((trace, v))
-      // updateTheoryConstraints(process, samples(process).size - 1)
       v
     }
   }
@@ -109,7 +108,7 @@ class DFADisjunctiveGenerator(
     }
   }
 
-  private def addDisjunctiveConstraint(process: Int, trace: Trace, constraintType: Int): Unit = {
+  protected def addDisjunctiveConstraint(process: Int, trace: Trace, constraintType: Int): Unit = {
     constraintType match {
       case 34 =>
         assert(trace.size > 0)
@@ -128,7 +127,6 @@ class DFADisjunctiveGenerator(
 
         val newConstr =
           z3ctx.mkOr(z3ctx.mkOr(lhs: _*), varOfIndexedTrace(process, trace))
-        logger.debug(s"New constraint ${newConstr}")
         solver.add(newConstr)
       case 22 =>
         val prefix = trace.dropRight(1)
@@ -154,7 +152,6 @@ class DFADisjunctiveGenerator(
           )
         val newConstr = z3ctx.mkOr(term1, term2)
         solver.add(newConstr)
-        logger.debug(s"Adding ${newConstr}")
       case 29 =>
         val prefix = trace.dropRight(1)
         val term1 =
@@ -180,15 +177,12 @@ class DFADisjunctiveGenerator(
           )
         val newConstraint = z3ctx.mkOr(term1, term2)
         solver.add(newConstraint)
-        logger.debug(s"New constraint default ${newConstraint}")
     }
-    logger.debug(s"Number of constraints ${solver.getAssertions().size}")
   }
 
   override def refineByFinalPremiseCounterexample(trace: Trace): Unit = {
     breakable{
       for j <- 0 until nbProcesses do {
-          logger.debug(s"Checking if proj of ${trace} to j-th ass alphabet is accepted by process ${j}")
           if system.processes(j).checkTraceMembership(trace, Some(proofSkeleton.assumptionAlphabets(j))) == None then {
             break
           }
@@ -203,9 +197,7 @@ class DFADisjunctiveGenerator(
           .toSeq: _*
       )
     )
-    logger.debug(s"Adding constraint ${newConstraint}")
     solver.add(newConstraint)
-    logger.debug(s"Number of constraints: ${solver.getAssertions().size}")
   }
 
   /** Generate assumptions satisfying the constraints, except that those
@@ -225,10 +217,6 @@ class DFADisjunctiveGenerator(
       throw Exception(s"${this.getClass.getName()} does not support fixed assumptions")
     statistics.Counters.incrementCounter("DFA Generator")
 
-    logger.debug(s"Constraints:")
-    for ass <- solver.getAssertions() do{
-      logger.debug(ass.toString())
-    }
     var beginTime = System.nanoTime()
 
     // Generate SAT query to guess nb.Processes automata of total size at most k
@@ -240,7 +228,6 @@ class DFADisjunctiveGenerator(
 
     while allDLTS == None && k < configuration.get().maxDFASize do {
       solver.push()
-      // val prefixes = Buffer.tabulate(this.nbProcesses)(_ => Set[Trace]())
       // State reached in process when reading given trace:
       val states_at = Buffer.tabulate(this.nbProcesses)(_ => HashMap[Trace, z3.IntExpr]())
       for process <- 0 until nbProcesses do {
@@ -248,7 +235,6 @@ class DFADisjunctiveGenerator(
           val proj_w = w.filter(proofSkeleton.assumptionAlphabets(process).contains(_))
           for i <- 0 to proj_w.size do {
             val prefix = proj_w.dropRight(i)
-            // prefixes(process) = prefixes(process).incl(prefix)
             states_at(process).put(prefix, z3ctx.mkIntConst(s"q${process}${prefix.toString()}"))
           }
         }
@@ -304,13 +290,8 @@ class DFADisjunctiveGenerator(
           solver.add(z3ctx.mkIff(accept_w, z3ctx.mkNot(z3ctx.mkEq(states_at(process)(proj_w), error_state(process)))))
         }
       }
-      logger.debug(s"Assertions:")
-      for ass <- solver.getAssertions() do {
-        logger.debug(ass.toString())
-      }
       if solver.check() == z3.Status.SATISFIABLE then {
         val m = solver.getModel()
-        // logger.debug(s"Model: ${m}")
         val all_dlts = Buffer.tabulate[DLTS](nbProcesses)(
           process =>
             val m = solver.getModel()
@@ -343,5 +324,3 @@ class DFADisjunctiveGenerator(
     allDLTS
   }
 }
-
-

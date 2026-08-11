@@ -1,4 +1,4 @@
-val scala3Version = "3.3.3"
+val scala3Version = "3.3.7"
 
 resolvers += Resolver.mavenLocal
 resolvers += "artemis" at "https://artifacts.itemis.cloud/repository/maven-mps"
@@ -8,6 +8,10 @@ val jarName = "CircAG.jar"
 assembly/assemblyJarName := jarName
 assembly/mainClass := Some("fr.irisa.circag.Main")
 assembly / assemblyOutputPath := file(s"./${(assembly/assemblyJarName).value}")
+// use the default source layout (src/main/scala for Compile, src/test/scala for Test)
+// the previous override caused test sources to be compiled in the main scope, which
+// prevents Test-scoped dependencies (like munit) from being available.
+// Compile / scalaSource := baseDirectory.value / "src"
 
 lazy val root = project
   .in(file("."))
@@ -15,8 +19,8 @@ lazy val root = project
     name := "circAG",
     version := "0.1",
     scalaVersion := scala3Version,
-    libraryDependencies ++= Seq("org.scalameta" %% "munit" % "0.7.29" % Test,
-		"org.scala-lang.modules" %% "scala-parser-combinators" % "2.2.0",
+    libraryDependencies ++= Seq("org.scalameta" %% "munit" % "1.0.4" % Test,
+    	"org.scala-lang.modules" %% "scala-parser-combinators" % "2.2.0",
 		"de.learnlib" % "learnlib-api" % "0.16.0",
 		"de.learnlib" % "learnlib-parent" % "0.16.0" pomOnly(),
 		"de.learnlib.distribution" % "learnlib-distribution" % "0.16.0" pomOnly(),
@@ -26,7 +30,8 @@ lazy val root = project
 		"org.slf4j" % "slf4j-api" % "1.7.9",
         "org.slf4j" % "slf4j-simple" % "1.7.9",
 		"tools.aqua" % "z3-turnkey" % "4.11.2",
-		"jhoafparser" % "jhoafparser" % "1.1.1"
+		"jhoafparser" % "jhoafparser" % "1.1.1",
+		"org.scala-lang" %% "toolkit" % "0.7.0"
   		)
   	)
 Global / cancelable := true
