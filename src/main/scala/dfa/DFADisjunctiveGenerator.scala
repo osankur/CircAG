@@ -31,7 +31,8 @@ class DFADisjunctiveGenerator(
 ) extends DFAGenerator(_system, _proofSkeleton) {
   require(dfaLearnerAlgorithm == DFALearningAlgorithm.SAT)
 
-  val logger = LoggerFactory.getLogger("CircAG")
+  val logger = LoggerFactory.getLogger(this.getClass)
+
 
   protected val z3ctx = {
     val cfg = HashMap[String, String]()

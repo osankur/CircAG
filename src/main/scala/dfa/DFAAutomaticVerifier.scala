@@ -45,7 +45,7 @@ class DFAAutomaticVerifier(
     }
   }
 
-  protected val logger = LoggerFactory.getLogger("CircAG")
+  protected val logger = LoggerFactory.getLogger(this.getClass)
 
   protected var dfaGenerator =
     DFAGenerator.getGenerator(

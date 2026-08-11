@@ -67,7 +67,8 @@ trait LTLLearner(val name : String, val alphabet : Alphabet, val universal : Boo
 class SATLearner(name : String, alphabet : Alphabet, universal : Boolean, solver : LTLLearningAlgorithm) 
   extends LTLLearner(name, alphabet, universal) {
 
-  protected val logger = LoggerFactory.getLogger("CircAG")
+  protected val logger = LoggerFactory.getLogger(this.getClass)
+
 
   def learn() : Option[LTL] = {
     // logger.debug(s"Entering LTLLearner for ${name} (universal=${universal}) for process ${name} with the following samples:")

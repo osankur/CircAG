@@ -116,7 +116,8 @@ class LTLEagerGenerator(_system : SystemSpec, _proofSkeleton : LTLProofSkeleton,
   // Whether to add positive samples as a last resort. Setting this true makes the alg. incomplete!
   val positiveLastResort = true
 
-  private val logger = LoggerFactory.getLogger("CircAG")
+  private val logger = LoggerFactory.getLogger(this.getClass)
+
   protected val samples = Buffer.tabulate(nbProcesses)({_ => Buffer[Lasso]()})
   // Boolean variable corresponding to each pair (process,trace)
 
@@ -302,7 +303,8 @@ class LTLDisjunctiveGenerator(_system : SystemSpec, _proofSkeleton : LTLProofSke
     cfg.put("model", "true")
     z3.Context(cfg);
   }
-  private val logger = LoggerFactory.getLogger("CircAG")
+  private val logger = LoggerFactory.getLogger(this.getClass)
+
 
   protected val samples = Buffer.tabulate(nbProcesses)({_ => Buffer[(Lasso,z3.BoolExpr)]()})
   // Boolean variable corresponding to each pair (process,trace)

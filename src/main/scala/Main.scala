@@ -35,7 +35,8 @@ import net.automatalib.util.automata.builders.AutomatonBuilders;
 
 import fr.irisa.circag.ltl._
 object Main {
-  val logger = LoggerFactory.getLogger("CircAG")
+  val logger = LoggerFactory.getLogger(this.getClass)
+
 
   def main(args: Array[String]): Unit = {   
     val builder = OParser.builder[Configuration]

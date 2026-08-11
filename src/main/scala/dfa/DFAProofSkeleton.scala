@@ -22,7 +22,8 @@ import fr.irisa.circag._
   * 
   */
 class DFAProofSkeleton(val system : SystemSpec) {  
-  private val logger = LoggerFactory.getLogger("CircAG")
+  private val logger = LoggerFactory.getLogger(this.getClass)
+
 
   private val _processAlphabets : Buffer[Set[String]] = system.processes.map(_.alphabet).toBuffer
   private var _propertyAlphabet = system.property match{

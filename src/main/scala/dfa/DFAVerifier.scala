@@ -61,7 +61,8 @@ class DFAVerifier(val system: SystemSpec) {
     this(SystemSpec(ltsFiles, property))
   }
 
-  private val logger = LoggerFactory.getLogger("CircAG")
+  private val logger = LoggerFactory.getLogger(this.getClass)
+
 
   val nbProcesses = system.nbProcesses
   val proofSkeleton = DFAProofSkeleton(system)

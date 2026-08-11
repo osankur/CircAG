@@ -90,7 +90,8 @@ class LTLVerifier(val system : SystemSpec) {
     this(SystemSpec(ltsFiles, property))
   }
 
-  protected val logger = LoggerFactory.getLogger("CircAG")
+  protected val logger = LoggerFactory.getLogger(this.getClass)
+
 
   val nbProcesses = system.ltsFiles.size
   

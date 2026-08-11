@@ -63,7 +63,7 @@ class DFABoltGenerator(
     _proofSkeleton: DFAProofSkeleton,
     _dfaLearnerAlgorithm: DFALearningAlgorithm
 ) extends DFAGenerator(system, _proofSkeleton) {
-  protected val logger = LoggerFactory.getLogger("CircAG")
+  protected val logger = LoggerFactory.getLogger(this.getClass)
 
   val traces = HashMap[Trace, Int]()
   val tracesPerProcess : Buffer[Buffer[Trace]] = Buffer.tabulate(system.nbProcesses)(_ => Buffer[Trace]())

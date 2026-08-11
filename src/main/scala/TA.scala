@@ -308,7 +308,7 @@ class TA (
 }
 
 object TA{
-  protected val logger = LoggerFactory.getLogger("CircAG")
+  val logger = LoggerFactory.getLogger(this.getClass)
 
   /** 
    * Parser that reads TChecker TA format. 
@@ -321,7 +321,6 @@ object TA{
     val regProcess = "\\s*process:(.*)\\s*".r
     val regEdge = "\\s*edge:[^:]*:[^:]*:[^:]*:([^{]*).*".r
     val regSystem = "\\s*system:([^ ]*).*".r
-    // System.out.println("File: " + inputFile.toString)
     ta.alphabet = lines.flatMap({
       case regEvent(event) if !event.startsWith("_") => Some(event.strip())
       case _               => None

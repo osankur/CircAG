@@ -88,7 +88,7 @@ case class NLTS(
 ) extends LTS[FastNFAState](name, dfa, alphabet)
 
 object DLTS {
-  val logger = LoggerFactory.getLogger("CircAG")
+  val logger = LoggerFactory.getLogger(this.getClass)
 
   /** @brief
     *   Given (dfa, alphabet), compute the lifting of the dfa to

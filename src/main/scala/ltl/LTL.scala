@@ -119,7 +119,8 @@ object Or {
 }
 
 object LTL {
-   private val logger = LoggerFactory.getLogger("CircAG")
+   private val logger = LoggerFactory.getLogger(this.getClass)
+
 
    def fromString(ltlString : String) : LTL = {
     def printToFile(f: java.io.File)(op: java.io.PrintWriter => Unit) = {
