@@ -99,10 +99,6 @@ class Z3Tests extends munit.FunSuite {
     val solver = ctx.mkSolver()
     solver.add(e)
     assert(solver.check(vary) == Status.UNSATISFIABLE)
-    // System.out.println(solver.getProof())
-    // for ass <- solver.getUnsatCore() do {
-    //   System.out.println(ass)
-    // }    
   }
 }
 
@@ -120,7 +116,6 @@ class TAandLTSTests extends munit.FunSuite {
       4 -> 1 [guard="", reset="", src_invariant="", tgt_invariant="", vedge="<lts1@c,_comp_g_0@c,lifted_g_1@c,lifted_g_2@c>"]
     }""""
     val trace = TA.getTraceFromCounterExampleOutput(tck_output.split("\n").toList, Set("a","b","c"))
-    println(trace)
     assert(trace == List("a","b","c","a"))
   }
 
@@ -189,7 +184,6 @@ class TAandLTSTests extends munit.FunSuite {
 
     val trace5 = TA.getLassoFromCounterExampleOutput(tck_output5.split("\n").toList, Set("a","b","c")) 
     assert(trace5 == (List("a"),List("c","c")))
-    // println(trace5)
   }  
   test("DLTS from fromTrace"){
     val dlts = DLTS.fromTrace(List("a","b","c","a"))
@@ -698,7 +692,6 @@ class LTLAGTests extends munit.FunSuite {
     // val ass = List("G ((a -> X !a) & !c)", "G F b")
     val ass = List("G ((a -> X !a))", "G F b")
     val ltlf = ass.map(LTL.fromString)
-    System.out.println(s"LTL assumptions: ${ltlf}")
     val tas = Array(File("examples/ltl-toy1/a.tck"), File("examples/ltl-toy1/b.tck"))    
     val checker = LTLVerifier(ltl.SystemSpec(tas, G(F(Atomic("a")))))
     ltlf.zipWithIndex.foreach( (ltl,i) => checker.setAssumption(i, ltl))
@@ -712,7 +705,6 @@ class LTLAGTests extends munit.FunSuite {
   test("ltl inductive check: ltl-toy1 a b - double G"){
     val ass = List("G ((a -> X !a))", "G G F b") // Spot will simplify G G to G
     val ltlf = ass.map(LTL.fromString)
-    System.out.println(s"LTL assumptions: ${ltlf}")
     val tas = Array(File("examples/ltl-toy1/a.tck"), File("examples/ltl-toy1/b.tck"))
     val checker = LTLVerifier(ltl.SystemSpec(tas, G(F(Atomic("a")))))
     checker.setAssumption(1, G(G(F(Atomic("b"))))) // Overwrite
@@ -727,7 +719,6 @@ class LTLAGTests extends munit.FunSuite {
   test("ltl inductive check w fairness: ltl-toy1 c d"){
     val ass = List("G F (a | b)", "G !d")
     val ltlf = ass.map(LTL.fromString)
-    System.out.println(s"LTL assumptions: ${ltlf}")
     val tas = Array(File("examples/ltl-toy1/c.tck"), File("examples/ltl-toy1/d.tck"))
     val checker = LTLVerifier(ltl.SystemSpec(tas, LTLTrue()))
     ltlf.zipWithIndex.foreach( (ltl,i) => checker.setAssumption(i, ltl))
@@ -743,11 +734,9 @@ class LTLAGTests extends munit.FunSuite {
   test("ltl final premise check"){
     val ass = List("G ((a -> X !a) & !c)", "G (d -> (X c))")
     val ltlf = ass.map(LTL.fromString)
-    // System.out.println(s"LTL assumptions: ${ltl}")
     val tas = Array(File("examples/ltl-toy1/a.tck"), File("examples/ltl-toy1/b.tck"))
     val checker = LTLVerifier(ltl.SystemSpec(tas, G(Not(Atomic("d")))))
     ltlf.zipWithIndex.foreach( (ltl,i) => checker.setAssumption(i, ltl))
-    System.out.println(checker.checkFinalPremise(true))
     assert(checker.checkFinalPremise(true) == None)
     
     val checker2 = LTLVerifier(tas, G(Not(Atomic("a"))))
@@ -770,26 +759,16 @@ class LTLAGTests extends munit.FunSuite {
       case None => assert(false)
       case Some(ltl) => assert(ltl.toString == "(G (F c))")
     }
-
-    val learner2 = ltl.SATLearner("a", Set("a","b","c"), universal= true, ltl.LTLLearningAlgorithm.Scarlet)
-    learner2.setPositiveSamples(Set((List("a","b"), List("c"))))
-    learner2.setNegativeSamples(Set((List("b","b"), List("b")), (List("a","a"), List("b","b"))))
-    learner2.getLTL() match {
-      case None => assert(false)
-      case Some(ltl) => assert(ltl.toString == "(G (F c))")
-    }
   }
   test("sat-ltl-learner2"){
     val learner = ltl.SATLearner("formula", Set("a","b","c"), universal=true, ltl.LTLLearningAlgorithm.Samples2LTL)
     val pos = Set((List(),List("a", "b")), (List("a", "b"),List("a", "b")))
     val neg = Set((List("c"),List("c")))
-    println(learner.getLTL())
   }
   test("ltl inductive check: ltl-toy1 a b"){
     // val ass = List("G ((a -> X !a) & !c)", "G F b")
     val ass = List("G ((a -> X !a))", "G F b")
     val ltlf = ass.map(LTL.fromString)
-    System.out.println(s"LTL assumptions: ${ltlf}")
     val tas = Array(File("examples/ltl-toy1/a.tck"), File("examples/ltl-toy1/b.tck"))
     val checker = LTLVerifier(tas, G(F(Atomic("a"))))
     ltlf.zipWithIndex.foreach( (ltl,i) => checker.setAssumption(i, ltl))
@@ -804,20 +783,6 @@ class LTLAGTests extends munit.FunSuite {
 
 
 class Single extends munit.FunSuite {
-  // test("ltl learn assumptions: ltl-toy1 2 processes"){
-  //   val tas = Array(File("examples/ltl-toy1/a.tck"), File("examples/ltl-toy1/b.tck"))
-  //   val checker = LTLAutomaticVerifier(ltl.SystemSpec(tas, G(F(Atomic("a")))))
-  //   checker.setProcessInstantaneousDependencies(0, Set(1))
-  //   assert(checker.learnAssumptions(proveGlobalProperty = true) == LTLAGResult.Success)
-  // }
-  // test("ltl learn assumptions: ltl-toy1 3 processes"){
-  //   val tas = Array(File("examples/ltl-toy1/a.tck"), File("examples/ltl-toy1/b.tck"), File("examples/ltl-toy1/c.tck"))
-  //   val checker = LTLAutomaticVerifier(ltl.SystemSpec(tas, G(F(Atomic("a")))))
-  //   checker.setProcessInstantaneousDependencies(0, Set(1))
-  //   // The learned assumptions are: G (b -> (X a))) and (G (c U b)
-  //   // This corresponds to the only infinite execution in this product: abaac^omega
-  //   assert(checker.learnAssumptions(proveGlobalProperty = true) == LTLAGResult.Success)
-  // }
   test("ltl inductive check: ltl-toy1 applyAG"){
     val tas = Array(File("examples/ltl-toy1/a.tck"), File("examples/ltl-toy1/b.tck"))
     val checker = LTLVerifier(ltl.SystemSpec(tas, G(F(Atomic("a")))))
@@ -837,24 +802,6 @@ class Single extends munit.FunSuite {
 }
 
 class A extends munit.FunSuite {
-  //  test("buchi automata for sdn and ums"){
-  //     // val ta = TA.fromFile(File("examples/sdn/a.tck"))
-  //     // val bta = ta.buchiIntersection(NLTS.fromLTL("((G F (go | ask)) & (G F (change | send)) & ~(G(ask -> F go)))", None),"acc")
-  //     // println(bta)
-  //     val ta = TA.fromFile(File("examples/ums-1/a.tck"))
-  //     // val bta = ta.buchiIntersection(NLTS.fromLTL("((G F (start1 | end1 | err)) & (G F (req1 | rel1 | grant1)) & ~(G(start1 -> F end1)))", None),"acc")
-  //     val bta = ta.buchiIntersection(NLTS.fromLTL("((G F (start1 | end1 | err)) & (G F (req1 | rel1 | grant1)) & ~(F rel1))", None),"acc")
-  //     // val ta = TA.fromFile(File("examples/ums-1/a.tck"))
-  //     // val bta = ta.buchiIntersection(NLTS.fromLTL("((G F (start1 | end1 | start2 | end2 | err)) & (G F (req1 | rel1 | grant1 | req2 | grant2 | rel2)) & ~(G(start1 -> F end1)))", None),"acc")
-  //     // val bta = ta.buchiIntersection(NLTS.fromLTL("((G F (start1 | end1 | start2 | end2 | err)) & (G F (req1 | rel1 | grant1 | req2 | grant2 | rel2)) & ~(F rel1))", None),"acc")
-  //     println(bta)
-  //   }    
-//  test("DFA learn assumptions: ums-1"){
-//     val tas = Array(File("examples/ums-1/user.tck"), File("examples/ums-1/scheduler.tck"), File("examples/ums-1/machine.tck"))
-//     val checker = DFAAutomaticVerifier(dfa.SystemSpec(tas, Some(DLTS.fromErrorSymbol(List("err")))))
-//     // val checker = LTLAutomaticVerifier(ltl.SystemSpec(tas, LTL.fromString("F(rel1)"))) // fails
-//     checker.learnAssumptions(true)
-//   }
   test("CEX Parsing from String"){
     val tck_output = """
       digraph _premise_scheduler {
@@ -881,7 +828,6 @@ class A extends munit.FunSuite {
       10 -> 0 [guard="", reset="", src_invariant="", tgt_invariant="", vedge="<scheduler@rel1,_comp_assumption_1_scheduler@rel1,lifted_assumption_0_user@rel1,lifted_assumption_2_machine@rel1>"]
       """
     val trace = TA.getTraceFromCounterExampleOutput(tck_output.split("\n").toList, Set("start1","end1","grant1", "rel1", "req1"))
-    println(trace)
   }
 
  }

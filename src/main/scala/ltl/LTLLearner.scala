@@ -29,7 +29,7 @@ import fr.irisa.circag.{pruned, filter, suffix, semanticEquals, size}
 
 
 enum LTLLearningAlgorithm:
-  case Samples2LTL, Scarlet
+  case Samples2LTL
 
   /**
   * Passive learning of LTL formulas. If learning universal formulas of the form G(phi),
@@ -121,9 +121,9 @@ class SATLearner(name : String, alphabet : Alphabet, universal : Boolean, solver
 
     solver match {
       case LTLLearningAlgorithm.Samples2LTL => 
-        val cmd = s"python samples2ltl/samples2LTL.py --sat --traces ${inputFile.toString}"
+        val cmd = Seq("samples2ltl/env/bin/python", "samples2ltl/samples2LTL.py", "--sat", "--traces", inputFile.toString)
 
-        logger.debug(s"${BLUE}${cmd}${RESET}")
+        logger.debug(s"${BLUE}${cmd.mkString(" ")}${RESET}")
 
         val stdout = StringBuilder()
         val stderr = StringBuilder()
@@ -151,66 +151,6 @@ class SATLearner(name : String, alphabet : Alphabet, universal : Boolean, solver
           }      
           // logger.debug(s"Samples2LTL returned ${substLtl}")
           Some(substLtl)
-        }
-      case LTLLearningAlgorithm.Scarlet =>        
-        Files.copy(inputFile.toPath(), Paths.get("Scarlet/_input_.trace"), REPLACE_EXISTING)
-        val cmd = s"python -m Scarlet.ltllearner --i _input_.trace --timeout 120 --verbose --outputcsv _output_.csv"
-        val stdout = StringBuilder()
-        val stderr = StringBuilder()
-        val beginTime = System.nanoTime()
-        val output =
-          try{
-          cmd !! ProcessLogger(stdout append _, stderr append _)
-          } catch {        
-            case e => 
-              logger.error(s"Unexpected return value when executing: ${cmd}")
-              throw e
-          }
-        statistics.Timers.incrementTimer("ltl-learner", System.nanoTime() - beginTime)
-        
-        val solutions = io.Source.fromFile("Scarlet/_output_.csv").getLines().toSeq.tail
-        if solutions.isEmpty then {
-          None
-        } else {
-          // Parse alphabet
-          val alphabetString = 
-            val l = stderr.toString().split("\n").filter(_.contains("Alphabet: "))
-            if (l.size != 1) then throw Exception(s"Cannot parse alphabet from the following output of Scarlet:\n${stderr}")
-            l.head
-          val rAlphabet = ".*\\[(.*)\\].*".r
-          val rLetter1 = "'(.*)'".r
-          val rLetter2 = "\"(.*)\"".r
-          val letters = 
-            alphabetString match {
-              case rAlphabet(letters) => 
-                letters.split(",").map({
-                    sigma =>  sigma.strip() match {
-                      case rLetter1(a) => a
-                      case rLetter2(a) => a
-                      case _ => throw Exception(s"Cannot parse letter ${sigma} in the alphabet description ${alphabetString} of Scarlet")
-                    }
-                  })
-              case _ => throw Exception(s"Could not parse alphabet from the following line: ${alphabetString}")
-            }
-          // println(s"Parsed alphabet: ${letters.toList}")
-          // Parse solution
-          val lastSolution = solutions.last
-          // println(s"Last solution is: ${lastSolution}")
-          val csvTerms = lastSolution.split(",")
-          if (csvTerms.size < 3) then throw Exception(s"Output file Scarlet/_output_.csv does not contain a solution")
-          val ltlFormula = LTL.fromString(csvTerms(2)) match {
-            case f if universal => G(f)
-            case f => f
-          }
-          // Double substitute p -> x0 -> bwdSubst(x0)
-          val subst = HashMap[String,String]()
-          letters
-          .zipWithIndex
-          .foreach({
-            (p, i) => subst.put(p, bwdSubst(s"x${i}"))
-          })
-          // println(s"Substitution is ${subst}")
-          Some(LTL.substitute(ltlFormula, subst))
         }
     }
   }

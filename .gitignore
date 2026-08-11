@@ -20,6 +20,16 @@ local.sbt
 
 # VS Code
 .vscode/
+.VSCodeCounter/
+.scalafmt.conf
+lib/tck*
+lib/AUTHORS
+lib/LICENSE
+lib/*.md
+lib/spot*
+lib/tchecker*
+output/
+examples/logs
 
 # Metals
 .bloop/
@@ -33,3 +43,5 @@ metals.sbt
 
 CircAG.jar
 .circag_log
+
+.ipynb*/*

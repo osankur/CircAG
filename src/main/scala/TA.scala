@@ -91,8 +91,8 @@ class TA (
 
     val certFile =
       Files.createTempFile(configuration.get().tmpDirPath, "circag-cert", ".cert").toFile()
-    val cmd = "tck-reach -a reach %s -l %s -C symbolic -o %s"
-            .format(modelFile.toString, label, certFile.toString)
+    val cmd = "%s -a reach %s -l %s -C symbolic -o %s"
+            .format(configuration.get().reachModelChecker, modelFile.toString, label, certFile.toString)
 
     TA.logger.debug(s"${BLUE}${cmd}${RESET}")
     // System.out.println(cmd)
@@ -283,9 +283,8 @@ class TA (
           ".cert"
         )
         .toFile()
-    // val cmd = "tck-liveness -a ndfs %s -C symbolic -l %s -o %s"
-    val cmd = "tck-liveness -a couvscc %s -C symbolic -l %s -o %s"
-      .format(modelFile.toString, label, certFile.toString)
+    val cmd = "%s -a couvscc %s -C symbolic -l %s -o %s"
+      .format(configuration.get().livenessModelChecker, modelFile.toString, label, certFile.toString)
     TA.logger.debug(s"${BLUE}${cmd}${RESET}")
 
     val output = cmd.!!

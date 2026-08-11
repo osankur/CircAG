@@ -1,5 +1,6 @@
 package fr.irisa.circag
 
+import org.slf4j.LoggerFactory
 import scala.collection.mutable.{Buffer, HashMap, ArrayBuffer}
 import scala.collection.mutable.Queue
 import scala.collection.immutable.Set
@@ -78,6 +79,8 @@ case class NLTS(
 ) extends LTS[FastNFAState](name, dfa, alphabet)
 
 object DLTS {
+
+  val logger = LoggerFactory.getLogger("CircAG")
 
   /** @brief Given (dfa, alphabet), compute the lifting of the dfa to extendedAlphabet
     * by copying it and adding self-loops at all states on symbols in
@@ -332,7 +335,7 @@ object DLTS {
       }
     }
     while(addIdentifier()){}
-    println(s"Modified regexp: ${modifiedRegexp}")
+    logger.debug(s"Modified regexp: ${modifiedRegexp}")
     val aut = BricsNFA(dk.brics.automaton.RegExp(modifiedRegexp).toAutomaton())
     val dfa = NFAs.determinize(aut, Alphabets.characters('A', 'z'))
     val alph = Alphabets.fromList(names.values.toList)
@@ -642,6 +645,8 @@ extension(dfa : FastDFA[String]){
 }
 
 object NLTS {
+  private val hoaParserLock = Object()
+
   def copy(nlts : NLTS) : NLTS = {
     val dfa = nlts.dfa
     val statesMap = HashMap[FastNFAState,FastNFAState]()
@@ -796,8 +801,11 @@ object NLTS {
     }
 
     val autFactory = HOAConsumerStore()
-    HOAFParser.parseHOA(new ByteArrayInputStream(automatonString.getBytes()), autFactory);
-    val aut = autFactory.getStoredAutomaton()
+    // JHoafParser has a static, non-reentrant parser. We used this lock because tests are run concurrently.
+    val aut = hoaParserLock.synchronized {
+      HOAFParser.parseHOA(new ByteArrayInputStream(automatonString.getBytes()), autFactory)
+      autFactory.getStoredAutomaton()
+    }
     val header = aut.getStoredHeader()
     // Symbols of the given fullAlphabet that do not appear as APs in the HOA automaton
     val alphabet = header.getAPs().toBuffer

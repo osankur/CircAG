@@ -1,0 +1,41 @@
+# upon receiving change from device, becomes unstable.
+# then asks the supervisor for auth, once obtaining a go,
+# it communicates ack to device and becomes stable again.
+system:controller
+
+event:change
+event:ack
+event:go
+event:ask
+event:send
+event:_c_idle
+event:_contR
+event:_contW
+
+# 0: send, 1: change, 2: other
+int:4:0:2:0:bufc # fifo
+int:1:0:3:0:cs1 # start index of the fifo
+int:1:0:3:0:ce1 # end index of the fifo
+
+process:Controller
+location:Controller:stable{initial:}
+location:Controller:unstable
+location:Controller:asking
+location:Controller:authorized
+
+edge:Controller:stable:stable:_c_idle
+edge:Controller:stable:stable:_contW{provided: (ce1+1)%4 != cs1 : do : bufc[ce1] = 0; ce1 = (ce1+1)%4}
+edge:Controller:stable:stable:_contW{provided: (ce1+1)%4 != cs1 : do : bufc[ce1] = 1; ce1 = (ce1+1)%4}
+edge:Controller:stable:stable:_contW{provided: (ce1+1)%4 != cs1 : do : bufc[ce1] = 2; ce1 = (ce1+1)%4}
+edge:Controller:stable:stable:_contR{provided: ce1 != cs1 && bufc[cs1] == 2 : do : cs1 = (cs1+1)%4}
+edge:Controller:stable:stable:send{provided: ce1 != cs1 && bufc[cs1] == 0 : do : cs1 = (cs1+1)%4}
+edge:Controller:stable:unstable:change{provided: ce1 != cs1 && bufc[cs1] == 1 : do : cs1 = (cs1+1)%4}
+edge:Controller:unstable:asking:ask
+edge:Controller:unstable:unstable:_contR{provided: ce1 != cs1 && bufc[cs1] == 2 : do : cs1 = (cs1+1)%4}
+edge:Controller:unstable:unstable:_contW{provided: (ce1+1)%4 != cs1 : do : bufc[ce1] = 0; ce1 = (ce1+1)%4}
+edge:Controller:unstable:unstable:_contW{provided: (ce1+1)%4 != cs1 : do : bufc[ce1] = 1; ce1 = (ce1+1)%4}
+edge:Controller:unstable:unstable:_contW{provided: (ce1+1)%4 != cs1 : do : bufc[ce1] = 2; ce1 = (ce1+1)%4}
+edge:Controller:asking:authorized:go
+edge:Controller:asking:asking:_contR{provided: ce1 != cs1 && bufc[cs1] == 2 : do : cs1 = (cs1+1)%4}
+edge:Controller:authorized:stable:ack
+edge:Controller:authorized:authorized:_contR{provided: ce1 != cs1 && bufc[cs1] == 2 : do : cs1 = (cs1+1)%4}

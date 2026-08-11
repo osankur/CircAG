@@ -12,12 +12,7 @@ case class ParseError(msg: String) extends Exception(msg)
 
 object FSM {
   enum FSMFormat:
-    case SMV, AIG, Murphi, TCheckerTA, Verilog
-
-  sealed trait ModelChecker
-  case object TCheckerModelChecker extends ModelChecker {
-    override def toString: String = "tck-reach"
-  }
+    case TCheckerTA
 }
 
 case class Configuration(
@@ -35,6 +30,8 @@ case class Configuration(
     alphabetRefinement : Boolean = false,
     dfaLearningAlgorithm : DFALearningAlgorithm = DFALearningAlgorithm.RPNI,
     constraintStrategy : ConstraintStrategy = ConstraintStrategy.Eager,
+    reachModelChecker : String = findExecutable("tck-reach"),
+    livenessModelChecker : String = findExecutable("tck-liveness"),
     randomSeed : Int = 0,
     maxDFASize : Int = 128
 ) {
@@ -49,3 +46,17 @@ def set(c : Configuration) : Unit = {
 def get() : Configuration = {
   globalConfiguration
 }
+
+def findExecutable(executableName: String): String = {
+    val executablePath = s"lib/$executableName"
+    if (new File(executablePath).exists()) {
+      executablePath
+    } else {
+      val whereisResult = sys.process.Process(s"whereis $executableName").!!.trim
+      if (whereisResult.nonEmpty) {
+        whereisResult.split(" ")(0)
+      } else {
+        throw new Exception(s"$executableName executable not found")
+      }
+    }
+  }

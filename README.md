@@ -18,44 +18,30 @@ We use the [LearnLib](https://github.com/LearnLib/) for DFA learning and automat
 for learning LTL formulas.
 
 ## Dependencies and Installation
-You need
-- Scala 3.3
-- Java 1.7
-- sbt 1.8
+The following must be installed with your system package manager.
+- Scala 3.3+
+- Java 17+
+- sbt 1.10+
 - maven
-  
-And the executables of the following must be on your path:
+
+We further need the following executables and libraries which will be installed by running the `install.sh` script:
 - [tchecker](https://github.com/ticktac-project/tchecker)
 
   we use `tck-reach`, and `tck-liveness`
 - [spot](https://spot.lre.epita.fr/)
 
   we use `ltlfilt` and `ltl2tgba`
+- [jhoafparser](https://automata.tools/hoa/jhoafparser/)
+- [samples2LTL](https://github.com/ivan-gavran/samples2LTL)
 
-Other dependencies will be installed by sbt.
+This script can install TChecker binaries for Linux x86_64 only. Please inspect the script and adapt it to your needs. You can compile yourself if needed.
+The script downloads and compiles Spot which is very long. If you already have the above executables or can install a package, you can comment this part of the script.
 
-Once you have all this, execute the following in the `lib` directory. This installs the provided hoaf parser library into the maven repository.
-
-    mvn install:install-file -Dfile=jhoafparser-1.1.1.jar -DgroupId=jhoafparser -DartifactId=jhoafparser -Dversion=1.1.1 -Dpackaging=jar -DgeneratePom=true
-
-Then run the following in the main directory
+Then run the following in the main directory to install other Scala dependencies and compile the jar:
 
     sbt assembly
 
 This will create the executable jar `CircAG.jar`.
-
-### Submodules
-To check out and test the samples2LTL and Scarlet submodules, run:
-
-    git submodule init
-    git submodule update
-    cd samples2ltl
-    pip3 install -r requirements.txt
-
-You can test as follows:
-
-    python3 samples2LTL.py --sat --traces traces/alt.trace
-
 
 ## License
 This program is distributed under GNU GPL 3.0 (see [LICENSE](LICENSE)).
