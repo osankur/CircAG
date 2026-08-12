@@ -1,0 +1,104 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  build-and-test:
+    name: Build & test (Ubuntu 24.04)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    env:
+      # Give the Scala 3 compiler / sbt enough headroom.
+      SBT_OPTS: "-Xmx4g -XX:MaxMetaspaceSize=1g -Xss4m"
+
+    steps:
+      # install.sh expects the samples2ltl submodule to be present.
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # The tracked .sbtopts pins sbt's JVM to a machine-specific path
+      # (/usr/lib/jvm/java-1.17.0-openjdk-amd64). Point that path at the JDK
+      # installed above so `sbt` (run by install.sh and directly) works in CI.
+      - name: Make .sbtopts java-home resolvable
+        run: |
+          sudo mkdir -p /usr/lib/jvm
+          sudo ln -sfn "$JAVA_HOME" /usr/lib/jvm/java-1.17.0-openjdk-amd64
+          echo "JAVA_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
+          echo "PATH=$JAVA_HOME/bin:$PATH" >> "$GITHUB_ENV"
+          java -version
+
+      # Pin the sbt runner to match project/build.properties (1.12.3) instead
+      # of the action's "latest" default; the runner bootstraps the version
+      # declared in build.properties regardless.
+      - name: Install sbt
+        uses: sbt/setup-sbt@v1
+        with:
+          sbt-runner-version: "1.12.3"
+
+      - name: Cache sbt / Maven / Coursier caches
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.ivy2/cache
+            ~/.sbt
+            ~/.cache/coursier
+            ~/.m2/repository
+          key: deps-${{ runner.os }}-${{ hashFiles('build.sbt', 'project/**') }}
+          restore-keys: |
+            deps-${{ runner.os }}-
+
+      # System packages required by install.sh. Spot is installed by install.sh
+      # itself from the LRE EPITA apt repository on Debian-based systems, so no
+      # build toolchain is needed here.
+      #  - wget/tar: download TChecker binaries
+      #  - maven: install jhoafparser into the local Maven repo
+      #  - python3/python3-venv: create the samples2ltl venv
+      - name: Install system dependencies required by install.sh
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            wget tar maven python3 python3-venv
+
+      # Runs install.sh with sudo (the GitHub runner user has passwordless
+      # sudo). This installs samples2ltl, jhoafparser, TChecker and Spot, and
+      # finally builds CircAG.jar via `sbt assembly`.
+      - name: Run install.sh (installs dependencies and builds CircAG.jar)
+        run: ./install.sh
+        timeout-minutes: 150
+
+      - name: Verify installed tools
+        run: |
+          command -v ltlfilt ltl2tgba
+          ls -l lib/tck-reach lib/tck-liveness
+          ls -lh CircAG.jar
+
+      # Unit tests (munit). These exercise the DFA/LTL learning algorithms and
+      # run the installed TChecker and Spot tools, so they must run from the
+      # repository root (findExecutable looks for lib/tck-reach, etc.).
+      - name: Run unit tests (sbt test)
+        run: sbt test
+        timeout-minutes: 60
+
+      - name: Smoke test — DFA assume-guarantee
+        run: |
+          java -Xmx4g -jar CircAG.jar dfa \
+            --files "examples/toy/lts1.tck,examples/toy/lts2.tck,examples/toy/lts3.tck" \
+            --err "err" --verbose false
+
+      - name: Smoke test — LTL assume-guarantee
+        run: |
+          java -Xmx4g -jar CircAG.jar ltl \
+            --files "examples/muo/user.tck,examples/muo/machine.tck" \
+            --ltlProperty "G F cycle"
