@@ -17,8 +17,7 @@ import net.automatalib.automata.fsa.impl.compact.CompactDFA;
 import net.automatalib.util.automata.builders.AutomatonBuilders;
 
 import fr.irisa.circag.configuration.Configuration
-import fr.irisa.circag.configuration.FSM
-import fr.irisa.circag.TA
+import fr.irisa.circag.TChecker
 import fr.irisa.circag.dfa.DFALearningAlgorithm
 import scala.collection.mutable
 import scala.collection.immutable
@@ -36,7 +35,7 @@ import net.automatalib.util.automata.builders.AutomatonBuilders;
 import fr.irisa.circag.ltl._
 object Main {
   val logger = LoggerFactory.getLogger(this.getClass)
-
+  val processFactory : ProcessFactory = TChecker
 
   def main(args: Array[String]): Unit = {   
     val builder = OParser.builder[Configuration]
@@ -150,8 +149,8 @@ object Main {
 
           config.cmd match {
             case "product" =>
-              val tas = configuration.get().ltsFiles.map(TA.fromFile(_))              
-              val product = TA.synchronousProduct(tas.toList)
+              val tas = configuration.get().ltsFiles.toSeq.map(processFactory.fromFile(_))              
+              val product = processFactory.synchronousProduct(tas.toList)
               if config.err.size == 0 then {
                 System.out.println(product.toString())
               } else {
@@ -168,7 +167,7 @@ object Main {
                   throw Exception("Please provide an error event with the --err option")
                 }
                 dfa.DFAAutomaticVerifier(
-                  dfa.SystemSpec(
+                  dfa.SystemSpec(processFactory)(
                     configuration.get().ltsFiles, 
                     Some(DLTS.fromErrorSymbol(configuration.get().err))),
                   configuration.get().dfaLearningAlgorithm,
@@ -177,7 +176,7 @@ object Main {
             case "ltl" =>
               val ltlProperty = LTL.fromString(configuration.get().ltlProperty.getOrElse("G 1"))
               val files = configuration.get().ltsFiles              
-                ltl.LTLAutomaticVerifier(ltl.SystemSpec(files,ltlProperty))
+                ltl.LTLAutomaticVerifier(ltl.SystemSpec(processFactory)(files,ltlProperty))
                 .learnAssumptions(configuration.get().ltlProperty != None)
             case _ => 
               logger.error("Unknown command")

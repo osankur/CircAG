@@ -63,9 +63,6 @@ import fr.irisa.circag.dfa._
 import fr.irisa.circag.ltl.LTL
 import fr.irisa.circag.{pruned, toFastDFA}
 
-
-
-
 class Z3Tests extends munit.FunSuite {
   test("z3 enum sort"){
     val cfg = HashMap[String, String]()
@@ -114,7 +111,7 @@ class TAandLTSTests extends munit.FunSuite {
       2 -> 4 [guard="", reset="", src_invariant="", tgt_invariant="", vedge="<lts1@b,lifted_g_1@b,lifted_g_2@b>"]
       4 -> 1 [guard="", reset="", src_invariant="", tgt_invariant="", vedge="<lts1@c,_comp_g_0@c,lifted_g_1@c,lifted_g_2@c>"]
     }""""
-    val trace = TA.getTraceFromCounterExampleOutput(tck_output.split("\n").toList, Set("a","b","c"))
+    val trace = TChecker.getTraceFromCounterExampleOutput(tck_output.split("\n").toList, Set("a","b","c"))
     assert(trace == List("a","b","c","a"))
   }
 
@@ -163,19 +160,19 @@ class TAandLTSTests extends munit.FunSuite {
       2 -> 3 [guard="", reset="", src_invariant="", tgt_invariant="", vedge="<_hoa_@c>"]
       3 -> 2 [guard="", reset="", src_invariant="", tgt_invariant="", vedge="<_hoa_@c>"]
       }"""
-    val trace1 = TA.getLassoFromCounterExampleOutput(tck_output1.split("\n").toList, Set("a","b","c"))
+    val trace1 = TChecker.getLassoFromCounterExampleOutput(tck_output1.split("\n").toList, Set("a","b","c"))
     assert(trace1 == (List(),List("a")))
 
-    val trace2 = TA.getLassoFromCounterExampleOutput(tck_output2.split("\n").toList, Set("a","b","c"))    
+    val trace2 = TChecker.getLassoFromCounterExampleOutput(tck_output2.split("\n").toList, Set("a","b","c"))    
     assert(trace2 == (List("a"),List("c")))
 
-    val trace3 = TA.getLassoFromCounterExampleOutput(tck_output3.split("\n").toList, Set("a","b","c"))    
+    val trace3 = TChecker.getLassoFromCounterExampleOutput(tck_output3.split("\n").toList, Set("a","b","c"))    
     assert(trace3 == (List("c"),List("c")))
 
-    val trace4 = TA.getLassoFromCounterExampleOutput(tck_output4.split("\n").toList, Set("a","b","c")) 
+    val trace4 = TChecker.getLassoFromCounterExampleOutput(tck_output4.split("\n").toList, Set("a","b","c")) 
     assert(trace4 == (List("a","c"),List("c")))
 
-    val trace5 = TA.getLassoFromCounterExampleOutput(tck_output5.split("\n").toList, Set("a","b","c")) 
+    val trace5 = TChecker.getLassoFromCounterExampleOutput(tck_output5.split("\n").toList, Set("a","b","c")) 
     assert(trace5 == (List("a"),List("c","c")))
   }  
   test("DLTS from fromTrace"){
@@ -223,7 +220,7 @@ class TAandLTSTests extends munit.FunSuite {
     assert(!f3.accepts(l3))
   }
   test("lasso membership"){
-    val ta = TA.fromFile(File("examples/simple.tck"))
+    val ta = TChecker.fromFile(File("examples/simple.tck"))
     val l1 : Lasso = (List("a","a","b"), List("c", "a", "c", "a"))
     val l2 : Lasso = (List("b"), List("c"))
     val l3 : Lasso = (List("b","b"), List("c"))
@@ -232,14 +229,14 @@ class TAandLTSTests extends munit.FunSuite {
     assert(ta.checkLassoMembership(l3) == None)
   }
   test("lasso as suffix"){
-     val ta = TA.fromFile(File("examples/simple.tck"))
+     val ta = TChecker.fromFile(File("examples/simple.tck"))
      assert(ta.checkLassoSuffixMembership((List(),List("c","a"))) != None)
      assert(ta.checkLassoSuffixMembership((List("b"),List("c","a")))!= None)
      assert(ta.checkLassoSuffixMembership((List("a"),List("a","a")))!= None)
      assert(ta.checkLassoSuffixMembership((List("a"),List("b","c","a"))) == None)
   }
   test("lasso as suffix"){
-     val ta = TA.fromFile(File("examples/simple-sdn/controller.tck"))
+     val ta = TChecker.fromFile(File("examples/simple-sdn/controller.tck"))
      val lasso = (List("change"),List("change"))
      assert(ta.checkLassoMembership(lasso) != None)
      assert(ta.checkLassoMembership(lasso,Some(ta.alphabet)) == None)
@@ -371,7 +368,7 @@ class DFAAAG extends munit.FunSuite {
         .withAccepting("q0")
         .create();
 
-    val ver = dfa.DFAAutomaticVerifier(dfa.SystemSpec(Array(File("examples/simple-ums/user.tck"), File("examples/simple-ums/scheduler.tck"), File("examples/simple-ums/machine.tck")), Some(DLTS.fromErrorSymbol(List("err")))))
+    val ver = dfa.DFAAutomaticVerifier(dfa.SystemSpec(TChecker)(Array(File("examples/simple-ums/user.tck"), File("examples/simple-ums/scheduler.tck"), File("examples/simple-ums/machine.tck")), Some(DLTS.fromErrorSymbol(List("err")))))
     ver.setAssumption(0, DLTS("user", gUser, gUser.getInputAlphabet().toSet))
     ver.setAssumption(1, DLTS("sched", gSched, gSched.getInputAlphabet().toSet))
     ver.setAssumption(2, DLTS("machine", gMachine, gMachine.getInputAlphabet().toSet))
@@ -507,7 +504,7 @@ class DFAAAG extends munit.FunSuite {
     assert(errDFA.pruned.isPrunedSafety)
     assert(gUser.isPrunedSafety)
     assert(gUser.isSafety)
-    val ver = dfa.DFAAutomaticVerifier(dfa.SystemSpec(Array(File("examples/simple-ums/user.tck"), File("examples/simple-ums/scheduler.tck"), File("examples/simple-ums/machine.tck")), Some(DLTS.fromErrorSymbol(List("err")))))
+    val ver = dfa.DFAAutomaticVerifier(dfa.SystemSpec(TChecker)(Array(File("examples/simple-ums/user.tck"), File("examples/simple-ums/scheduler.tck"), File("examples/simple-ums/machine.tck")), Some(DLTS.fromErrorSymbol(List("err")))))
     ver.setAssumption(0, DLTS("user", gUser, gUser.getInputAlphabet().toSet))
     ver.setAssumption(1, DLTS("sched", gSched, gSched.getInputAlphabet().toSet))
     ver.setAssumption(2, DLTS("machine", gMachine, gMachine.getInputAlphabet().toSet))
@@ -521,9 +518,9 @@ class DFAAAG extends munit.FunSuite {
 
   test("toy: with SAT, UFSAT, RPNI"){
     val files = Array(File("examples/toy/lts1.tck"),File("examples/toy/lts2.tck"),File("examples/toy/lts3.tck"))
-    val verSAT = dfa.DFAAutomaticVerifier(dfa.SystemSpec(files, Some(DLTS.fromErrorSymbol(List("err")))), dfa.DFALearningAlgorithm.SAT)
-    val verUFSAT = dfa.DFAAutomaticVerifier(dfa.SystemSpec(files, Some(DLTS.fromErrorSymbol(List("err")))), dfa.DFALearningAlgorithm.UFSAT)
-    val verRPNI = dfa.DFAAutomaticVerifier(dfa.SystemSpec(files, Some(DLTS.fromErrorSymbol(List("err")))), dfa.DFALearningAlgorithm.RPNI)
+    val verSAT = dfa.DFAAutomaticVerifier(dfa.SystemSpec(TChecker)(files, Some(DLTS.fromErrorSymbol(List("err")))), dfa.DFALearningAlgorithm.SAT)
+    val verUFSAT = dfa.DFAAutomaticVerifier(dfa.SystemSpec(TChecker)(files, Some(DLTS.fromErrorSymbol(List("err")))), dfa.DFALearningAlgorithm.UFSAT)
+    val verRPNI = dfa.DFAAutomaticVerifier(dfa.SystemSpec(TChecker)(files, Some(DLTS.fromErrorSymbol(List("err")))), dfa.DFALearningAlgorithm.RPNI)
     assert(verUFSAT.learnAssumptions() == AGResult.Success)
     assert(verSAT.learnAssumptions() == AGResult.Success)
     assert(verRPNI.learnAssumptions() == AGResult.Success)
@@ -531,19 +528,19 @@ class DFAAAG extends munit.FunSuite {
 
   test("seq-toy"){
     val files = Array(File("examples/seq-toy/lts0.tck"),File("examples/seq-toy/lts1.tck"),File("examples/seq-toy/lts2.tck"))
-    val verUFSAT =  dfa.DFAAutomaticVerifier(dfa.SystemSpec(files, Some(DLTS.fromErrorSymbol(List("err")))), dfa.DFALearningAlgorithm.SAT)
-    val verSAT =  dfa.DFAAutomaticVerifier(dfa.SystemSpec(files, Some(DLTS.fromErrorSymbol(List("err")))), dfa.DFALearningAlgorithm.SAT)
-    val verRPNI = dfa.DFAAutomaticVerifier(dfa.SystemSpec(files, Some(DLTS.fromErrorSymbol(List("err")))), dfa.DFALearningAlgorithm.RPNI)
+    val verUFSAT =  dfa.DFAAutomaticVerifier(dfa.SystemSpec(TChecker)(files, Some(DLTS.fromErrorSymbol(List("err")))), dfa.DFALearningAlgorithm.SAT)
+    val verSAT =  dfa.DFAAutomaticVerifier(dfa.SystemSpec(TChecker)(files, Some(DLTS.fromErrorSymbol(List("err")))), dfa.DFALearningAlgorithm.SAT)
+    val verRPNI = dfa.DFAAutomaticVerifier(dfa.SystemSpec(TChecker)(files, Some(DLTS.fromErrorSymbol(List("err")))), dfa.DFALearningAlgorithm.RPNI)
     assert(verRPNI.learnAssumptions() != AGResult.Success)
     assert(verSAT.learnAssumptions() != AGResult.Success)
     assert(verUFSAT.learnAssumptions() != AGResult.Success)
 
     val files2 = Array(File("examples/seq-toy/lts0.tck"),File("examples/seq-toy/lts1.tck"),File("examples/seq-toy/lts2.tck"),File("examples/seq-toy/lts3.tck"))
-    val ver2SAT = dfa.DFAAutomaticVerifier(dfa.SystemSpec(files2, Some(DLTS.fromErrorSymbol(List("err")))), dfa.DFALearningAlgorithm.SAT)
+    val ver2SAT = dfa.DFAAutomaticVerifier(dfa.SystemSpec(TChecker)(files2, Some(DLTS.fromErrorSymbol(List("err")))), dfa.DFALearningAlgorithm.SAT)
     assert(ver2SAT.learnAssumptions() == AGResult.Success)
-    val ver2UFSAT = dfa.DFAAutomaticVerifier(dfa.SystemSpec(files2, Some(DLTS.fromErrorSymbol(List("err")))), dfa.DFALearningAlgorithm.SAT)
+    val ver2UFSAT = dfa.DFAAutomaticVerifier(dfa.SystemSpec(TChecker)(files2, Some(DLTS.fromErrorSymbol(List("err")))), dfa.DFALearningAlgorithm.SAT)
     assert(ver2UFSAT.learnAssumptions() == AGResult.Success)
-    val ver2RPNI = dfa.DFAAutomaticVerifier(dfa.SystemSpec(files2, Some(DLTS.fromErrorSymbol(List("err")))), dfa.DFALearningAlgorithm.RPNI)
+    val ver2RPNI = dfa.DFAAutomaticVerifier(dfa.SystemSpec(TChecker)(files2, Some(DLTS.fromErrorSymbol(List("err")))), dfa.DFALearningAlgorithm.RPNI)
     assert(ver2RPNI.learnAssumptions() == AGResult.Success)
   }
 
@@ -612,7 +609,7 @@ class LTLTests extends munit.FunSuite {
     assert(f3 == expected3)
   }
   test("lasso |= LTL"){
-    val lassoTA = TA.fromLTS(DLTS.fromLasso((List("a"), List("a"))))
+    val lassoTA = TChecker.fromLTS(DLTS.fromLasso((List("a"), List("a"))))
     val f = Atomic("b")
     val g = And(Atomic("b"), X(Atomic("a")))
     val h = G(Atomic("a"))
@@ -621,7 +618,7 @@ class LTLTests extends munit.FunSuite {
     assert(lassoTA.checkLTL(h) == None)
   }
   test("ta |= LTL"){
-    val ta = TA.fromFile(File("examples/simple-sdn/controller.tck"))
+    val ta = TChecker.fromFile(File("examples/simple-sdn/controller.tck"))
     assert(ta.checkLTL(G(F(Atomic("change")))) != None)
   }
 }
@@ -673,7 +670,7 @@ class LTLAGTests extends munit.FunSuite {
 
   test("violation index"){
     val tas = Array(File("examples/ltl-toy1/a.tck"), File("examples/ltl-toy1/b.tck"))
-    val checker = LTLAutomaticVerifier(ltl.SystemSpec(tas, G(F(Atomic("a")))))
+    val checker = LTLAutomaticVerifier(ltl.SystemSpec(TChecker)(tas, G(F(Atomic("a")))))
     val query = CircularPremiseQuery(1, List(), List((0,(Atomic("b")))), List(), Atomic("d"), LTLTrue())
     val lasso = (List("a","a","c"), List("c"))
     assert(checker.getPremiseViolationIndex(lasso, query) == 0)
@@ -687,7 +684,7 @@ class LTLAGTests extends munit.FunSuite {
     val ass = List("G ((a -> X !a))", "G F b")
     val ltlf = ass.map(LTL.fromString)
     val tas = Array(File("examples/ltl-toy1/a.tck"), File("examples/ltl-toy1/b.tck"))    
-    val checker = LTLVerifier(ltl.SystemSpec(tas, G(F(Atomic("a")))))
+    val checker = LTLVerifier(ltl.SystemSpec(TChecker)(tas, G(F(Atomic("a")))))
     ltlf.zipWithIndex.foreach( (ltl,i) => checker.setAssumption(i, ltl))
     // Without instantaneous assumptions, the proof fails:
     assert(checker.checkInductivePremise(0) != None)
@@ -700,7 +697,7 @@ class LTLAGTests extends munit.FunSuite {
     val ass = List("G ((a -> X !a))", "G G F b") // Spot will simplify G G to G
     val ltlf = ass.map(LTL.fromString)
     val tas = Array(File("examples/ltl-toy1/a.tck"), File("examples/ltl-toy1/b.tck"))
-    val checker = LTLVerifier(ltl.SystemSpec(tas, G(F(Atomic("a")))))
+    val checker = LTLVerifier(ltl.SystemSpec(TChecker)(tas, G(F(Atomic("a")))))
     checker.setAssumption(1, G(G(F(Atomic("b"))))) // Overwrite
     ltlf.zipWithIndex.foreach( (ltl,i) => checker.setAssumption(i, ltl))
     // Without instantaneous assumptions, the proof fails:
@@ -714,7 +711,7 @@ class LTLAGTests extends munit.FunSuite {
     val ass = List("G F (a | b)", "G !d")
     val ltlf = ass.map(LTL.fromString)
     val tas = Array(File("examples/ltl-toy1/c.tck"), File("examples/ltl-toy1/d.tck"))
-    val checker = LTLVerifier(ltl.SystemSpec(tas, LTLTrue()))
+    val checker = LTLVerifier(ltl.SystemSpec(TChecker)(tas, LTLTrue()))
     ltlf.zipWithIndex.foreach( (ltl,i) => checker.setAssumption(i, ltl))
 
     checker.setProcessInstantaneousDependencies(1, Set(0))
@@ -729,17 +726,17 @@ class LTLAGTests extends munit.FunSuite {
     val ass = List("G ((a -> X !a) & !c)", "G (d -> (X c))")
     val ltlf = ass.map(LTL.fromString)
     val tas = Array(File("examples/ltl-toy1/a.tck"), File("examples/ltl-toy1/b.tck"))
-    val checker = LTLVerifier(ltl.SystemSpec(tas, G(Not(Atomic("d")))))
+    val checker = LTLVerifier(ltl.SystemSpec(TChecker)(tas, G(Not(Atomic("d")))))
     ltlf.zipWithIndex.foreach( (ltl,i) => checker.setAssumption(i, ltl))
     assert(checker.checkFinalPremise(true) == None)
     
-    val checker2 = LTLVerifier(tas, G(Not(Atomic("a"))))
+    val checker2 = LTLVerifier(ltl.SystemSpec(TChecker)(tas, G(Not(Atomic("a")))))
     ltlf.zipWithIndex.foreach( (ltl,i) => checker2.setAssumption(i, ltl))
     assert(checker2.checkFinalPremise() != None)
   } 
 
   test("TA Buchi check"){
-    val ta = TA.fromFile(File("examples/simple.tck"))
+    val ta = TChecker.fromFile(File("examples/simple.tck"))
     assert(ta.checkBuchi("3") == Some(List("a","b"), List("c", "a")))
     assert(ta.checkBuchi("4") == None)
   }
@@ -763,7 +760,7 @@ class LTLAGTests extends munit.FunSuite {
     val ass = List("G ((a -> X !a))", "G F b")
     val ltlf = ass.map(LTL.fromString)
     val tas = Array(File("examples/ltl-toy1/a.tck"), File("examples/ltl-toy1/b.tck"))
-    val checker = LTLVerifier(tas, G(F(Atomic("a"))))
+    val checker = LTLVerifier(ltl.SystemSpec(TChecker)(tas, G(F(Atomic("a")))))
     ltlf.zipWithIndex.foreach( (ltl,i) => checker.setAssumption(i, ltl))
     // Without instantaneous assumptions, the proof fails:
     assert(checker.checkInductivePremise(0) != None)
@@ -778,7 +775,7 @@ class LTLAGTests extends munit.FunSuite {
 class Single extends munit.FunSuite {
   test("ltl inductive check: ltl-toy1 applyAG"){
     val tas = Array(File("examples/ltl-toy1/a.tck"), File("examples/ltl-toy1/b.tck"))
-    val checker = LTLVerifier(ltl.SystemSpec(tas, G(F(Atomic("a")))))
+    val checker = LTLVerifier(ltl.SystemSpec(TChecker)(tas, G(F(Atomic("a")))))
     checker.setAssumption(0, G(LTLTrue()))
     checker.setAssumption(1, G(LTLTrue()))
     checker.setProcessInstantaneousDependencies(0, Set(1))
@@ -787,8 +784,8 @@ class Single extends munit.FunSuite {
     val ass1_ = LTL.fromString("G (( d-> X b) & F(c | d) & (c -> ! F c))")
     checker.setAssumption(0, (ass0))
     checker.setAssumption(1, (ass1))
-    assert(TA.fromFile(tas(0)).checkLTL(ass0) == None)
-    assert(TA.fromFile(tas(1)).checkLTL(ass1) == None)
+    assert(TChecker.fromFile(tas(0)).checkLTL(ass0) == None)
+    assert(TChecker.fromFile(tas(1)).checkLTL(ass1) == None)
     assert(checker.applyAG(proveGlobalproperty = false) == LTLAGResult.Success)
     assert(checker.applyAG(proveGlobalproperty = true) == LTLAGResult.Success)
   }

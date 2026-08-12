@@ -72,7 +72,7 @@ trait LTS[S](
   }
   def writeToFile(file: java.io.File): Unit = {
     val lts = this
-    new PrintWriter(file) { write(TA.fromLTS(lts).toString()); close }
+    new PrintWriter(file) { write(TChecker.fromLTS(lts).toString()); close }
   }
 }
 case class DLTS(
@@ -323,7 +323,7 @@ object DLTS {
   }
 
   def fromTCheckerFile(file: java.io.File): DLTS = {
-    val ta = TA.fromFile(file)
+    val ta = TChecker.fromFile(file)
     if ta.syncs.length > 0 || ta.eventsOfProcesses.keys.size > 1 then {
       throw Exception(
         "The DLTS parser only accepts single-process TA without synchronization labels"

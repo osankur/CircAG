@@ -45,9 +45,9 @@ enum AGResult extends Exception:
 
 class DFAUnsatisfiableConstraints extends Exception
 
-class SystemSpec(val ltsFiles: Array[File], var property: Option[DLTS]):
-  val processes = ltsFiles.map(TA.fromFile(_))
-  val nbProcesses = processes.size
+class SystemSpec(val factory: ProcessFactory)(val ltsFiles: Array[File], var property: Option[DLTS]):
+  val processes: Seq[factory.P] = ltsFiles.toSeq.map(factory.fromFile(_))
+  val nbProcesses: Int = processes.size
 
 /** Assume-guarantee property prover which can check each inductive premise, and the final premise
   * given used-provided assumptions for the processes.
@@ -56,10 +56,6 @@ class SystemSpec(val ltsFiles: Array[File], var property: Option[DLTS]):
   *   system under study
   */
 class DFAVerifier(val system: SystemSpec) {
-
-  def this(ltsFiles: Array[File], property: Option[DLTS]) = {
-    this(SystemSpec(ltsFiles, property))
-  }
 
   private val logger = LoggerFactory.getLogger(this.getClass)
 
@@ -81,8 +77,6 @@ class DFAVerifier(val system: SystemSpec) {
         for sigma <- alph do {
           dfa.addTransition(state, sigma, state)
         }
-        // Visualization.visualize(dfa, Alphabets.fromList(processes(i).alphabet.toList))
-
         DLTS(s"g_${i}", dfa, alph)
       })
       .toBuffer
@@ -161,7 +155,7 @@ class DFAVerifier(val system: SystemSpec) {
           Some(s"lifted_${ass.name}")
         )
       })
-    val premiseProduct = TA.synchronousProduct(
+    val premiseProduct = system.factory.synchronousProduct(
       ta,
       compG :: liftedAssumptions.toList,
       Some("_accept_")
@@ -209,8 +203,8 @@ class DFAVerifier(val system: SystemSpec) {
           DFAs.complement(propertyDLTS.dfa, alph, FastDFA(alph)),
           propertyDLTS.alphabet
         )
-        val premiseProduct = TA.synchronousProduct(
-          TA.fromLTS[FastDFAState](
+        val premiseProduct = system.factory.synchronousProduct(
+          system.factory.fromLTS[FastDFAState](
             compG,
             acceptingLabelSuffix = Some("_accept_")
           ),
@@ -295,7 +289,7 @@ class DFAVerifier(val system: SystemSpec) {
     val dir = Paths.get(".", ".circag_log")
     Files.createDirectories(dir)
     for i <- 0 until nbProcesses do {
-      val tck = TA.fromLTS(assumptions(i))
+      val tck = system.factory.fromLTS(assumptions(i))
       val writer = PrintWriter(new File(dir.toFile(), s"_assumption${i}_${system.processes(i).systemName}.tck"))
       writer.write(tck.toString())
       writer.close()

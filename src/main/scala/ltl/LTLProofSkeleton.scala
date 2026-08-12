@@ -5,7 +5,9 @@ import org.slf4j.LoggerFactory
 import collection.mutable.Buffer
 import collection.mutable.HashMap
 
-import fr.irisa.circag.{Alphabet, Symbol, TA}
+import fr.irisa.circag.{Alphabet, Symbol, Process}
+import fr.irisa.circag.ltl.SystemSpec
+
 /**
  * Malformed proof skeleton, for instance, when instantaneous dependencies are circular.
  */
@@ -104,12 +106,11 @@ class LTLProofSkeleton(val nbProcesses: Int) {
     * @param processes
     * @param property
     */
-  def this( processes: Buffer[TA], property : LTL ) = {
-    this(processes.size)
-    val propertyAlphabet = property.getAlphabet
-    updateByCone(processes.map(_.alphabet), propertyAlphabet)
+  def this( system : SystemSpec) = {
+    this(system.processes.size)
+    val propertyAlphabet = system.property.getAlphabet
+    updateByCone(system.processes.map(_.alphabet), propertyAlphabet)
   }
-
 
   /** Update the proof skeleton from the given assumption and property alphabets.
     * Process dependencies are updated so as to include exactly all processes with which the

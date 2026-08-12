@@ -19,7 +19,6 @@ import fr.irisa.circag.configuration
 import fr.irisa.circag.{Trace, DLTS, Alphabet}
 import fr.irisa.circag.{pruned, isSafety, augmentToPrefixClosed, makeNonPrefixClosedStatesAbsorbing}
 import fr.irisa.circag.ltl.MalformedLTL
-import fr.irisa.circag.TA
 import fr.irisa.circag.configuration
 
 def stringOfConstraint(c : Map[String, List[List[Int]]], instance : Instance) : String = {
@@ -214,7 +213,7 @@ class DFABoltGenerator(
     val dir = Paths.get(".", ".circag_log")
     Files.createDirectories(dir)
     for i <- 0 until nbProcesses do {
-      val tck = TA.fromLTS(assumptions(i))
+      val tck = system.factory.fromLTS(assumptions(i))
       val writer = PrintWriter(new File(dir.toFile(), s"_assumption${i}_${system.processes(i).systemName}.tck"))
       writer.write(tck.toString())
       writer.close()

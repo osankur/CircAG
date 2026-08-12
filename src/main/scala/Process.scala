@@ -30,11 +30,42 @@ import net.automatalib.words.impl.Alphabets;
 import fr.irisa.circag._
 import fr.irisa.circag.ltl.LTL
 
-case class BadTimedAutomaton(msg: String) extends Exception(msg)
-case class FailedTAModelChecking(msg: String) extends Exception(msg)
+case class BadProcess(msg: String) extends Exception(msg)
+case class FailedModelChecking(msg: String) extends Exception(msg)
+
+/**
+ * @brief High-level trait representing processes under verification.
+ */
+trait Process {
+  def systemName: String
+  def systemName_=(value: String): Unit
+  def alphabet: Set[String]
+  def alphabet_=(value: Set[String]): Unit
+  def internalAlphabet: Set[String]
+  def internalAlphabet_=(value: Set[String]): Unit
+
+  def checkReachability(labels: String*): Option[Trace]
+  def checkTraceMembership(trace: Trace, syncAlphabet: Option[Set[String]] = None): Option[Trace]
+  def checkLassoMembership(lasso: Lasso, syncAlphabet: Option[Set[String]] = None): Option[Lasso]
+  def buchiIntersection(lts: NLTS, acceptingLabelSuffix: String): Process
+  def checkLassoSuffixMembership(lasso: Lasso, syncAlphabet: Option[Set[String]] = None): Option[Lasso]
+  def checkLTL(ltlFormula: LTL): Option[Lasso]
+  def checkBuchi(label: String): Option[Lasso]
+}
+
+trait ProcessFactory {
+  type P <: Process
+  def fromFile(inputFile: java.io.File): P
+  def fromLTS[S](dlts: LTS[S], acceptingLabelSuffix: Option[String] = None): P
+  def fromHOA(automatonString: String, fullAlphabet: Option[Alphabet], acceptingLabel: Option[String]): P
+  def fromLTL(ltlString: String, fullAlphabet: Option[Alphabet], acceptingLabel: Option[String]): P
+  def fromLTL(ltl: LTL, fullAlphabet: Option[Alphabet], acceptingLabel: Option[String]): P
+  def synchronousProduct[S](ta: P, dlts: List[LTS[S]], acceptingLabelSuffix: Option[String] = None, syncOnInternalEvents: Boolean = false): P
+  def synchronousProduct(tas: List[P]): P
+}
 
 /** 
-  * Timed automaton representing a process.
+  * TChecker automaton representing a process.
   * Light weight representation storing the tuple 
   * (events, eventsOfProcesses, core, syncs) where 
   * - events is the list of all events,
@@ -42,13 +73,13 @@ case class FailedTAModelChecking(msg: String) extends Exception(msg)
   * - core is the list of lines of the input file except for the system name, events, and sync instructions,
   * - syncs contains lists of tuples encoding the syncs
   */
-class TA (
-  var systemName : String = "",
-  var alphabet: Set[String] = Set(),
-  var internalAlphabet: Set[String] = Set(),
+class TChecker (
+  override var systemName : String = "",
+  override var alphabet: Set[String] = Set(),
+  override var internalAlphabet: Set[String] = Set(),
   var core: String = "",
   var eventsOfProcesses : HashMap[String, Set[String]] = HashMap[String, Set[String]](),
-  var syncs : List[List[(String, String)]] = List[List[(String, String)]]()){
+  var syncs : List[List[(String, String)]] = List[List[(String, String)]]()) extends Process {
 
   def getProcessNames() : List[String] = {
     eventsOfProcesses.keys().toList
@@ -94,7 +125,7 @@ class TA (
     val cmd = "%s -a reach %s -l %s -C symbolic -o %s"
             .format(configuration.get().reachModelChecker, modelFile.toString, label, certFile.toString)
 
-    TA.logger.debug(s"${BLUE}${cmd}${RESET}")
+    TChecker.logger.debug(s"${BLUE}${cmd}${RESET}")
 
     val output = cmd.!!
     val cex = scala.io.Source.fromFile(certFile).getLines().toList
@@ -107,9 +138,9 @@ class TA (
     if (output.contains("REACHABLE false")) then {
       None
     } else if (output.contains("REACHABLE true")) then {
-      Some(TA.getTraceFromCounterExampleOutput(cex, this.alphabet))
+      Some(TChecker.getTraceFromCounterExampleOutput(cex, this.alphabet))
     } else {
-      throw FailedTAModelChecking(output)
+      throw FailedModelChecking(output)
     }
   }
 
@@ -126,7 +157,7 @@ class TA (
     // We project trace to syncAlpha because we want to create a process with a given alphabet (there cannot be letters outside of its alphabet)
     val projTrace = trace.filter(syncAlpha.contains(_))
     val traceProcess = DLTS.fromTrace(projTrace, Some(syncAlpha))
-    val productTA = TA.synchronousProduct(this, List(traceProcess), Some("_accept_"))
+    val productTA = TChecker.synchronousProduct(this, List(traceProcess), Some("_accept_"))
     val result = productTA.checkReachability(s"${traceProcess.name}_accept_")
     result
   }
@@ -150,13 +181,13 @@ class TA (
   }
 
   /**
-    * Compute TA with a Buchi acceptance condition which recognizes the intersection of lts and this.
+    * Compute process with a Buchi acceptance condition which recognizes the intersection of lts and this.
     * 
     * Because the model checker is based on accepting states and not accepting labels, we need to make sure
     * to exclude inf runs in which the lts stays forever in an accepting state (and not take any transition).
     * This the case e.g. if the lts is a^\omega an if the other process reads, say, \tau^\omega.
     * To do this, 
-    * 1. we extend the alphabet of LTS to include all non-sync labels of TA;
+    * 1. we extend the alphabet of LTS to include all non-sync labels of the process;
     * 2. add a fresh dummy state D for each accepting state AC of LTS
     * 3. all sync labels from the D has the same effect as from AC
     * 4. all non-sync labels go from AC to D
@@ -166,7 +197,7 @@ class TA (
     * @param acceptingLabelSuffix
     * @return
     */
-  def buchiIntersection(lts : NLTS, acceptingLabelSuffix : String) : TA = {
+  def buchiIntersection(lts : NLTS, acceptingLabelSuffix : String) : Process = {
     val syncAlphabet = lts.alphabet & this.alphabet
     val nonSyncAlpha = (this.internalAlphabet | this.alphabet).diff(syncAlphabet) // internal alphabet of ta
     val fullAlphabet = (lts.alphabet | this.internalAlphabet | this.alphabet)
@@ -218,7 +249,7 @@ class TA (
         }
     )
     val newNLTS = NLTS(lts.name, newNFA, fullAlphabet)
-    TA.synchronousProduct(this, List(newNLTS),Some(acceptingLabelSuffix),syncOnInternalEvents=true)
+    TChecker.synchronousProduct(this, List(newNLTS),Some(acceptingLabelSuffix),syncOnInternalEvents=true)
   }
   /**
   * Check whether alpha*.(lasso|_alph) has non-empty intersection with ta|_alph where alph is syncAlphabet (default is lasso.toSet)
@@ -234,12 +265,12 @@ class TA (
     val lassoProcess = NLTS.fromLassoAsSuffix(projLasso, Some(lassoAlphabet))
     val productTA = this.buchiIntersection(lassoProcess, "_accept_")
     val result = productTA.checkBuchi(s"${lassoProcess.name}_accept_")
-    TA.logger.debug(s"checkLassoSuffixMembership: whether ${lasso} can be read in process ${systemName} *as a suffix* with sync alphabet ${lassoAlphabet}: ${result != None}")
+    TChecker.logger.debug(s"checkLassoSuffixMembership: whether ${lasso} can be read in process ${systemName} *as a suffix* with sync alphabet ${lassoAlphabet}: ${result != None}")
     result
   }
 
   /**
-    * Check whether all infinite runs of the TA satisfy the LTL formula.
+    * Check whether all infinite runs of the process satisfy the LTL formula.
     *
     * @param ltlFormula
     * @return None if the formula is satisfied, and a counterexample lasso violating the formula otherwise.
@@ -284,7 +315,7 @@ class TA (
         .toFile()
     val cmd = "%s -a couvscc %s -C symbolic -l %s -o %s"
       .format(configuration.get().livenessModelChecker, modelFile.toString, label, certFile.toString)
-    TA.logger.debug(s"${BLUE}${cmd}${RESET}")
+    TChecker.logger.debug(s"${BLUE}${cmd}${RESET}")
 
     val output = cmd.!!
     val cex = scala.io.Source.fromFile(certFile).getLines().toList
@@ -299,22 +330,23 @@ class TA (
     if (output.contains("CYCLE false")) then {
       None
     } else if (output.contains("CYCLE true")) then {
-      Some(TA.getLassoFromCounterExampleOutput(cex, this.alphabet))
+      Some(TChecker.getLassoFromCounterExampleOutput(cex, this.alphabet))
     } else {
-      throw FailedTAModelChecking(output)
+      throw FailedModelChecking(output)
     }
   }
 
 }
 
-object TA{
+object TChecker extends ProcessFactory {
+  type P = TChecker
   val logger = LoggerFactory.getLogger(this.getClass)
 
   /** 
    * Parser that reads TChecker TA format. 
    */
-  def fromFile(inputFile: java.io.File) : TA = {
-    val ta = TA()
+  def fromFile(inputFile: java.io.File) : TChecker = {
+    val ta = TChecker()
     val lines = scala.io.Source.fromFile(inputFile).getLines().toList
     val regEvent = "\\s*event:([^ ]*).*".r
     val regSync = "\\s*sync:(.*)\\s*".r
@@ -364,18 +396,18 @@ object TA{
     }).mkString("\n")
     val nbProcesses = ta.eventsOfProcesses.keys().size
     if nbProcesses > 1 then {
-      throw BadTimedAutomaton("Timed automata can only have a single process")
+      throw BadProcess("Timed automata can only have a single process")
     } else if nbProcesses == 0 then {
-      throw BadTimedAutomaton("Timed automata must have at least one process")
+      throw BadProcess("Timed automata must have at least one process")
     }
     return ta
   }
 
   /**
-   * Build a TA object that represents the given LTS.
+   * Build a TChecker object that represents the given LTS.
    */
-  def fromLTS[S](dlts : LTS[S], acceptingLabelSuffix : Option[String] = None) : TA = {
-    val ta = TA(dlts.name, dlts.alphabet.toSet)
+  def fromLTS[S](dlts : LTS[S], acceptingLabelSuffix : Option[String] = None) : TChecker = {
+    val ta = TChecker(dlts.name, dlts.alphabet.toSet)
     ta.eventsOfProcesses += (dlts.name -> ta.alphabet )
     val strStates = StringBuilder()  
     val strTransitions = StringBuilder()
@@ -438,23 +470,23 @@ object TA{
   }
 
   /**
-   * Build TA from the NLTS corresponding to the Buchi automaton given in the HOA format.
+   * Build TChecker object from the NLTS corresponding to the Buchi automaton given in the HOA format.
    * @param automatonString the Buchi automaton description in the HOA format
    * @param fullAlphabet if not None, an alphabet containing all symbols that appear in automatonString
-   * @param acceptingLabel if not None, the label of the accepting states in the produced TA
+   * @param acceptingLabel if not None, the label of the accepting states in the produced process
    */
-  def fromHOA(automatonString : String, fullAlphabet : Option[Alphabet], acceptingLabel : Option[String]) : TA = {
-    TA.fromLTS[FastNFAState](NLTS.fromHOA(automatonString, fullAlphabet), acceptingLabel)
+  def fromHOA(automatonString : String, fullAlphabet : Option[Alphabet], acceptingLabel : Option[String]) : TChecker = {
+    TChecker.fromLTS[FastNFAState](NLTS.fromHOA(automatonString, fullAlphabet), acceptingLabel)
   }
 
   /**
-   * Build a TA representing an NBA that recognizes the given LTL formula.
+   * Build a TChecker process representing an NBA that recognizes the given LTL formula.
    */
-  def fromLTL(ltlString : String, fullAlphabet : Option[Alphabet], acceptingLabel : Option[String] ) : TA = {
+  def fromLTL(ltlString : String, fullAlphabet : Option[Alphabet], acceptingLabel : Option[String] ) : TChecker = {
     val nlts = NLTS.fromLTL(ltlString, fullAlphabet)
     this.fromLTS[FastNFAState](nlts, acceptingLabel)
   }
-  def fromLTL(ltl : LTL, fullAlphabet : Option[Alphabet], acceptingLabel : Option[String]) : TA = {
+  def fromLTL(ltl : LTL, fullAlphabet : Option[Alphabet], acceptingLabel : Option[String]) : TChecker = {
     fromLTL(ltl.toString, fullAlphabet, acceptingLabel)
   }
 
@@ -466,7 +498,7 @@ object TA{
     * @pre ta.systemName and dlts.name's are pairwise distinct
     * @return Product of ta and the given DLTS
     */
-  def synchronousProduct[S](ta : TA, dlts : List[LTS[S]], acceptingLabelSuffix : Option[String] = None, syncOnInternalEvents : Boolean = false) : TA = {
+  def synchronousProduct[S](ta : TChecker, dlts : List[LTS[S]], acceptingLabelSuffix : Option[String] = None, syncOnInternalEvents : Boolean = false) : TChecker = {
     val allNames = dlts.map(_.name) ++ ta.eventsOfProcesses.keys().toList
     if allNames.size > allNames.distinct.size then {
       val repeatedNames = Buffer[String]()
@@ -476,7 +508,7 @@ object TA{
       }
       throw Exception(s"Product computation failed: some processes have the same name: ${repeatedNames}")
     }
-    val dltsTA = dlts.map({d => TA.fromLTS[S](d, acceptingLabelSuffix)})
+    val dltsTA = dlts.map({d => TChecker.fromLTS[S](d, acceptingLabelSuffix)})
     val jointAlphabet = 
       ta.alphabet
       // union of alphabets of the LTSs
@@ -502,18 +534,18 @@ object TA{
           else None
         }
     ).toList.filter(_.size > 1)
-    TA(systemName, jointAlphabet, ta.internalAlphabet.diff(jointAlphabet), sb.toString(), eventsOfProcesses, syncs)
+    TChecker(systemName, jointAlphabet, ta.internalAlphabet.diff(jointAlphabet), sb.toString(), eventsOfProcesses, syncs)
   }
   
   /**
     * Synchronous product of the given processes.
     * 
     * @param tas pocesses whose product is to be taken
-    * @pre The TAs must have distinct process and variable names.
-    * @pre Each TA has a single process
-    * @return product TA
+    * @pre The processes must have distinct process and variable names.
+    * @pre Each process has a single process
+    * @return product process
     */
-  def synchronousProduct(tas : List[TA]) : TA = {
+  def synchronousProduct(tas : List[TChecker]) : TChecker = {
     require(tas.size > 0)
     require(tas.forall(p => p.eventsOfProcesses.keys().size == 1))
     def unionOfList[A](l : List[Set[A]]) : Set[A] = {
@@ -547,7 +579,7 @@ object TA{
             else Some((ta.getProcessNames().head, sigma))
         }
     ).toList.filter(_.size > 1)
-    TA(systemName, jointAlphabet, jointInternalAlphabet, sb.toString(), eventsOfProcesses, syncs)
+    TChecker(systemName, jointAlphabet, jointInternalAlphabet, sb.toString(), eventsOfProcesses, syncs)
   }
 
   /**
@@ -571,7 +603,7 @@ object TA{
             val a = singleSync.toArray
             edges.put(src.trim.toInt, (a(0), tgt.trim.toInt))
           } else if (singleSync.size > 1){
-            throw FailedTAModelChecking("The counterexample trace has a transition with syncs containing more than one letter of the alphabet:\n" + syncList)
+            throw FailedModelChecking("The counterexample trace has a transition with syncs containing more than one letter of the alphabet:\n" + syncList)
           } else {
             // Ignore internal transition
           }

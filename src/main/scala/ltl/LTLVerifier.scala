@@ -31,10 +31,9 @@ import fr.irisa.circag.statistics
 import fr.irisa.circag.configuration
 import fr.irisa.circag._
 
-class SystemSpec(val ltsFiles: Array[File], var property: LTL):
-  val processes = ltsFiles.map(TA.fromFile(_))
+class SystemSpec(val factory: ProcessFactory)(val ltsFiles: Array[File], var property: LTL):
+  val processes: Buffer[factory.P] = ltsFiles.toBuffer.map(factory.fromFile(_))
   val nbProcesses = processes.size
-
 
 abstract class PremiseQuery(val processID : Int)
 /**
@@ -86,17 +85,11 @@ class LTLUnsatisfiableConstraints extends Exception
 
 class LTLVerifier(val system : SystemSpec) {
 
-  def this(ltsFiles: Array[File], property: LTL) = {
-    this(SystemSpec(ltsFiles, property))
-  }
-
   protected val logger = LoggerFactory.getLogger(this.getClass)
-
 
   val nbProcesses = system.ltsFiles.size
   
-  protected val processes = system.ltsFiles.map(TA.fromFile(_)).toBuffer
-  protected val proofSkeleton = LTLProofSkeleton(processes, system.property)
+  protected val proofSkeleton = LTLProofSkeleton(system)
   require(proofSkeleton.propertyAlphabet == system.property.getAlphabet)
 
   def processInstantaneousDependencies(i: Int) = proofSkeleton.processInstantaneousDependencies(i)
@@ -168,7 +161,7 @@ class LTLVerifier(val system : SystemSpec) {
     val fairnessConstraint =
       if fairness then {
         And(
-            (0 until processes.size).map({
+            (0 until system.processes.size).map({
             i =>
               G(F(Or(proofSkeleton.assumptionAlphabet(i).toList.map(Atomic(_)))))
             })
@@ -240,7 +233,7 @@ class LTLVerifier(val system : SystemSpec) {
         val noncircularLHS = And(deps.map(_._2) : _*)
         And( fairness, noncircularLHS, Not(mainAssumption))
     }
-    processes(premise.processID).checkLTL(Not(f))
+    system.processes(premise.processID).checkLTL(Not(f))
   }
 
   /**
@@ -254,10 +247,10 @@ class LTLVerifier(val system : SystemSpec) {
   def getPremiseViolationIndex(lasso : Lasso, query : CircularPremiseQuery) : Int = {
     query match {
       case CircularPremiseQuery(_processID, noncircularDeps, circularDeps, instantaneousDeps, mainAssumption, fairness) => 
-        val processAlphabet = processes(_processID).alphabet 
+        val processAlphabet = system.processes(_processID).alphabet 
         // All symbols but internal ones
         val overallAlphabet = 
-          processes
+          system.processes
           .map(_.alphabet)
           .foldLeft(Set[String]())((a,b) => a | b )        
         val rhs = And(Not(mainAssumption) :: instantaneousDeps.map(_._2))
@@ -275,7 +268,7 @@ class LTLVerifier(val system : SystemSpec) {
               val alpha = newp.toSet ++ c.toSet ++ processAlphabet ++ formulaAlphabet
               val dlts = DLTS.fromLasso((newp, c), alphabet = Some(alpha))
               // add symbols of the process being checked in the premise query to the alphabet of the lasso
-              val lassoTA = TA.fromLTS(dlts)
+              val lassoTA = TChecker.fromLTS(dlts)
               if lassoTA.checkLTL(rhs) == None then 
                 break(i)
             }
@@ -296,7 +289,7 @@ class LTLVerifier(val system : SystemSpec) {
     val fairnessConstraint =
       if fairness then {
         And(
-          (0 until processes.size).map({
+          (0 until system.processes.size).map({
           i =>
             G(F(proofSkeleton.assumptionAlphabet(i).foldLeft(LTLFalse() : LTL)({ (f, sigma) => Or(List(f, Atomic(sigma)))})))
           }).toList
@@ -314,7 +307,7 @@ class LTLVerifier(val system : SystemSpec) {
       )
     val cexFormula = And(List(assFormulas, Not(system.property)))
     logger.debug(s"Checking final premise formula: $cexFormula")
-    val ta = TA.fromLTL(cexFormula.toString, None, Some("_ltl_acc_"))
+    val ta = TChecker.fromLTL(cexFormula.toString, None, Some("_ltl_acc_"))
     ta.checkBuchi(s"${ta.systemName}_ltl_acc_")
   }
 
@@ -327,7 +320,7 @@ class LTLVerifier(val system : SystemSpec) {
   def checkCounterExample(lasso : Lasso): Boolean = {
     class Break extends Exception
     try {
-      for (ta, i) <- processes.zipWithIndex do {
+      for (ta, i) <- system.processes.zipWithIndex do {
         // val projLasso = lasso.filter(x => assumptions(i).getAlphabet.contains(x))
         logger.debug(s"Checking if ${lasso} is accepted by process ${i} (${ta.systemName})")
         ta.checkLassoMembership(lasso, Some(ta.alphabet)) match {

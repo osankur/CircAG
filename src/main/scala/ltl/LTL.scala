@@ -4,7 +4,7 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.nio.file._
 import scala.sys.process._
-import fr.irisa.circag.{Alphabet, Trace, Lasso, TA,DLTS}
+import fr.irisa.circag.{Alphabet, Trace, Lasso, TChecker,DLTS}
 import scala.collection.mutable.Map
 class MalformedLTL(msg : String) extends Exception(msg)
 
@@ -12,7 +12,7 @@ abstract class LTL {
     def isUniversal : Boolean = false
     def getAlphabet : Alphabet 
     def accepts(lasso : Lasso) : Boolean = {
-        val ta = TA.fromLTS(DLTS.fromLasso(lasso))
+        val ta = TChecker.fromLTS(DLTS.fromLasso(lasso))
         ta.checkLTL(this) == None
     }
 }

@@ -10,17 +10,15 @@ import fr.irisa.circag.dfa.DFALearningAlgorithm
 import fr.irisa.circag.dfa.ConstraintStrategy
 case class ParseError(msg: String) extends Exception(msg)
 
-object FSM {
-  enum FSMFormat:
-    case TCheckerTA
-}
+enum ProcessFormat:
+  case TCheckerTA
 
 case class Configuration(
     cmd : String = "",
     ltsFiles : Array[File] = Array[File](),
     err: List[String] = List(),
     ltlProperty : Option[String] = None,
-    ltsFormat: FSM.FSMFormat = FSM.FSMFormat.TCheckerTA,
+    processFormat: ProcessFormat = ProcessFormat.TCheckerTA,
     keepTmpFiles: Boolean = true,
     verbose: Boolean = false,
     verbose_MembershipQueries : Boolean = false,
