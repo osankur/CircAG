@@ -23,12 +23,27 @@ else
 fi
 
 # Spot
-wget http://www.lre.epita.fr/dload/spot/spot-2.15.1.tar.gz
-tar -xzf spot-2.15.1.tar.gz
-cd spot-2.15.1/
-./configure #--prefix ~/usr
-make -j$(nproc)
-sudo make install
+# On Debian-based systems, Spot is installed from the LRE EPITA apt repository
+# (the else branch below). It is compiled from source only when explicitly
+# requested with --compile-spot-from-src.
+if [ "$1" = "--compile-spot-from-src" ]; then
+    wget http://www.lre.epita.fr/dload/spot/spot-2.15.1.tar.gz
+    tar -xzf spot-2.15.1.tar.gz
+    cd spot-2.15.1/
+    ./configure #--prefix ~/usr
+    make -j$(nproc)
+    sudo make install
+    # Return to the repository root: the final "sbt assembly" step below
+    # must run from the directory containing build.sbt.
+    cd ../..
+else
+    sudo mkdir -p /etc/apt/keyrings
+    sudo wget -q -O /etc/apt/keyrings/lre-epita.gpg https://www.lre.epita.fr/repo/debian.gpg
+    echo "deb [signed-by=/etc/apt/keyrings/lre-epita.gpg] http://www.lre.epita.fr/repo/debian/ stable/" \
+      | sudo tee /etc/apt/sources.list.d/lre-epita.list > /dev/null
+    sudo apt-get update
+    sudo apt-get install spot
+fi
 
 # Compile JAR
 sbt assembly
