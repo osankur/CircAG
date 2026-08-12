@@ -39,8 +39,13 @@ jobs:
           echo "PATH=$JAVA_HOME/bin:$PATH" >> "$GITHUB_ENV"
           java -version
 
+      # Pin the sbt runner to match project/build.properties (1.12.3) instead
+      # of the action's "latest" default; the runner bootstraps the version
+      # declared in build.properties regardless.
       - name: Install sbt
         uses: sbt/setup-sbt@v1
+        with:
+          sbt-runner-version: "1.12.3"
 
       - name: Cache sbt / Maven / Coursier caches
         uses: actions/cache@v4
