@@ -42,7 +42,7 @@ else
     echo "deb [signed-by=/etc/apt/keyrings/lre-epita.gpg] http://www.lre.epita.fr/repo/debian/ stable/" \
       | sudo tee /etc/apt/sources.list.d/lre-epita.list > /dev/null
     sudo apt-get update
-    sudo apt-get install spot libspot-dev
+    sudo apt-get install spot
 fi
 
 # Compile JAR
